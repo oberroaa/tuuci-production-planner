@@ -14,6 +14,16 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   });
   const [history, setHistory] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [cooldown, setCooldown] = useState<number>(0);
+
+  // Timer countdown for cooldown (5 seconds)
+  React.useEffect(() => {
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
 
   const handleExecuteScan = async (codeToScan?: string) => {
     const code = (codeToScan || pieceQr).trim();
@@ -33,6 +43,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
       const data = await res.json();
 
       if (data.success) {
+        setCooldown(5);
         setOledDisplay({
           line1: data.oled_message,
           line2: `${data.pieceCode} [${data.station}]`,
@@ -51,6 +62,9 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         ]);
         onScanSuccess();
       } else {
+        if (data.cooldown) {
+          setCooldown(data.remainingSecs || 5);
+        }
         setOledDisplay({
           line1: data.oled_message || 'ERROR',
           line2: data.reason || 'RECHAZADO',
@@ -169,18 +183,28 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
                   type="text"
                   placeholder="ej. JOB0279087-01"
                   value={pieceQr}
+                  disabled={cooldown > 0}
                   onChange={(e) => setPieceQr(e.target.value)}
-                  className="flex-1 bg-[#111317] border border-[#2f3540] rounded-lg px-3 py-2.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="flex-1 bg-[#111317] border border-[#2f3540] rounded-lg px-3 py-2.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
                 />
                 <button
                   type="submit"
-                  disabled={scanning || !pieceQr}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow transition-all disabled:opacity-50 flex items-center space-x-1"
+                  disabled={scanning || !pieceQr || cooldown > 0}
+                  className={`px-5 py-2.5 font-bold text-xs rounded-lg shadow transition-all flex items-center space-x-1.5 ${
+                    cooldown > 0
+                      ? 'bg-amber-600 text-amber-100 cursor-not-allowed animate-pulse'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50'
+                  }`}
                 >
                   <Scan className="w-4 h-4" />
-                  <span>GATILLO</span>
+                  <span>{cooldown > 0 ? `ESPERE (${cooldown}s)` : 'GATILLO'}</span>
                 </button>
               </div>
+              {cooldown > 0 && (
+                <div className="text-[10px] text-amber-400 font-mono flex items-center space-x-1 pt-1 animate-pulse">
+                  <span>⏱ Cooldown activo: espera {cooldown}s antes de reintentar otro escaneo</span>
+                </div>
+              )}
             </div>
           </form>
         </div>

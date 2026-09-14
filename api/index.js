@@ -651,12 +651,37 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // 3. Wireless Wi-Fi Scanner endpoint
+// Cooldown / Debounce map to prevent accidental double scans within 5 seconds
+const scanCooldownMap = new Map();
+
 app.post('/api/scan', async (req, res) => {
   try {
     const { codigoEstacion, codigoQRUnico } = req.body;
-    const result = await StateEngine.handleScan({ codigoEstacion, codigoQRUnico });
+    const cleanQR = (codigoQRUnico || '').trim();
+
+    if (!cleanQR) {
+      return res.json({ success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' });
+    }
+
+    // 5-second cooldown check per piece QR
+    const now = Date.now();
+    const lastScanTime = scanCooldownMap.get(cleanQR);
+    if (lastScanTime && (now - lastScanTime) < 5000) {
+      const remainingSecs = Math.ceil((5000 - (now - lastScanTime)) / 1000);
+      return res.json({
+        success: false,
+        cooldown: true,
+        remainingSecs,
+        oled_message: `ESPERE ${remainingSecs}S`,
+        tone: 'red',
+        reason: `Escaneo duplicado bloqueado. Debe esperar ${remainingSecs}s antes de volver a escanear esta pieza.`
+      });
+    }
+
+    const result = await StateEngine.handleScan({ codigoEstacion, codigoQRUnico: cleanQR });
 
     if (result.success) {
+      scanCooldownMap.set(cleanQR, Date.now());
       io.emit('scan:event', result);
       notifyDashboardUpdate();
     }
