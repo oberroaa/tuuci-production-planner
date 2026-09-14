@@ -480,10 +480,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
         {/* Column Sub-badge with Count */}
         <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 bg-white">
-          <span>{isLoteColumn ? 'Lotes activos:' : 'Piezas activas:'}</span>
+          <span>{isLoteColumn ? 'Jobs activos:' : 'Piezas activas:'}</span>
           <span className="font-bold text-slate-800 font-mono">
             {isLoteColumn
-              ? `${groupedLoteItems.length} lotes (${columnItems.length} piezas)`
+              ? `${groupedLoteItems.length} jobs (${columnItems.length} piezas)`
               : columnItems.length}
           </span>
         </div>
@@ -521,7 +521,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         )}
                       </div>
                       <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
-                        {totalInLote} {totalInLote === 1 ? 'Pieza' : 'Piezas en Lote'}
+                        {totalInLote} {totalInLote === 1 ? 'Pieza' : 'Piezas en Job'}
                       </span>
                     </div>
 
@@ -575,7 +575,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         className="w-full mt-1.5 py-1 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
                       >
                         <Package className="w-3 h-3" />
-                        <span>Cerrar Lote Final</span>
+                        <span>Cerrar Job Final</span>
                       </button>
                     )}
 
@@ -589,7 +589,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               })
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-[11px] text-slate-400 py-12 text-center">
-                <span>Sin lotes en esta estación</span>
+                <span>Sin jobs en esta estación</span>
               </div>
             )
           ) : (
@@ -637,7 +637,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
                       {!selectedJobCode && (
                         <span>
-                          Lote: <strong className="text-slate-600">{item.codigo_job}</strong>
+                          Job: <strong className="text-slate-600">{item.codigo_job}</strong>
                           {item.item_code && (
                             <span className="ml-1.5 px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 text-[9px]">
                               {item.item_code}
@@ -682,7 +682,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           className="py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
                         >
                           <Package className="w-3 h-3" />
-                          <span>Cerrar Lote</span>
+                          <span>Cerrar Job</span>
                         </button>
                       )}
                     </div>
@@ -740,7 +740,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             <p className="text-xs text-slate-500">
               {isAllLines
                 ? 'Monitoreo consolidado de todas las líneas de producción y flujo simultáneo de estaciones'
-                : 'Monitoreo en tiempo real de piezas, flujo por estaciones y cierre reconciliado de lotes'}
+                : 'Monitoreo en tiempo real de piezas, flujo por estaciones y cierre reconciliado de jobs'}
             </p>
           </div>
         </div>
@@ -811,7 +811,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Lotes / Jobs ({routeJobs.length})</span>
+              <span>Jobs ({routeJobs.length})</span>
             </button>
           </div>
 
@@ -915,7 +915,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   <span>
                     {jobSearchQuery.trim()
                       ? `Resultados (${matchingJobs.length + matchingPieces.length})`
-                      : 'Lotes sugeridos en proceso'}
+                      : 'Jobs sugeridos en proceso'}
                   </span>
                   {(selectedJobCode || selectedPieceCode) && (
                     <button
@@ -994,7 +994,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 <div className="mt-1">
                   {matchingPieces.length > 0 && matchingJobs.length > 0 && (
                     <div className="px-2 py-1 text-[9px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50 rounded mt-2">
-                      Lotes / Jobs ({matchingJobs.length})
+                      Jobs ({matchingJobs.length})
                     </div>
                   )}
                   <div className="divide-y divide-slate-50 mt-1">
@@ -1052,7 +1052,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       })
                     ) : matchingPieces.length === 0 ? (
                       <div className="p-4 text-center text-xs text-slate-400">
-                        No se encontraron lotes ni piezas que coincidan con{' '}
+                        No se encontraron jobs ni piezas que coincidan con{' '}
                         <strong className="text-slate-600 font-mono">"{jobSearchQuery}"</strong>
                       </div>
                     ) : null}
@@ -1197,7 +1197,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   {activePieceData.codigo_qr_unico}
                 </span>
                 <span className="text-xs text-slate-400">
-                  • Lote: <strong className="text-slate-700 font-mono">{selectedJobCode}</strong>
+                  • Job: <strong className="text-slate-700 font-mono">{selectedJobCode}</strong>
                 </span>
                 {activePieceData.linea_nombre && (
                   <span className="text-xs text-slate-500 font-semibold">
@@ -1232,7 +1232,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               onClick={() => setSelectedPieceCode('')}
               className="text-xs bg-white hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs transition-colors"
             >
-              Ver todo el Lote
+              Ver todo el Job
             </button>
           </div>
         </div>
@@ -1247,7 +1247,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-slate-500 uppercase">Lote Filtrado:</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">Job Filtrado:</span>
                 <span className="text-sm font-extrabold font-mono text-blue-800">
                   {currentSelectedJob.job_code}
                 </span>
@@ -1290,7 +1290,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-xs transition-colors flex items-center space-x-1"
               >
                 <Package className="w-3.5 h-3.5" />
-                <span>Cerrar Lote Final</span>
+                <span>Cerrar Job Final</span>
               </button>
             )}
           </div>
@@ -1301,7 +1301,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Lotes</span>
+            <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Jobs</span>
             <span className="text-xl font-extrabold text-slate-800 font-mono">{totalJobsCount}</span>
           </div>
           <Package className="w-6 h-6 text-slate-300" />
@@ -1483,7 +1483,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </div>
 
             <div className="text-xs text-slate-400">
-              Mostrando {filteredJobs.length} de {jobs.length} lotes
+              Mostrando {filteredJobs.length} de {jobs.length} jobs
               {selectedJobCode && ` (Filtrado por: ${selectedJobCode})`}
             </div>
           </div>
@@ -1587,7 +1587,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-sm inline-flex items-center space-x-1"
                           >
                             <Package className="w-3.5 h-3.5" />
-                            <span>Cerrar Lote Final</span>
+                            <span>Cerrar Job Final</span>
                           </button>
                         )}
 
@@ -1606,7 +1606,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 ) : (
                   <tr>
                     <td colSpan={isAllLines ? 9 : 8} className="py-8 text-center text-slate-400">
-                      No se encontraron lotes con el filtro seleccionado.
+                      No se encontraron jobs con el filtro seleccionado.
                     </td>
                   </tr>
                 )}

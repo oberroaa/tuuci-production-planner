@@ -102,10 +102,10 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                Cierre de Lote Final & Reconciliación
+                Cierre de Job Final & Reconciliación
               </h2>
               <p className="text-xs text-slate-500">
-                Estación Final de Empaque / Salida • Modo LOTE
+                Estación Final de Empaque / Salida • Modo JOB
               </p>
             </div>
           </div>
@@ -128,7 +128,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
             </div>
           ) : error && !auditData ? (
             <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
-              <p className="font-bold">Error al auditar lote</p>
+              <p className="font-bold">Error al auditar job</p>
               <p className="mt-1">{error}</p>
             </div>
           ) : auditData ? (
@@ -166,7 +166,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                   </div>
                   <p className="text-xs text-emerald-700 pl-7">
                     Todas las <strong>{auditData.totalPieces}</strong> piezas de la orden completaron exitosamente
-                    cada una de las estaciones intermedias de la ruta. El lote se cerrará con estatus{' '}
+                    cada una de las estaciones intermedias de la ruta. El job se cerrará con estatus{' '}
                     <strong className="underline">COMPLETADO</strong>.
                   </p>
                 </div>
@@ -181,7 +181,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-amber-800">
-                      El lote ha llegado a la estación final ({auditData.procesoFinal?.tipo_nombre}), pero se detectó que{' '}
+                      El job ha llegado a la estación final ({auditData.procesoFinal?.tipo_nombre}), pero se detectó que{' '}
                       <strong>{auditData.laggingCount} de {auditData.totalPieces} piezas</strong> se quedaron en estaciones anteriores y no
                       fueron escaneadas en todo el flujo.
                     </p>
@@ -298,7 +298,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
               ) : auditData.isClean ? (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Cerrar Lote Completo (Limpio)</span>
+                  <span>Cerrar Job Completo (Limpio)</span>
                 </>
               ) : (
                 <>

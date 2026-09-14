@@ -60,7 +60,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                Auditoría y Trazabilidad del Lote
+                Auditoría y Trazabilidad del Job
               </h2>
               <p className="text-xs text-slate-500">
                 Historial forense de eventos y reconciliación de piezas
@@ -179,7 +179,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
               {/* Pieces Summary with Individual Umbrella Durations */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                  <span>Piezas / Sombrillas del Lote ({data.pieces.length})</span>
+                  <span>Piezas / Sombrillas del Job ({data.pieces.length})</span>
                   {data.pieces.some((p: any) => p.cierre_excepcion === 1) && (
                     <span className="text-rose-600 font-bold normal-case text-[11px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
                       {data.pieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción

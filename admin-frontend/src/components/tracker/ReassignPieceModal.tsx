@@ -146,7 +146,7 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-medium">Lote / Modelo:</span>
+              <span className="text-slate-500 font-medium">Job / Modelo:</span>
               <span className="text-slate-700 font-semibold truncate max-w-[240px]">
                 {piece.codigo_job} • {piece.modelo}
               </span>
@@ -222,7 +222,7 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
               className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-slate-800 placeholder-slate-400"
             ></textarea>
             <p className="text-[10px] text-slate-400 mt-0.5">
-              Esta nota quedará registrada en la bitácora de auditoría forense del Lote y la Pieza.
+              Esta nota quedará registrada en la bitácora de auditoría forense del Job y la Pieza.
             </p>
           </div>
 
