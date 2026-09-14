@@ -271,6 +271,94 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
       })
     : routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').slice(0, 8);
 
+  // Dynamic matching for specific pieces (e.g. JOB569057-01, -01, etc.)
+  const matchingPieces = React.useMemo(() => {
+    const rawQ = jobSearchQuery.trim();
+    if (!rawQ) return [];
+    const q = rawQ.toLowerCase();
+    const normalizedQ = q.replace(/[\s_]/g, '-');
+    const pieceMatch = rawQ.match(/^([a-zA-Z0-9]+)[-_\s](\d{1,3})$/);
+    const pieceSuffixMatch = rawQ.match(/^[-_]?(\d{1,3})$/);
+
+    const results: Array<{
+      pieceQr: string;
+      pieceNumber: string;
+      jobCode: string;
+      job: any;
+      procesoNombre?: string;
+      estadoNombre?: string;
+    }> = [];
+
+    // Helper to add unique piece result
+    const addPieceResult = (qr: string, pNum: string, job: any, proc?: string, est?: string) => {
+      if (!results.some((r) => r.pieceQr.toLowerCase() === qr.toLowerCase())) {
+        results.push({
+          pieceQr: qr,
+          pieceNumber: pNum,
+          jobCode: job.job_code,
+          job,
+          procesoNombre: proc,
+          estadoNombre: est
+        });
+      }
+    };
+
+    // 1. Search in active kanban items
+    kanbanData.items.forEach((item) => {
+      if (!item.codigo_qr_unico) return;
+      const qrLower = item.codigo_qr_unico.toLowerCase();
+      const parentJob = routeJobs.find(
+        (j) => j.job_code.toLowerCase() === (item.codigo_job || '').toLowerCase()
+      );
+      if (!parentJob) return;
+
+      const pNum = item.codigo_qr_unico.split('-').pop() || '';
+      const matchesDirect = qrLower.includes(normalizedQ);
+      const matchesSuffix = pieceSuffixMatch && pNum.endsWith(pieceSuffixMatch[1].padStart(2, '0'));
+
+      if (matchesDirect || matchesSuffix) {
+        addPieceResult(
+          item.codigo_qr_unico,
+          pNum,
+          parentJob,
+          item.proceso_nombre,
+          item.estado_nombre
+        );
+      }
+    });
+
+    // 2. Synthesize/predict pieces for matching jobs if user searched specific piece format or if job matched
+    matchingJobs.slice(0, 5).forEach((j) => {
+      const cant = j.cantidad_piezas || 1;
+      for (let i = 1; i <= cant; i++) {
+        const pNum = String(i).padStart(2, '0');
+        const synthQr = `${j.job_code}-${pNum}`;
+        const synthQrLower = synthQr.toLowerCase();
+
+        const matchesQuery =
+          synthQrLower.includes(normalizedQ) ||
+          (pieceSuffixMatch && pNum === pieceSuffixMatch[1].padStart(2, '0')) ||
+          (pieceMatch && pieceMatch[1].toLowerCase() === j.job_code.toLowerCase() && pNum === pieceMatch[2].padStart(2, '0'));
+
+        if (matchesQuery) {
+          // Check if piece already exists in kanbanData.items
+          const existingItem = kanbanData.items.find(
+            (it) => (it.codigo_qr_unico || '').toLowerCase() === synthQrLower
+          );
+          addPieceResult(
+            synthQr,
+            pNum,
+            j,
+            existingItem?.proceso_nombre,
+            existingItem?.estado_nombre
+          );
+        }
+      }
+    });
+
+    return results.slice(0, 10);
+  }, [jobSearchQuery, routeJobs, kanbanData.items, matchingJobs]);
+
   // Filter items in Kanban based on Job, Piece, and direct text search query
   const visibleItems = kanbanData.items.filter((item) => {
     // 1. Direct explicit piece selection
@@ -796,14 +884,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
             {/* Autocomplete Dropdown Panel */}
             {isJobDropdownOpen && (
-              <div className="absolute left-[92px] top-full mt-1.5 w-[380px] max-h-72 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-50 p-1.5 animate-in fade-in duration-150">
+              <div className="absolute left-[92px] top-full mt-1.5 w-[420px] max-h-80 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-50 p-1.5 animate-in fade-in duration-150">
                 <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
                   <span>
                     {jobSearchQuery.trim()
-                      ? `Resultados (${matchingJobs.length})`
+                      ? `Resultados (${matchingJobs.length + matchingPieces.length})`
                       : 'Lotes sugeridos en proceso'}
                   </span>
-                  {selectedJobCode && (
+                  {(selectedJobCode || selectedPieceCode) && (
                     <button
                       onClick={() => {
                         setSelectedJobCode('');
@@ -818,65 +906,131 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   )}
                 </div>
 
-                <div className="divide-y divide-slate-50 mt-1">
-                  {matchingJobs.length > 0 ? (
-                    matchingJobs.map((j) => {
-                      const isSelected = selectedJobCode === j.job_code;
-                      return (
-                        <button
-                          key={j.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedJobCode(j.job_code);
-                            setJobSearchQuery(j.job_code);
-                            setSelectedPieceCode('');
-                            setIsJobDropdownOpen(false);
-                          }}
-                          className={`w-full text-left p-2 rounded-lg transition-colors flex items-center justify-between gap-2 ${
-                            isSelected ? 'bg-blue-50/80 border border-blue-200' : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-mono font-bold text-xs text-blue-700">{j.job_code}</span>
-                              {j.linea_nombre && (
-                                <span className="text-[8px] font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
-                                  {j.linea_nombre}
+                {/* Specific Piece matches (e.g., JOB569057-01) */}
+                {matchingPieces.length > 0 && (
+                  <div className="mt-1">
+                    <div className="px-2 py-1 text-[9px] font-extrabold text-indigo-500 uppercase tracking-wider bg-indigo-50/60 rounded flex items-center gap-1">
+                      <Target className="w-3 h-3 text-indigo-500" />
+                      <span>Piezas coincidentes ({matchingPieces.length})</span>
+                    </div>
+                    <div className="divide-y divide-slate-50 mt-1">
+                      {matchingPieces.map((p) => {
+                        const isSelected = selectedPieceCode === p.pieceQr;
+                        return (
+                          <button
+                            key={p.pieceQr}
+                            type="button"
+                            onClick={() => {
+                              setSelectedJobCode(p.jobCode);
+                              setSelectedPieceCode(p.pieceQr);
+                              setJobSearchQuery(p.pieceQr);
+                              setIsJobDropdownOpen(false);
+                            }}
+                            className={`w-full text-left p-2 rounded-lg transition-colors flex items-center justify-between gap-2 ${
+                              isSelected ? 'bg-indigo-50/80 border border-indigo-200' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono font-bold text-xs text-indigo-700">{p.pieceQr}</span>
+                                <span className="text-[8px] font-bold bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded">
+                                  Pieza #{p.pieceNumber}
+                                </span>
+                                {p.procesoNombre && (
+                                  <span className="text-[8px] font-bold bg-slate-100 text-slate-700 px-1 py-0.2 rounded">
+                                    {p.procesoNombre}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-600 truncate mt-0.5">
+                                {p.job.modelo} • <span className="font-mono text-slate-500">{p.job.job_code}</span>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              {p.estadoNombre ? (
+                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 block">
+                                  {p.estadoNombre}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-slate-400 font-mono block">
+                                  {p.job.cantidad_piezas} uds
                                 </span>
                               )}
-                              <span
-                                className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
-                                  j.estado_cierre === 'EN_PROCESO'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : j.estado_cierre === 'COMPLETADO'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {j.estado_cierre}
-                              </span>
                             </div>
-                            <div className="text-[11px] text-slate-600 truncate mt-0.5">{j.modelo}</div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded block">
-                              {j.cantidad_piezas} uds
-                            </span>
-                            {j.duracion_texto && (
-                              <span className="text-[9px] text-slate-400 font-mono block mt-0.5">
-                                {j.duracion_texto}
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="p-4 text-center text-xs text-slate-400">
-                      No se encontraron lotes que coincidan con{' '}
-                      <strong className="text-slate-600 font-mono">"{jobSearchQuery}"</strong>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Job Matches */}
+                <div className="mt-1">
+                  {matchingPieces.length > 0 && matchingJobs.length > 0 && (
+                    <div className="px-2 py-1 text-[9px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-50 rounded mt-2">
+                      Lotes / Jobs ({matchingJobs.length})
                     </div>
                   )}
+                  <div className="divide-y divide-slate-50 mt-1">
+                    {matchingJobs.length > 0 ? (
+                      matchingJobs.map((j) => {
+                        const isSelected = selectedJobCode === j.job_code && !selectedPieceCode;
+                        return (
+                          <button
+                            key={j.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedJobCode(j.job_code);
+                              setJobSearchQuery(j.job_code);
+                              setSelectedPieceCode('');
+                              setIsJobDropdownOpen(false);
+                            }}
+                            className={`w-full text-left p-2 rounded-lg transition-colors flex items-center justify-between gap-2 ${
+                              isSelected ? 'bg-blue-50/80 border border-blue-200' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono font-bold text-xs text-blue-700">{j.job_code}</span>
+                                {j.linea_nombre && (
+                                  <span className="text-[8px] font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
+                                    {j.linea_nombre}
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                                    j.estado_cierre === 'EN_PROCESO'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : j.estado_cierre === 'COMPLETADO'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {j.estado_cierre}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 truncate mt-0.5">{j.modelo}</div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded block">
+                                {j.cantidad_piezas} uds
+                              </span>
+                              {j.duracion_texto && (
+                                <span className="text-[9px] text-slate-400 font-mono block mt-0.5">
+                                  {j.duracion_texto}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : matchingPieces.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        No se encontraron lotes ni piezas que coincidan con{' '}
+                        <strong className="text-slate-600 font-mono">"{jobSearchQuery}"</strong>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             )}
