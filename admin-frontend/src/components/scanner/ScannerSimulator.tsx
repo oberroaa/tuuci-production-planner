@@ -15,8 +15,21 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   const [history, setHistory] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [cooldown, setCooldown] = useState<number>(0);
+  const [configCooldownSecs, setConfigCooldownSecs] = useState<number>(5);
 
-  // Timer countdown for cooldown (5 seconds)
+  // Load configured cooldown duration from server
+  React.useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.values?.scanner_cooldown_segundos !== undefined) {
+          setConfigCooldownSecs(data.values.scanner_cooldown_segundos);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  // Timer countdown for cooldown
   React.useEffect(() => {
     if (cooldown <= 0) return;
     const interval = setInterval(() => {
@@ -43,7 +56,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
       const data = await res.json();
 
       if (data.success) {
-        setCooldown(5);
+        setCooldown(configCooldownSecs);
         setOledDisplay({
           line1: data.oled_message,
           line2: `${data.pieceCode} [${data.station}]`,

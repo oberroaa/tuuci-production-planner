@@ -650,8 +650,82 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
+// Dynamic configuration helper with in-memory caching
+let cachedConfigs = {
+  scanner_cooldown_segundos: 5,
+  auto_refresh_interval_segundos: 5
+};
+
+async function loadSystemConfigs() {
+  try {
+    const rows = await db.prepare('SELECT clave, valor FROM configuraciones').all();
+    for (const r of rows) {
+      if (r.clave === 'scanner_cooldown_segundos') {
+        cachedConfigs.scanner_cooldown_segundos = Math.max(0, parseInt(r.valor, 10) || 5);
+      } else if (r.clave === 'auto_refresh_interval_segundos') {
+        cachedConfigs.auto_refresh_interval_segundos = Math.max(1, parseInt(r.valor, 10) || 5);
+      }
+    }
+  } catch (err) {
+    console.error('Error loading configuraciones:', err);
+  }
+}
+
+await loadSystemConfigs();
+
+// Config API endpoints
+app.get('/api/config', async (req, res) => {
+  try {
+    const rows = await db.prepare('SELECT clave, valor, descripcion, updated_at FROM configuraciones').all();
+    const configMap = {};
+    for (const r of rows) {
+      configMap[r.clave] = r.valor;
+    }
+    res.json({
+      configs: rows,
+      values: {
+        scanner_cooldown_segundos: parseInt(configMap.scanner_cooldown_segundos || '5', 10),
+        auto_refresh_interval_segundos: parseInt(configMap.auto_refresh_interval_segundos || '5', 10)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/config', async (req, res) => {
+  try {
+    const { scanner_cooldown_segundos, auto_refresh_interval_segundos } = req.body;
+
+    if (scanner_cooldown_segundos !== undefined) {
+      const cooldownVal = Math.max(0, parseInt(scanner_cooldown_segundos, 10) || 0);
+      await db.prepare(`
+        INSERT INTO configuraciones (clave, valor, updated_at)
+        VALUES ('scanner_cooldown_segundos', ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = CURRENT_TIMESTAMP
+      `).run(String(cooldownVal));
+      cachedConfigs.scanner_cooldown_segundos = cooldownVal;
+    }
+
+    if (auto_refresh_interval_segundos !== undefined) {
+      const refreshVal = Math.max(1, parseInt(auto_refresh_interval_segundos, 10) || 5);
+      await db.prepare(`
+        INSERT INTO configuraciones (clave, valor, updated_at)
+        VALUES ('auto_refresh_interval_segundos', ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = CURRENT_TIMESTAMP
+      `).run(String(refreshVal));
+      cachedConfigs.auto_refresh_interval_segundos = refreshVal;
+    }
+
+    io.emit('config:updated', cachedConfigs);
+    res.json({ success: true, values: cachedConfigs });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // 3. Wireless Wi-Fi Scanner endpoint
-// Cooldown / Debounce map to prevent accidental double scans within 5 seconds
+// Cooldown / Debounce map to prevent accidental double scans within configured seconds
 const scanCooldownMap = new Map();
 
 app.post('/api/scan', async (req, res) => {
@@ -663,19 +737,23 @@ app.post('/api/scan', async (req, res) => {
       return res.json({ success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' });
     }
 
-    // 5-second cooldown check per piece QR
-    const now = Date.now();
-    const lastScanTime = scanCooldownMap.get(cleanQR);
-    if (lastScanTime && (now - lastScanTime) < 5000) {
-      const remainingSecs = Math.ceil((5000 - (now - lastScanTime)) / 1000);
-      return res.json({
-        success: false,
-        cooldown: true,
-        remainingSecs,
-        oled_message: `ESPERE ${remainingSecs}S`,
-        tone: 'red',
-        reason: `Escaneo duplicado bloqueado. Debe esperar ${remainingSecs}s antes de volver a escanear esta pieza.`
-      });
+    const cooldownMs = (cachedConfigs.scanner_cooldown_segundos || 5) * 1000;
+
+    // Configurable cooldown check per piece QR
+    if (cooldownMs > 0) {
+      const now = Date.now();
+      const lastScanTime = scanCooldownMap.get(cleanQR);
+      if (lastScanTime && (now - lastScanTime) < cooldownMs) {
+        const remainingSecs = Math.ceil((cooldownMs - (now - lastScanTime)) / 1000);
+        return res.json({
+          success: false,
+          cooldown: true,
+          remainingSecs,
+          oled_message: `ESPERE ${remainingSecs}S`,
+          tone: 'red',
+          reason: `Escaneo duplicado bloqueado. Debe esperar ${remainingSecs}s antes de volver a escanear esta pieza.`
+        });
+      }
     }
 
     const result = await StateEngine.handleScan({ codigoEstacion, codigoQRUnico: cleanQR });

@@ -132,6 +132,21 @@ export async function initDb() {
         observacion TEXT,
         timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS configuraciones (
+        clave TEXT PRIMARY KEY,
+        valor TEXT NOT NULL,
+        descripcion TEXT,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
+      INSERT INTO configuraciones (clave, valor, descripcion)
+      VALUES 
+        ('scanner_cooldown_segundos', '5', 'Tiempo de espera (segundos) entre escaneos para evitar reenvíos accidentales'),
+        ('auto_refresh_interval_segundos', '5', 'Intervalo de actualización automática del tablero Kanban')
+      ON CONFLICT (clave) DO NOTHING;
     `);
 
     await client.query('COMMIT');

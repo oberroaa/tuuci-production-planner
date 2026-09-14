@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer } from 'lucide-react';
+import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw } from 'lucide-react';
 
 interface AdminPanelProps {
   onCatalogUpdated: () => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'LINES' | 'PROCESS_TYPES' | 'ROUTES' | 'STATES' | 'SCANNERS' | 'USERS'>('ROUTES');
+  const [activeSubTab, setActiveSubTab] = useState<'LINES' | 'PROCESS_TYPES' | 'ROUTES' | 'STATES' | 'SCANNERS' | 'USERS' | 'SYSTEM_CONFIG'>('ROUTES');
   const [catalogs, setCatalogs] = useState<{
     lineas: any[];
     rutas: any[];
@@ -162,6 +162,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [editingUserRol, setEditingUserRol] = useState<'ADMIN' | 'SUPERVISOR' | 'OPERADOR'>('OPERADOR');
   const [editingUserLineaId, setEditingUserLineaId] = useState<number | ''>('');
 
+  // System Configuration state (cooldown, refresh)
+  const [systemCooldownSecs, setSystemCooldownSecs] = useState<number>(5);
+  const [systemRefreshSecs, setSystemRefreshSecs] = useState<number>(5);
+  const [savingConfig, setSavingConfig] = useState<boolean>(false);
+
+  const loadSystemConfigs = async () => {
+    try {
+      const res = await fetch('/api/config');
+      const data = await res.json();
+      if (data?.values) {
+        setSystemCooldownSecs(data.values.scanner_cooldown_segundos || 5);
+        setSystemRefreshSecs(data.values.auto_refresh_interval_segundos || 5);
+      }
+    } catch (err) {
+      console.error('Failed to load system configs', err);
+    }
+  };
+
+  const handleSaveSystemConfigs = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scanner_cooldown_segundos: systemCooldownSecs,
+          auto_refresh_interval_segundos: systemRefreshSecs
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Parámetros del sistema actualizados con éxito', 'success');
+      } else {
+        showToast(data.error || 'No se pudo guardar la configuración', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error de conexión al guardar configuración', 'error');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   const loadCatalogs = async () => {
     try {
       const res = await fetch('/api/catalogs');
@@ -188,6 +232,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   useEffect(() => {
     loadCatalogs();
     loadUsers();
+    loadSystemConfigs();
   }, []);
 
   // Synchronize selectedRutaId whenever selectedLineId or catalogs.rutas changes
@@ -1111,6 +1156,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         >
           <Users className="w-4 h-4" />
           <span>Gestión de Usuarios y Roles</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('SYSTEM_CONFIG')}
+          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+            activeSubTab === 'SYSTEM_CONFIG' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Timer className="w-4 h-4 text-amber-500" />
+          <span>Parámetros del Sistema (Cooldown)</span>
         </button>
       </div>
 
@@ -2587,6 +2642,158 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. SECTION: SYSTEM CONFIGURATION (COOLDOWN & DEBOUNCE) */}
+      {activeSubTab === 'SYSTEM_CONFIG' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+            <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
+              <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
+                <Timer className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                  Control de Escaneo y Antirrebote (Cooldown)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Ajusta los tiempos de espera para prevenir disparos duplicados en las terminales físicas y pantallas OLED.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSystemConfigs} className="space-y-6">
+              {/* Cooldown setting */}
+              <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                    <Radio className="w-4 h-4 text-emerald-600" />
+                    <span>Tiempo de Espera entre Escaneos (Cooldown)</span>
+                  </label>
+                  <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                    {systemCooldownSecs} segundos
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Cuando un operario escanea un código QR de pieza, la terminal y la API rechazarán cualquier nuevo escaneo de esa misma pieza durante este intervalo, mostrando <code className="bg-slate-200 px-1 rounded text-slate-800 font-mono">ESPERE Xs</code> en la pantalla OLED.
+                </p>
+
+                <div className="pt-2 flex items-center space-x-4">
+                  <input
+                    type="range"
+                    min="0"
+                    max="30"
+                    step="1"
+                    value={systemCooldownSecs}
+                    onChange={(e) => setSystemCooldownSecs(parseInt(e.target.value, 10))}
+                    className="flex-1 accent-amber-600 cursor-pointer"
+                  />
+                  <div className="flex items-center space-x-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="60"
+                      value={systemCooldownSecs}
+                      onChange={(e) => setSystemCooldownSecs(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <span className="text-xs text-slate-500 font-medium">seg</span>
+                  </div>
+                </div>
+
+                {/* Quick preset buttons */}
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 self-center">Preajustes:</span>
+                  {[0, 3, 5, 8, 10, 15].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setSystemCooldownSecs(val)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold font-mono transition-all ${
+                        systemCooldownSecs === val
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {val === 0 ? 'Desactivado (0s)' : `${val}s`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Kanban auto-refresh setting */}
+              <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                    <RefreshCw className="w-4 h-4 text-blue-600" />
+                    <span>Intervalo de Ticker del Tablero Kanban</span>
+                  </label>
+                  <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-blue-100 text-blue-900 border border-blue-300">
+                    {systemRefreshSecs} segundos
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Frecuencia de sincronización periódica en segundo plano para mantener los contadores de tiempo en estación siempre actualizados.
+                </p>
+
+                <div className="pt-2 flex items-center space-x-4">
+                  <input
+                    type="range"
+                    min="2"
+                    max="30"
+                    step="1"
+                    value={systemRefreshSecs}
+                    onChange={(e) => setSystemRefreshSecs(parseInt(e.target.value, 10))}
+                    className="flex-1 accent-blue-600 cursor-pointer"
+                  />
+                  <div className="flex items-center space-x-1">
+                    <input
+                      type="number"
+                      min="2"
+                      max="60"
+                      value={systemRefreshSecs}
+                      onChange={(e) => setSystemRefreshSecs(Math.max(2, parseInt(e.target.value, 10) || 2))}
+                      className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-slate-500 font-medium">seg</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={savingConfig}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{savingConfig ? 'Guardando...' : 'Guardar Parámetros'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Info Card / Guidelines */}
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl border border-slate-700 shadow-lg space-y-4">
+              <div className="flex items-center space-x-2 text-emerald-400">
+                <Shield className="w-5 h-5" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Mecanismo de Protección en Planta</h4>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                En operaciones industriales con lectores Wi-Fi / Bluetooth, los operarios pueden accionar involuntariamente el gatillo varias veces sobre la misma etiqueta.
+              </p>
+              <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2 text-xs">
+                <div className="font-bold text-slate-200">Comportamiento en Hardware:</div>
+                <ul className="list-disc list-inside text-slate-400 space-y-1 text-[11px]">
+                  <li><strong>1er Disparo:</strong> Procesa la apertura o cierre con confirmación verde y zumbador.</li>
+                  <li><strong>Disparos repetidos (&lt; {systemCooldownSecs}s):</strong> Bloqueo inmediato con alerta OLED <code className="text-amber-400 font-mono">ESPERE Xs</code> y tono sonoro corto.</li>
+                  <li><strong>Persistencia:</strong> Los cambios se guardan en la base de datos y se propagan inmediatamente por WebSockets a todas las terminales activas.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       )}
