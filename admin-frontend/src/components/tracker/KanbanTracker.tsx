@@ -16,10 +16,12 @@ import {
   GitFork,
   X,
   Target,
-  Search
+  Search,
+  RotateCcw
 } from 'lucide-react';
 import { BatchCloseModal } from './BatchCloseModal';
 import { JobAuditModal } from './JobAuditModal';
+import { ReassignPieceModal } from './ReassignPieceModal';
 
 interface KanbanTrackerProps {
   activeLine: string;
@@ -78,6 +80,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   // Modals state
   const [closingJobId, setClosingJobId] = useState<number | null>(null);
   const [auditJobId, setAuditJobId] = useState<number | null>(null);
+  const [reassigningPiece, setReassigningPiece] = useState<any | null>(null);
   const [jobFilter, setJobFilter] = useState<'ALL' | 'EN_PROCESO' | 'COMPLETADO' | 'COMPLETADO_CON_INCIDENCIAS'>('ALL');
 
   // Resolve current line object safely: supports global view ('TODAS' / 'ALL') or dedicated line
@@ -650,16 +653,29 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <span>En estación: <strong>{item.tiempo_estacion_texto || '—'}</strong></span>
                     </div>
 
-                    {/* Quick action: If item is in closure station, button to close batch */}
-                    {isClosureColumn && item.job_estado_cierre === 'EN_PROCESO' && (
+                    {/* Actions: Reassign / Mover estación & Cerrar Lote */}
+                    <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5">
                       <button
-                        onClick={() => setClosingJobId(item.job_id)}
-                        className="w-full mt-1.5 py-1 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
+                        type="button"
+                        onClick={() => setReassigningPiece(item)}
+                        className="flex-1 py-1 px-2 rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 border border-slate-200"
+                        title="Mover o regresar pieza a otro proceso (reproceso o corrección)"
                       >
-                        <Package className="w-3 h-3" />
-                        <span>Cerrar Lote Final</span>
+                        <RotateCcw className="w-3 h-3 text-amber-600" />
+                        <span>Mover Estación</span>
                       </button>
-                    )}
+
+                      {isClosureColumn && item.job_estado_cierre === 'EN_PROCESO' && (
+                        <button
+                          type="button"
+                          onClick={() => setClosingJobId(item.job_id)}
+                          className="py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
+                        >
+                          <Package className="w-3 h-3" />
+                          <span>Cerrar Lote</span>
+                        </button>
+                      )}
+                    </div>
 
                     <div
                       className={`w-full h-1 rounded-full ${
@@ -1604,6 +1620,19 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         isOpen={auditJobId !== null}
         jobId={auditJobId}
         onClose={() => setAuditJobId(null)}
+      />
+
+      {/* Reassign Piece Modal (Move / Rework backward) */}
+      <ReassignPieceModal
+        isOpen={reassigningPiece !== null}
+        piece={reassigningPiece}
+        procesos={kanbanData.procesos || []}
+        currentUser={currentUser}
+        onClose={() => setReassigningPiece(null)}
+        onSuccess={() => {
+          fetchKanbanAndJobs();
+          onRefreshTrigger();
+        }}
       />
     </div>
   );

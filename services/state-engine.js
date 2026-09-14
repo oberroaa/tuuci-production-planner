@@ -699,4 +699,118 @@ export class StateEngine {
       client.release();
     }
   }
+
+  /**
+   * Reassign a piece back (or to any target process) for rework / corrective actions,
+   * keeping its timestamps/history intact and recording an audit trail event with optional reason.
+   */
+  static async reassignPieceProcess({ piezaId, targetProcesoId, usuarioId = null, observacion = '' }) {
+    const piezaRes = await query(`
+      SELECT p.id, p.job_id, p.codigo_qr_unico, j.job_code, j.ruta_id
+      FROM piezas p
+      JOIN jobs j ON p.job_id = j.id
+      WHERE p.id = $1
+    `, [piezaId]);
+
+    const pieza = piezaRes.rows[0];
+    if (!pieza) {
+      throw new Error('Pieza no encontrada');
+    }
+
+    const targetProcRes = await query(`
+      SELECT p.id, p.orden, p.modo_trabajo, tp.nombre as tipo_nombre
+      FROM procesos p
+      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
+      WHERE p.id = $1
+    `, [targetProcesoId]);
+
+    const targetProc = targetProcRes.rows[0];
+    if (!targetProc) {
+      throw new Error('Proceso destino no encontrado');
+    }
+
+    const stateEsperandoRes = await query("SELECT id FROM estados WHERE nombre = 'ESPERANDO'");
+    const stateInactivoRes = await query("SELECT id FROM estados WHERE nombre = 'INACTIVO'");
+    const stateEsperando = stateEsperandoRes.rows[0];
+    const stateInactivo = stateInactivoRes.rows[0];
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const now = new Date();
+
+      // Find current active step for this piece
+      const currentActiveStepRes = await client.query(`
+        SELECT pp.id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, pr.orden, tp.nombre as tipo_nombre
+        FROM pieza_procesos pp
+        JOIN procesos pr ON pp.proceso_id = pr.id
+        JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
+        JOIN estados e ON pp.estado_id = e.id
+        WHERE pp.pieza_id = $1 AND e.nombre IN ('EN PROCESO', 'ESPERANDO')
+        ORDER BY pr.orden DESC LIMIT 1
+      `, [pieza.id]);
+
+      const currentStep = currentActiveStepRes.rows[0];
+
+      // Reset subsequent steps after target process to INACTIVO
+      await client.query(`
+        UPDATE pieza_procesos
+        SET estado_id = $1, fecha_fin = NULL
+        WHERE pieza_id = $2
+          AND proceso_id IN (
+            SELECT id FROM procesos WHERE ruta_id = $3 AND orden > $4
+          )
+      `, [stateInactivo.id, pieza.id, pieza.ruta_id, targetProc.orden]);
+
+      // Set target process to ESPERANDO
+      const targetPPRes = await client.query(`
+        SELECT id, estado_id, fecha_inicio FROM pieza_procesos
+        WHERE pieza_id = $1 AND proceso_id = $2
+      `, [pieza.id, targetProc.id]);
+
+      let targetPP = targetPPRes.rows[0];
+      if (!targetPP) {
+        // If row doesn't exist, insert it
+        const newPP = await client.query(`
+          INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+          VALUES ($1, $2, $3, $4)
+          RETURNING id, estado_id, fecha_inicio
+        `, [pieza.id, targetProc.id, stateEsperando.id, now]);
+        targetPP = newPP.rows[0];
+      } else {
+        await client.query(`
+          UPDATE pieza_procesos
+          SET estado_id = $1, fecha_fin = NULL,
+              fecha_inicio = COALESCE(fecha_inicio, $2)
+          WHERE id = $3
+        `, [stateEsperando.id, now, targetPP.id]);
+      }
+
+      // Record audit event in evento_estados
+      const fromName = currentStep ? currentStep.tipo_nombre : 'Desconocido';
+      const reasonText = observacion ? `Motivo: ${observacion.trim()}` : 'Ajuste operativo / Reproceso';
+      const eventObs = `Movimiento manual de estación: de [${fromName}] regresado a [${targetProc.tipo_nombre}]. ${reasonText}`.trim();
+
+      await client.query(`
+        INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [targetPP.id, currentStep ? currentStep.estado_id : null, stateEsperando.id, usuarioId, eventObs]);
+
+      await client.query('COMMIT');
+
+      return {
+        success: true,
+        pieceQr: pieza.codigo_qr_unico,
+        jobCode: pieza.job_code,
+        targetProcess: targetProc.tipo_nombre,
+        targetOrden: targetProc.orden
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }
+

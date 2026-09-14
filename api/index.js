@@ -1400,6 +1400,27 @@ app.post('/api/jobs/:id/close-final-batch', async (req, res) => {
   }
 });
 
+// 5e. Reassign piece to another process (e.g. backward for rework/correction)
+app.post('/api/pieces/:id/reassign', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { targetProcesoId, usuarioId, observacion } = req.body;
+    if (!targetProcesoId) {
+      return res.status(400).json({ error: 'targetProcesoId es requerido' });
+    }
+    const result = await StateEngine.reassignPieceProcess({
+      piezaId: parseInt(id, 10),
+      targetProcesoId: parseInt(targetProcesoId, 10),
+      usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
+      observacion: observacion || ''
+    });
+    notifyDashboardUpdate();
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // 6. Dashboard Analytics Summary
 app.get('/api/dashboard/summary', async (req, res) => {
   try {
