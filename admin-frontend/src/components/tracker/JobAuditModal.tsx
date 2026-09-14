@@ -1,0 +1,325 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  Package,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  User,
+  History,
+  FileText,
+  ShieldCheck,
+  ShieldAlert
+} from 'lucide-react';
+
+interface JobAuditModalProps {
+  jobId: number | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onClose }) => {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && jobId) {
+      setLoading(true);
+      setError(null);
+      fetch(`/api/jobs/${jobId}`)
+        .then(async (res) => {
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Error al cargar detalles del Job');
+          }
+          return res.json();
+        })
+        .then((resData) => {
+          setData(resData);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setError(err.message);
+          setLoading(false);
+        });
+    }
+  }, [isOpen, jobId]);
+
+  if (!isOpen || !jobId) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-lg bg-indigo-100 text-indigo-700">
+              <History className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Auditoría y Trazabilidad del Lote
+              </h2>
+              <p className="text-xs text-slate-500">
+                Historial forense de eventos y reconciliación de piezas
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+          {loading ? (
+            <div className="py-12 text-center space-y-3">
+              <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p className="text-xs font-semibold text-slate-500">
+                Cargando eventos y bitácora del Job...
+              </p>
+            </div>
+          ) : error || !data ? (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+              <p className="font-bold">Error al cargar datos</p>
+              <p className="mt-1">{error}</p>
+            </div>
+          ) : (
+            <>
+              {/* Job Header Card */}
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Código Job</span>
+                    <span className="font-mono font-extrabold text-lg text-slate-900">
+                      {data.job.job_code}
+                    </span>
+                  </div>
+
+                  <div>
+                    {data.job.estado_cierre === 'COMPLETADO' ? (
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>COMPLETADO LIMPIO</span>
+                      </span>
+                    ) : data.job.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS' ? (
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        <ShieldAlert className="w-4 h-4 text-amber-600" />
+                        <span>COMPLETADO CON INCIDENCIAS</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                        <Clock className="w-4 h-4 text-blue-600" />
+                        <span>EN PROCESO</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Modelo</span>
+                    <span className="font-medium text-slate-800">{data.job.modelo}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Línea & Ruta</span>
+                    <span className="font-medium text-slate-800">{data.job.linea_nombre}</span>
+                    <span className="text-slate-400 block text-[10px]">{data.job.ruta_nombre || 'Principal'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Piezas Totales</span>
+                    <span className="font-bold text-slate-800">{data.job.cantidad_piezas} unidades</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Creado el</span>
+                    <span className="font-medium text-slate-600">
+                      {new Date(data.job.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="bg-indigo-50/80 border border-indigo-200/70 p-2 rounded-lg">
+                    <span className="text-indigo-600 flex items-center space-x-1 text-[10px] font-bold uppercase">
+                      <Clock className="w-3 h-3 text-indigo-500" />
+                      <span>Tiempo Job</span>
+                    </span>
+                    <span className="font-mono font-extrabold text-xs text-indigo-900 block">
+                      {data.job.duracion_texto || '—'}
+                    </span>
+                    <span className="text-[9px] text-indigo-500 block">
+                      {data.job.es_en_curso ? 'En curso' : 'Finalizado'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Closure Details */}
+                {data.job.fecha_cierre && (
+                  <div className="mt-3 pt-3 border-t border-slate-200 text-xs space-y-1 bg-white p-3 rounded-lg border border-slate-200/60">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>
+                        <strong>Cerrado por:</strong> {data.job.cerrado_por_nombre || 'Supervisor'}
+                      </span>
+                      <span>
+                        <strong>Fecha Cierre:</strong> {new Date(data.job.fecha_cierre).toLocaleString()}
+                      </span>
+                    </div>
+                    {data.job.notas_cierre && (
+                      <div className="mt-1 pt-1 text-slate-700">
+                        <strong className="text-slate-500">Notas / Justificación:</strong>{' '}
+                        <span className="italic">{data.job.notas_cierre}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Pieces Summary with Individual Umbrella Durations */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                  <span>Piezas / Sombrillas del Lote ({data.pieces.length})</span>
+                  {data.pieces.some((p: any) => p.cierre_excepcion === 1) && (
+                    <span className="text-rose-600 font-bold normal-case text-[11px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                      {data.pieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción
+                    </span>
+                  )}
+                </h3>
+                <div className="grid grid-cols-1 gap-2.5">
+                  {data.pieces.map((piece: any) => (
+                    <div
+                      key={piece.id}
+                      className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                        piece.cierre_excepcion === 1
+                          ? 'bg-rose-50/60 border-rose-200'
+                          : 'bg-white border-slate-200 shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <span className="font-mono font-bold text-sm text-slate-900">{piece.codigo_qr_unico}</span>
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            {piece.estacion_actual ? `${piece.estacion_actual} • ${piece.estado_actual}` : 'Proceso Completado'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {/* Umbrella Duration Badge */}
+                          <span className="inline-flex items-center space-x-1.5 font-mono text-[11px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-800 px-2.5 py-1 rounded-md" title="Tiempo total de ciclo de esta sombrilla">
+                            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Tiempo Sombrilla: {piece.duracion_texto || '—'}</span>
+                            {piece.es_finalizada ? (
+                              <span className="text-[9px] text-emerald-600 font-extrabold uppercase ml-1">✓ OK</span>
+                            ) : (
+                              <span className="text-[9px] text-blue-600 font-extrabold uppercase ml-1">En curso</span>
+                            )}
+                          </span>
+
+                          {piece.cierre_excepcion === 1 ? (
+                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider">
+                              Excepción
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                              Normal
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Station-by-station Time Progression */}
+                      {piece.pasos && piece.pasos.length > 0 && (
+                        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-[10px]">
+                          <span className="text-slate-400 font-semibold uppercase text-[9px] mr-1">Tiempos por Estación:</span>
+                          {piece.pasos.map((paso: any) => {
+                            const isTerminado = paso.estado_nombre === 'TERMINADA';
+                            const isEnProceso = paso.estado_nombre === 'EN PROCESO';
+                            return (
+                              <span
+                                key={paso.id}
+                                className={`px-2 py-0.5 rounded border font-mono flex items-center space-x-1 ${
+                                  isTerminado
+                                    ? 'bg-slate-50 border-slate-200 text-slate-700'
+                                    : isEnProceso
+                                    ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold'
+                                    : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
+                                }`}
+                                title={`${paso.proceso_nombre}: ${isTerminado ? 'Terminado' : isEnProceso ? 'En proceso' : 'Pendiente'}`}
+                              >
+                                <span>{paso.proceso_nombre}:</span>
+                                <strong className={isEnProceso ? 'text-blue-700' : 'text-slate-800'}>
+                                  {paso.duracion_texto || '—'}
+                                </strong>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Forensic Audit Events Trail */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                  <History className="w-4 h-4 text-slate-500" />
+                  <span>Bitácora de Eventos Registrados</span>
+                </h3>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                    {data.auditEvents && data.auditEvents.length > 0 ? (
+                      data.auditEvents.map((ev: any) => (
+                        <div key={ev.id} className="p-3 text-xs bg-white hover:bg-slate-50 transition-colors space-y-1">
+                          <div className="flex items-center justify-between text-slate-600">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-mono font-bold text-blue-700">{ev.codigo_qr_unico}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                                {ev.proceso_nombre}
+                              </span>
+                              <span className="font-semibold text-slate-800">→ {ev.estado_nombre}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {new Date(ev.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+
+                          {ev.observacion && (
+                            <div className="bg-amber-50/80 border-l-2 border-amber-400 p-2 rounded text-[11px] text-amber-900 mt-1">
+                              <strong>Observación:</strong> {ev.observacion}
+                            </div>
+                          )}
+
+                          <div className="text-[10px] text-slate-400 flex items-center justify-between pt-0.5">
+                            <span>Usuario: {ev.usuario_nombre || 'Sistema'}</span>
+                            <span>{new Date(ev.timestamp).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-6 text-center text-xs text-slate-400">
+                        No hay eventos registrados para este Job.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

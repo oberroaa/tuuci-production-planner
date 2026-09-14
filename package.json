@@ -1,0 +1,33 @@
+{
+  "name": "tuuci-production-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tuuci Production Planner - End-to-end production traceability and station control system",
+  "type": "module",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "node --watch api/index.js",
+    "seed": "node scripts/seed.mjs",
+    "test": "vitest run --config vitest.config.mjs",
+    "test:watch": "vitest --config vitest.config.mjs",
+    "verify:prod-boot": "node tests/verify-prod-boot.mjs"
+  },
+  "author": "Tuuci",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0",
+    "vitest": "^3.0.7"
+  }
+}
