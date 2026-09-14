@@ -778,6 +778,7 @@ app.get('/api/jobs/check/:jobCode', async (req, res) => {
         j.id, 
         j.job_code, 
         j.modelo, 
+        j.item_code,
         j.cantidad_piezas,
         j.estado_cierre,
         j.fecha_cierre,
@@ -824,12 +825,13 @@ app.get('/api/jobs/check/:jobCode', async (req, res) => {
 // 4. Cutting Station (Fase 1): Create Job and Pieces
 app.post('/api/jobs', async (req, res) => {
   try {
-    const { jobCode, lineaId, rutaId, modelo, specsRaw, cantidadPiezas, creadoPorUsuarioId } = req.body;
+    const { jobCode, lineaId, rutaId, modelo, itemCode, specsRaw, cantidadPiezas, creadoPorUsuarioId } = req.body;
     const job = await StateEngine.createJob({
       jobCode,
       lineaId,
       rutaId,
       modelo,
+      itemCode,
       specsRaw,
       cantidadPiezas,
       creadoPorUsuarioId
@@ -1225,6 +1227,7 @@ app.get('/api/kanban', async (req, res) => {
             j.id as job_id,
             j.job_code as codigo_job,
             j.modelo,
+            j.item_code,
             j.linea_id as job_linea_id,
             l.nombre as linea_nombre,
             j.ruta_id as job_ruta_id,
@@ -1257,6 +1260,7 @@ app.get('/api/kanban', async (req, res) => {
             j.id as job_id,
             j.job_code as codigo_job,
             j.modelo,
+            j.item_code,
             j.linea_id as job_linea_id,
             l.nombre as linea_nombre,
             j.ruta_id as job_ruta_id,
@@ -1291,6 +1295,7 @@ app.get('/api/kanban', async (req, res) => {
             j.id as job_id,
             j.job_code as codigo_job,
             j.modelo,
+            j.item_code,
             j.linea_id as job_linea_id,
             l.nombre as linea_nombre,
             j.ruta_id as job_ruta_id,
@@ -1323,6 +1328,7 @@ app.get('/api/kanban', async (req, res) => {
             j.id as job_id,
             j.job_code as codigo_job,
             j.modelo,
+            j.item_code,
             j.linea_id as job_linea_id,
             l.nombre as linea_nombre,
             j.ruta_id as job_ruta_id,

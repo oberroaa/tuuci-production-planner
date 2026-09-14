@@ -633,11 +633,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <span className="truncate">{item.modelo}</span>
                     </div>
 
-                    {/* Metadata tags: Line and Job */}
+                    {/* Metadata tags: Line, Job, and Item */}
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
                       {!selectedJobCode && (
                         <span>
                           Lote: <strong className="text-slate-600">{item.codigo_job}</strong>
+                          {item.item_code && (
+                            <span className="ml-1.5 px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 text-[9px]">
+                              {item.item_code}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {selectedJobCode && item.item_code && (
+                        <span className="px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 text-[9px]">
+                          Item: {item.item_code}
                         </span>
                       )}
                       {isAllLines && item.linea_nombre && (

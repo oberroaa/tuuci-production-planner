@@ -128,24 +128,28 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
   const sampleOrders = [
     {
       jobCode: 'JOB0279087', // Job already cut/recorded in DB
+      itemCode: 'ITM-88410',
       modelo: "OceanMaster M1 Classic 7.5' SQ",
       cantidadPiezas: 4,
       specsRaw: 'Carton: 1 Of 4\nFinish: Polished Silver Aluminum\nFabric: Sunbrella Marine Blue 4608\nTrim: White Binding'
     },
     {
       jobCode: 'JOB0284112', // Job already cut/recorded in DB
+      itemCode: 'ITM-94205',
       modelo: "Plantation MAX Cantilever 10.0' OCT",
       cantidadPiezas: 3,
       specsRaw: 'Carton: 1 Of 3\nFinish: Aluma-TEAK Weathered\nFabric: Sunbrella Natural 4604'
     },
     {
       jobCode: 'NEW_50', // New 50-piece batch to test compact 1 a 50 ticket view
+      itemCode: 'ITM-60312',
       modelo: "Plantation MAX Cantilever 10.0' OCT",
       cantidadPiezas: 50,
       specsRaw: 'Carton: 1 Of 50\nFinish: Aluma-TEAK Weathered\nFabric: Sunbrella Natural 4604'
     },
     {
       jobCode: 'NEW_6',
+      itemCode: 'ITM-77144',
       modelo: "OceanMaster M1 Classic 7.5' SQ",
       cantidadPiezas: 6,
       specsRaw: 'Carton: 1 Of 6\nFinish: Polished Silver Aluminum\nFabric: Sunbrella Marine Blue 4608'
@@ -214,6 +218,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
           lineaId: selectedLineId,
           rutaId: selectedRutaId,
           modelo: ocrResult.modelo,
+          itemCode: ocrResult.itemCode,
           specsRaw: ocrResult.specsRaw,
           cantidadPiezas: ocrResult.cantidadPiezas,
           creadoPorUsuarioId: currentUser?.id || 1
@@ -385,7 +390,14 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             ) : ocrResult ? (
               <div className="w-full h-full bg-white p-6 rounded shadow text-slate-800 space-y-3 text-xs overflow-auto">
                 <div className="flex justify-between border-b pb-2">
-                  <span className="font-extrabold text-sm text-blue-700 mono">{ocrResult.jobCode}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-extrabold text-sm text-blue-700 mono">{ocrResult.jobCode}</span>
+                    {ocrResult.itemCode && (
+                      <span className="font-bold px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 mono">
+                        ITEM: {ocrResult.itemCode}
+                      </span>
+                    )}
+                  </div>
                   <span className="font-bold bg-slate-100 px-2 py-0.5 rounded">TUUCI Production Traveler</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -745,6 +757,14 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                   {ocrResult.jobCode}
                 </span>
               </div>
+              {ocrResult.itemCode && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Item ERP:</span>
+                  <span className="font-bold text-xs mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                    {ocrResult.itemCode}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Cantidad Total:</span>
                 <span className="font-bold text-slate-800 mono">{ocrResult.cantidadPiezas} piezas</span>

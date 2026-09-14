@@ -206,6 +206,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     }
   };
 
+  // Danger Zone: Reset Tracker & Dashboard Operational Data
+  const [cleaningData, setCleaningData] = useState<boolean>(false);
+
+  const handleRequestCleanOperationalData = () => {
+    askConfirmation({
+      title: '¿Limpiar Todo el Tablero y Dashboard?',
+      message: 'Esta acción eliminará de forma irreversible todos los Jobs, Piezas individuales, eventos de escaneo e historial operativo del Tracker y Dashboard. Los catálogos (Líneas, Rutas, Escáneres, Usuarios) permanecerán intactos. ¿Deseas continuar?',
+      confirmText: 'Sí, Limpiar Datos Operativos',
+      cancelText: 'Cancelar',
+      type: 'danger',
+      onConfirm: async () => {
+        setCleaningData(true);
+        try {
+          const res = await fetch('/api/admin/clean-jobs', { method: 'POST' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            showToast('Base de datos operativa reiniciada con éxito', 'success');
+            onCatalogUpdated();
+          } else {
+            showToast(data.error || 'No se pudo limpiar la base de datos', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Error de conexión al limpiar datos', 'error');
+        } finally {
+          setCleaningData(false);
+        }
+      }
+    });
+  };
+
   const loadCatalogs = async () => {
     try {
       const res = await fetch('/api/catalogs');
@@ -2775,7 +2806,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             </form>
           </div>
 
-          {/* Info Card / Guidelines */}
+          {/* Info Card / Guidelines & Danger Zone */}
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl border border-slate-700 shadow-lg space-y-4">
               <div className="flex items-center space-x-2 text-emerald-400">
@@ -2792,6 +2823,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   <li><strong>Disparos repetidos (&lt; {systemCooldownSecs}s):</strong> Bloqueo inmediato con alerta OLED <code className="text-amber-400 font-mono">ESPERE Xs</code> y tono sonoro corto.</li>
                   <li><strong>Persistencia:</strong> Los cambios se guardan en la base de datos y se propagan inmediatamente por WebSockets a todas las terminales activas.</li>
                 </ul>
+              </div>
+            </div>
+
+            {/* Danger Zone: Reset Tracker & Dashboard */}
+            <div className="bg-rose-50/70 border-2 border-rose-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex items-center space-x-2.5 text-rose-700">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-bold text-rose-900">Zona de Peligro: Limpieza de Datos Operativos</h4>
+                  <p className="text-[11px] text-rose-700 mt-0.5">Reinicio de Tracker, Dashboard y Trazabilidad</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Permite dejar en blanco el <strong>Tablero Kanban (Tracker)</strong> y los indicadores en tiempo real del <strong>Dashboard</strong>. 
+                Elimina todos los Jobs activos, piezas individuales, escaneos e historial de tiempos.
+              </p>
+
+              <div className="p-3 bg-white rounded-xl border border-rose-200 text-[11px] text-slate-600 space-y-1">
+                <div className="font-bold text-rose-800 flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Se preservan intactos:</span>
+                </div>
+                <p className="text-slate-500 pl-5">
+                  Líneas de producto, Rutas, Tipos de proceso, Estaciones / Escáneres, Estados y Cuentas de usuarios.
+                </p>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleRequestCleanOperationalData}
+                  disabled={cleaningData}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                >
+                  {cleaningData ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Limpiando Base de Datos...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Limpiar Todo el Tracker y Dashboard</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

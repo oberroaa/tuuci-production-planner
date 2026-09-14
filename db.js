@@ -84,6 +84,7 @@ export async function initDb() {
         linea_id INTEGER NOT NULL REFERENCES lineas(id) ON DELETE RESTRICT,
         ruta_id INTEGER REFERENCES rutas(id) ON DELETE SET NULL,
         modelo TEXT NOT NULL,
+        item_code TEXT,
         specs_raw TEXT,
         cantidad_piezas INTEGER NOT NULL,
         creado_por_usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
@@ -94,6 +95,8 @@ export async function initDb() {
         notas_cierre TEXT,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS item_code TEXT;
 
       CREATE TABLE IF NOT EXISTS piezas (
         id SERIAL PRIMARY KEY,
