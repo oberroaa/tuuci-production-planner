@@ -1,8 +1,9 @@
-import db from '../db.js';
+import { query } from '../db.js';
 
 // Helpers for Duration and Time Tracking
 function parseDateUtc(d) {
   if (!d) return null;
+  if (d instanceof Date) return d;
   if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(d)) {
     return new Date(d.replace(' ', 'T') + 'Z');
   }
@@ -41,18 +42,23 @@ function formatCycleTime(ms) {
 export class DashboardService {
   /**
    * Computes high-level KPIs and station details matching the Production Planner UI screenshot.
-   * Can be filtered by Line (for Operators & Supervisors) or global (for Admin / Todas las Líneas),
-   * and optionally filtered by Route (Ruta de Producción).
    */
-  static getSummary({ lineaId = null, rutaId = null, jobCode = null } = {}) {
+  static async getSummary({ lineaId = null, rutaId = null, jobCode = null } = {}) {
     const isAllLines = !lineaId || lineaId === 'ALL' || lineaId === 'TODAS';
 
     // 1. Line resolution
     let lineRow = null;
     let currentLineId = null;
     if (!isAllLines) {
-      lineRow = db.prepare('SELECT id, nombre FROM lineas WHERE id = ? OR nombre = ?').get(lineaId, lineaId);
-      if (lineRow) {
+      const parsedLineId = parseInt(lineaId, 10);
+      let lineRes;
+      if (!isNaN(parsedLineId)) {
+        lineRes = await query('SELECT id, nombre FROM lineas WHERE id = $1', [parsedLineId]);
+      } else {
+        lineRes = await query('SELECT id, nombre FROM lineas WHERE nombre = $1', [lineaId]);
+      }
+      if (lineRes.rows.length > 0) {
+        lineRow = lineRes.rows[0];
         currentLineId = lineRow.id;
       }
     }
@@ -60,56 +66,68 @@ export class DashboardService {
     if (isAllLines) {
       lineRow = { id: 'ALL', nombre: 'Todas las Líneas' };
     } else if (!lineRow) {
-      lineRow = db.prepare("SELECT id, nombre FROM lineas WHERE nombre = 'Clásica'").get()
-        || db.prepare('SELECT id, nombre FROM lineas LIMIT 1').get();
+      const defLineRes = await query("SELECT id, nombre FROM lineas WHERE nombre = 'Clásica'");
+      if (defLineRes.rows.length > 0) {
+        lineRow = defLineRes.rows[0];
+      } else {
+        const anyLineRes = await query('SELECT id, nombre FROM lineas LIMIT 1');
+        lineRow = anyLineRes.rows[0];
+      }
       currentLineId = lineRow.id;
     }
 
     const parsedRutaId = (rutaId && rutaId !== 'ALL' && rutaId !== 'TODAS') ? parseInt(rutaId, 10) : null;
     let rutaJobCond = '';
     let rutaJobParams = [];
+    let pIdx = 1;
+
     if (parsedRutaId) {
-      const rutaRow = db.prepare('SELECT es_default FROM rutas WHERE id = ?').get(parsedRutaId);
-      if (rutaRow && rutaRow.es_default === 1) {
-        rutaJobCond = 'AND (j.ruta_id = ? OR j.ruta_id IS NULL)';
+      const rutaRes = await query('SELECT es_default FROM rutas WHERE id = $1', [parsedRutaId]);
+      const rutaRow = rutaRes.rows[0];
+      if (rutaRow && (rutaRow.es_default === 1 || rutaRow.es_default === true)) {
+        rutaJobCond = `AND (j.ruta_id = $${pIdx} OR j.ruta_id IS NULL)`;
       } else {
-        rutaJobCond = 'AND j.ruta_id = ?';
+        rutaJobCond = `AND j.ruta_id = $${pIdx}`;
       }
       rutaJobParams.push(parsedRutaId);
+      pIdx++;
     }
 
     const cleanJobCode = (jobCode && typeof jobCode === 'string' && jobCode.trim()) ? jobCode.trim() : null;
     if (cleanJobCode) {
-      rutaJobCond += ' AND j.job_code = ?';
+      rutaJobCond += ` AND j.job_code = $${pIdx}`;
       rutaJobParams.push(cleanJobCode);
+      pIdx++;
     }
 
     // 2. Jobs stats
     let totalJobsRow;
     if (isAllLines) {
-      totalJobsRow = db.prepare(`
+      const res = await query(`
         SELECT 
-          COUNT(*) as total_jobs,
-          SUM(cantidad_piezas) as total_widgets
+          COUNT(*)::int as total_jobs,
+          COALESCE(SUM(cantidad_piezas), 0)::int as total_widgets
         FROM jobs j
         WHERE 1=1 ${rutaJobCond}
-      `).get(...rutaJobParams);
+      `, rutaJobParams);
+      totalJobsRow = res.rows[0];
     } else {
-      totalJobsRow = db.prepare(`
+      const res = await query(`
         SELECT 
-          COUNT(*) as total_jobs,
-          SUM(cantidad_piezas) as total_widgets
+          COUNT(*)::int as total_jobs,
+          COALESCE(SUM(cantidad_piezas), 0)::int as total_widgets
         FROM jobs j
-        WHERE j.linea_id = ? ${rutaJobCond}
-      `).get(currentLineId, ...rutaJobParams);
+        WHERE j.linea_id = $1 ${rutaJobCond.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n, 10) + 1}`)}
+      `, [currentLineId, ...rutaJobParams]);
+      totalJobsRow = res.rows[0];
     }
 
     const totalJobs = totalJobsRow?.total_jobs || 0;
     const totalWidgets = totalJobsRow?.total_widgets || 0;
 
-    // Completed pieces (pieces that completed their final closing station)
+    // Completed pieces
     let completedPiecesQuery = `
-      SELECT COUNT(DISTINCT pp.pieza_id) as completed_count
+      SELECT COUNT(DISTINCT pp.pieza_id)::int as completed_count
       FROM pieza_procesos pp
       JOIN piezas p ON pp.pieza_id = p.id
       JOIN jobs j ON p.job_id = j.id
@@ -118,24 +136,29 @@ export class DashboardService {
       WHERE pr.es_proceso_cierre = 1 AND e.nombre = 'TERMINADA'
     `;
     const completedParams = [];
+    let cIdx = 1;
     if (!isAllLines) {
-      completedPiecesQuery += ' AND j.linea_id = ?';
+      completedPiecesQuery += ` AND j.linea_id = $${cIdx}`;
       completedParams.push(currentLineId);
+      cIdx++;
     }
     if (parsedRutaId) {
-      completedPiecesQuery += ' AND pr.ruta_id = ?';
+      completedPiecesQuery += ` AND pr.ruta_id = $${cIdx}`;
       completedParams.push(parsedRutaId);
+      cIdx++;
     }
-    if (rutaJobCond) {
-      completedPiecesQuery += ` ${rutaJobCond}`;
-      completedParams.push(...rutaJobParams);
+    if (cleanJobCode) {
+      completedPiecesQuery += ` AND j.job_code = $${cIdx}`;
+      completedParams.push(cleanJobCode);
+      cIdx++;
     }
-    const completedPiecesRow = db.prepare(completedPiecesQuery).get(...completedParams);
-    const completedPieces = completedPiecesRow?.completed_count || 0;
 
-    // Active pieces: in any process with state ESPERANDO or EN PROCESO
+    const completedPiecesRes = await query(completedPiecesQuery, completedParams);
+    const completedPieces = completedPiecesRes.rows[0]?.completed_count || 0;
+
+    // Active pieces
     let activePiecesQuery = `
-      SELECT COUNT(DISTINCT pp.pieza_id) as active_count
+      SELECT COUNT(DISTINCT pp.pieza_id)::int as active_count
       FROM pieza_procesos pp
       JOIN piezas p ON pp.pieza_id = p.id
       JOIN jobs j ON p.job_id = j.id
@@ -144,43 +167,49 @@ export class DashboardService {
       WHERE e.nombre IN ('ESPERANDO', 'EN PROCESO')
     `;
     const activeParams = [];
+    let aIdx = 1;
     if (!isAllLines) {
-      activePiecesQuery += ' AND j.linea_id = ?';
+      activePiecesQuery += ` AND j.linea_id = $${aIdx}`;
       activeParams.push(currentLineId);
+      aIdx++;
     }
     if (parsedRutaId) {
-      activePiecesQuery += ' AND pr.ruta_id = ?';
+      activePiecesQuery += ` AND pr.ruta_id = $${aIdx}`;
       activeParams.push(parsedRutaId);
+      aIdx++;
     }
-    if (rutaJobCond) {
-      activePiecesQuery += ` ${rutaJobCond}`;
-      activeParams.push(...rutaJobParams);
+    if (cleanJobCode) {
+      activePiecesQuery += ` AND j.job_code = $${aIdx}`;
+      activeParams.push(cleanJobCode);
+      aIdx++;
     }
-    const activePiecesRow = db.prepare(activePiecesQuery).get(...activeParams);
-    const activeWidgets = activePiecesRow?.active_count || 0;
+
+    const activePiecesRes = await query(activePiecesQuery, activeParams);
+    const activeWidgets = activePiecesRes.rows[0]?.active_count || 0;
 
     // Completed jobs
     let completedJobsRow;
     if (isAllLines) {
-      completedJobsRow = db.prepare(`
-        SELECT COUNT(*) as count
+      const res = await query(`
+        SELECT COUNT(*)::int as count
         FROM jobs j
         WHERE j.estado_cierre IN ('COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS') ${rutaJobCond}
-      `).get(...rutaJobParams);
+      `, rutaJobParams);
+      completedJobsRow = res.rows[0];
     } else {
-      completedJobsRow = db.prepare(`
-        SELECT COUNT(*) as count
+      const res = await query(`
+        SELECT COUNT(*)::int as count
         FROM jobs j
-        WHERE j.linea_id = ? AND j.estado_cierre IN ('COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS') ${rutaJobCond}
-      `).get(currentLineId, ...rutaJobParams);
+        WHERE j.linea_id = $1 AND j.estado_cierre IN ('COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS') ${rutaJobCond.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n, 10) + 1}`)}
+      `, [currentLineId, ...rutaJobParams]);
+      completedJobsRow = res.rows[0];
     }
-
     const completedJobs = completedJobsRow?.count || 0;
 
     const now = new Date();
     const nowMs = now.getTime();
 
-    // Station Overview with Real Dwell/Processing Times and Configured Delay Thresholds
+    // Station Overview
     let stationOverview = [];
     if (!parsedRutaId) {
       let distinctQuery;
@@ -204,37 +233,38 @@ export class DashboardService {
             AVG(COALESCE(p.tiempo_demora_segundos, 0)) as avg_tiempo_demora_segundos
           FROM procesos p
           JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-          WHERE p.linea_id = ?
+          WHERE p.linea_id = $1
           GROUP BY tp.nombre
           ORDER BY orden ASC
         `;
         distinctParams = [currentLineId];
       }
 
-      const distinctStations = db.prepare(distinctQuery).all(...distinctParams);
+      const distinctRes = await query(distinctQuery, distinctParams);
+      const distinctStations = distinctRes.rows;
 
-      stationOverview = distinctStations.map(st => {
-        let activeQuery = `
-          SELECT COUNT(pp.id) as count
+      for (const st of distinctStations) {
+        let activeQ = `
+          SELECT COUNT(pp.id)::int as count
           FROM pieza_procesos pp
           JOIN piezas p ON pp.pieza_id = p.id
           JOIN jobs j ON p.job_id = j.id
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE tp.nombre = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
+          WHERE tp.nombre = $1 AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
         `;
-        let doneQuery = `
-          SELECT COUNT(pp.id) as count
+        let doneQ = `
+          SELECT COUNT(pp.id)::int as count
           FROM pieza_procesos pp
           JOIN piezas p ON pp.pieza_id = p.id
           JOIN jobs j ON p.job_id = j.id
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE tp.nombre = ? AND e.nombre = 'TERMINADA'
+          WHERE tp.nombre = $1 AND e.nombre = 'TERMINADA'
         `;
-        let timeQuery = `
+        let timeQ = `
           SELECT 
             pp.fecha_inicio,
             pp.fecha_fin,
@@ -247,25 +277,32 @@ export class DashboardService {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE tp.nombre = ? AND (e.nombre IN ('ESPERANDO', 'EN PROCESO') OR (e.nombre = 'TERMINADA' AND pp.fecha_fin IS NOT NULL))
+          WHERE tp.nombre = $1 AND (e.nombre IN ('ESPERANDO', 'EN PROCESO') OR (e.nombre = 'TERMINADA' AND pp.fecha_fin IS NOT NULL))
         `;
         let params = [st.station_name];
+        let sIdx = 2;
         if (!isAllLines) {
-          activeQuery += ' AND j.linea_id = ?';
-          doneQuery += ' AND j.linea_id = ?';
-          timeQuery += ' AND j.linea_id = ?';
+          activeQ += ` AND j.linea_id = $${sIdx}`;
+          doneQ += ` AND j.linea_id = $${sIdx}`;
+          timeQ += ` AND j.linea_id = $${sIdx}`;
           params.push(currentLineId);
+          sIdx++;
         }
-        if (rutaJobCond) {
-          activeQuery += ` ${rutaJobCond}`;
-          doneQuery += ` ${rutaJobCond}`;
-          timeQuery += ` ${rutaJobCond}`;
-          params.push(...rutaJobParams);
+        if (cleanJobCode) {
+          activeQ += ` AND j.job_code = $${sIdx}`;
+          doneQ += ` AND j.job_code = $${sIdx}`;
+          timeQ += ` AND j.job_code = $${sIdx}`;
+          params.push(cleanJobCode);
+          sIdx++;
         }
 
-        const activeCount = db.prepare(activeQuery).get(...params).count;
-        const doneCount = db.prepare(doneQuery).get(...params).count;
-        const timeRows = db.prepare(timeQuery).all(...params);
+        const activeCountRes = await query(activeQ, params);
+        const doneCountRes = await query(doneQ, params);
+        const timeRowsRes = await query(timeQ, params);
+
+        const activeCount = activeCountRes.rows[0]?.count || 0;
+        const doneCount = doneCountRes.rows[0]?.count || 0;
+        const timeRows = timeRowsRes.rows;
 
         let totalMs = 0;
         let validCount = 0;
@@ -292,10 +329,11 @@ export class DashboardService {
             }
           }
         }
+
         const avgTimeMinutes = validCount > 0 ? Math.round((totalMs / validCount) / 60000) : 0;
         const avgTiempoDemoraSecs = Math.round(st.avg_tiempo_demora_segundos || 0);
 
-        return {
+        stationOverview.push({
           order: st.orden,
           name: st.station_name,
           active: activeCount,
@@ -305,10 +343,10 @@ export class DashboardService {
           tiempoDemoraTexto: avgTiempoDemoraSecs > 0 ? formatDuration(avgTiempoDemoraSecs * 1000) : '0s',
           delayedCount: delayedPiecesCount,
           hasDelayed: delayedPiecesCount > 0
-        };
-      });
+        });
+      }
     } else {
-      const stations = db.prepare(`
+      const stationsRes = await query(`
         SELECT 
           p.id as proceso_id,
           p.orden,
@@ -317,28 +355,29 @@ export class DashboardService {
           tp.nombre as station_name
         FROM procesos p
         JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-        WHERE p.ruta_id = ?
+        WHERE p.ruta_id = $1
         ORDER BY p.orden ASC
-      `).all(parsedRutaId);
+      `, [parsedRutaId]);
+      const stations = stationsRes.rows;
 
-      stationOverview = stations.map(st => {
-        let activeQuery = `
-          SELECT COUNT(pp.id) as count
+      for (const st of stations) {
+        let activeQ = `
+          SELECT COUNT(pp.id)::int as count
           FROM pieza_procesos pp
           JOIN piezas p ON pp.pieza_id = p.id
           JOIN jobs j ON p.job_id = j.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE pp.proceso_id = ? ${rutaJobCond} AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
+          WHERE pp.proceso_id = $1 AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
         `;
-        let doneQuery = `
-          SELECT COUNT(pp.id) as count
+        let doneQ = `
+          SELECT COUNT(pp.id)::int as count
           FROM pieza_procesos pp
           JOIN piezas p ON pp.pieza_id = p.id
           JOIN jobs j ON p.job_id = j.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE pp.proceso_id = ? ${rutaJobCond} AND e.nombre = 'TERMINADA'
+          WHERE pp.proceso_id = $1 AND e.nombre = 'TERMINADA'
         `;
-        let timeQuery = `
+        let timeQ = `
           SELECT 
             pp.fecha_inicio,
             pp.fecha_fin,
@@ -348,19 +387,32 @@ export class DashboardService {
           JOIN piezas p ON pp.pieza_id = p.id
           JOIN jobs j ON p.job_id = j.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE pp.proceso_id = ? ${rutaJobCond} AND (e.nombre IN ('ESPERANDO', 'EN PROCESO') OR (e.nombre = 'TERMINADA' AND pp.fecha_fin IS NOT NULL))
+          WHERE pp.proceso_id = $1 AND (e.nombre IN ('ESPERANDO', 'EN PROCESO') OR (e.nombre = 'TERMINADA' AND pp.fecha_fin IS NOT NULL))
         `;
-        let params = [st.proceso_id, ...rutaJobParams];
+        let params = [st.proceso_id];
+        let sIdx = 2;
         if (!isAllLines) {
-          activeQuery += ' AND j.linea_id = ?';
-          doneQuery += ' AND j.linea_id = ?';
-          timeQuery += ' AND j.linea_id = ?';
+          activeQ += ` AND j.linea_id = $${sIdx}`;
+          doneQ += ` AND j.linea_id = $${sIdx}`;
+          timeQ += ` AND j.linea_id = $${sIdx}`;
           params.push(currentLineId);
+          sIdx++;
+        }
+        if (cleanJobCode) {
+          activeQ += ` AND j.job_code = $${sIdx}`;
+          doneQ += ` AND j.job_code = $${sIdx}`;
+          timeQ += ` AND j.job_code = $${sIdx}`;
+          params.push(cleanJobCode);
+          sIdx++;
         }
 
-        const activeCount = db.prepare(activeQuery).get(...params).count;
-        const doneCount = db.prepare(doneQuery).get(...params).count;
-        const timeRows = db.prepare(timeQuery).all(...params);
+        const activeCountRes = await query(activeQ, params);
+        const doneCountRes = await query(doneQ, params);
+        const timeRowsRes = await query(timeQ, params);
+
+        const activeCount = activeCountRes.rows[0]?.count || 0;
+        const doneCount = doneCountRes.rows[0]?.count || 0;
+        const timeRows = timeRowsRes.rows;
 
         let totalMs = 0;
         let validCount = 0;
@@ -389,7 +441,7 @@ export class DashboardService {
         }
         const avgTimeMinutes = validCount > 0 ? Math.round((totalMs / validCount) / 60000) : 0;
 
-        return {
+        stationOverview.push({
           order: st.orden,
           name: st.station_name,
           active: activeCount,
@@ -399,11 +451,11 @@ export class DashboardService {
           tiempoDemoraTexto: st.tiempo_demora_segundos > 0 ? formatDuration(st.tiempo_demora_segundos * 1000) : '0s',
           delayedCount: delayedPiecesCount,
           hasDelayed: delayedPiecesCount > 0
-        };
-      });
+        });
+      }
     }
 
-    // Time Alerts: Pieces with oldest waiting/in-process times, checking against configured tiempo_demora_segundos
+    // Time Alerts
     let alertsQuery = `
       SELECT 
         p.codigo_qr_unico as piece_code,
@@ -421,17 +473,27 @@ export class DashboardService {
       WHERE e.nombre IN ('ESPERANDO', 'EN PROCESO')
     `;
     const alertsParams = [];
+    let alIdx = 1;
     if (!isAllLines) {
-      alertsQuery += ' AND j.linea_id = ?';
+      alertsQuery += ` AND j.linea_id = $${alIdx}`;
       alertsParams.push(currentLineId);
+      alIdx++;
     }
     if (parsedRutaId) {
-      alertsQuery += ` AND pr.ruta_id = ? ${rutaJobCond}`;
-      alertsParams.push(parsedRutaId, ...rutaJobParams);
+      alertsQuery += ` AND pr.ruta_id = $${alIdx}`;
+      alertsParams.push(parsedRutaId);
+      alIdx++;
+    }
+    if (cleanJobCode) {
+      alertsQuery += ` AND j.job_code = $${alIdx}`;
+      alertsParams.push(cleanJobCode);
+      alIdx++;
     }
     alertsQuery += ' ORDER BY COALESCE(pp.fecha_inicio, p.created_at, j.created_at) ASC LIMIT 8';
 
-    const alerts = db.prepare(alertsQuery).all(...alertsParams);
+    const alertsRes = await query(alertsQuery, alertsParams);
+    const alerts = alertsRes.rows;
+
     const formattedAlerts = alerts.map(a => {
       const start = parseDateUtc(a.start_time);
       const elapsedMs = start ? Math.max(nowMs - start.getTime(), 0) : 0;
@@ -457,7 +519,7 @@ export class DashboardService {
       ? { duration: formattedAlerts[0].duration, detail: `${formattedAlerts[0].pieceCode} @ ${formattedAlerts[0].station}` }
       : { duration: '0m', detail: 'Sin espera' };
 
-    // Average Cycle Time: from first station arrival to final station finish for completed pieces
+    // Average Cycle Time
     let cycleQuery = `
       SELECT 
         p.id,
@@ -471,17 +533,27 @@ export class DashboardService {
       WHERE pr.es_proceso_cierre = 1 AND e.nombre = 'TERMINADA' AND pp.fecha_fin IS NOT NULL
     `;
     const cycleParams = [];
+    let cycIdx = 1;
     if (!isAllLines) {
-      cycleQuery += ' AND j.linea_id = ?';
+      cycleQuery += ` AND j.linea_id = $${cycIdx}`;
       cycleParams.push(currentLineId);
+      cycIdx++;
     }
     if (parsedRutaId) {
-      cycleQuery += ` AND pr.ruta_id = ? ${rutaJobCond}`;
-      cycleParams.push(parsedRutaId, ...rutaJobParams);
+      cycleQuery += ` AND pr.ruta_id = $${cycIdx}`;
+      cycleParams.push(parsedRutaId);
+      cycIdx++;
+    }
+    if (cleanJobCode) {
+      cycleQuery += ` AND j.job_code = $${cycIdx}`;
+      cycleParams.push(cleanJobCode);
+      cycIdx++;
     }
     cycleQuery += ' GROUP BY p.id';
 
-    const cycleRows = db.prepare(cycleQuery).all(...cycleParams);
+    const cycleRes = await query(cycleQuery, cycleParams);
+    const cycleRows = cycleRes.rows;
+
     let totalCycleMs = 0;
     let validCycleCount = 0;
     for (const r of cycleRows) {
@@ -495,7 +567,7 @@ export class DashboardService {
     const avgCycleMs = validCycleCount > 0 ? (totalCycleMs / validCycleCount) : 0;
     const avgCycleTime = formatCycleTime(avgCycleMs);
 
-    // Throughput: Pieces completed in the last 12 hours
+    // Throughput: Last 12 hours
     const twelveHoursAgo = new Date(nowMs - 12 * 3600 * 1000);
     let throughputQuery = `
       SELECT pp.fecha_fin
@@ -504,19 +576,29 @@ export class DashboardService {
       JOIN jobs j ON p.job_id = j.id
       JOIN procesos pr ON pp.proceso_id = pr.id
       JOIN estados e ON pp.estado_id = e.id
-      WHERE pr.es_proceso_cierre = 1 AND e.nombre = 'TERMINADA' AND pp.fecha_fin >= ?
+      WHERE pr.es_proceso_cierre = 1 AND e.nombre = 'TERMINADA' AND pp.fecha_fin >= $1
     `;
     const tpParams = [twelveHoursAgo.toISOString()];
+    let tpIdx = 2;
     if (!isAllLines) {
-      throughputQuery += ' AND j.linea_id = ?';
+      throughputQuery += ` AND j.linea_id = $${tpIdx}`;
       tpParams.push(currentLineId);
+      tpIdx++;
     }
     if (parsedRutaId) {
-      throughputQuery += ` AND pr.ruta_id = ? ${rutaJobCond}`;
-      tpParams.push(parsedRutaId, ...rutaJobParams);
+      throughputQuery += ` AND pr.ruta_id = $${tpIdx}`;
+      tpParams.push(parsedRutaId);
+      tpIdx++;
+    }
+    if (cleanJobCode) {
+      throughputQuery += ` AND j.job_code = $${tpIdx}`;
+      tpParams.push(cleanJobCode);
+      tpIdx++;
     }
 
-    const tpRows = db.prepare(throughputQuery).all(...tpParams);
+    const tpRes = await query(throughputQuery, tpParams);
+    const tpRows = tpRes.rows;
+
     const throughput12Hours = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     for (const r of tpRows) {
       const fin = parseDateUtc(r.fecha_fin);

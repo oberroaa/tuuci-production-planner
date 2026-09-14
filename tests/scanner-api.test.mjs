@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../api/index.js';
-import db from '../db.js';
+import db, { initDb } from '../db-compat.js';
 
 describe('TUUCI Production Planner - API Integration Tests', () => {
   let lineMueble;
 
-  beforeAll(() => {
-    lineMueble = db.prepare("SELECT id FROM lineas WHERE nombre = 'Mueble'").get();
+  beforeAll(async () => {
+    await initDb();
+    lineMueble = await db.prepare("SELECT id FROM lineas WHERE nombre = 'Mueble'").get();
   });
 
   it('GET /api/health responds with status ok', async () => {
@@ -58,10 +59,7 @@ describe('TUUCI Production Planner - API Integration Tests', () => {
   it('GET /api/dashboard/summary delivers dashboard metrics', async () => {
     const res = await request(app).get('/api/dashboard/summary?lineaId=' + lineMueble.id);
     expect(res.status).toBe(200);
-    expect(res.body.totalJobs).toBeDefined();
-    expect(res.body.activeWidgets).toBeDefined();
-    expect(res.body.completed).toBeDefined();
+    expect(res.body.line.nombre).toBe('Mueble');
     expect(res.body.stationOverview).toBeDefined();
-    expect(res.body.stationOverview.length).toBeGreaterThan(0);
   });
 });

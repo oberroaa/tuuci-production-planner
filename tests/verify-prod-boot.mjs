@@ -1,35 +1,39 @@
 process.env.NODE_ENV = 'test';
 import http from 'http';
 import { app } from '../api/index.js';
-import db from '../db.js';
+import db, { initDb, pool } from '../db-compat.js';
 
 /**
  * Production boot verification test following Brian's AGENTS.md security guidelines.
- * Asserts security boundaries, fail-closed mechanics, and database integrity.
+ * Asserts security boundaries, fail-closed mechanics, and database integrity in PostgreSQL 17.
  */
 async function runProdBootVerification() {
-  console.log('Running TUUCI Production Planner boot verification checks...');
+  console.log('Running TUUCI Production Planner boot verification checks against PostgreSQL 17...');
   let checksPassed = 0;
 
-  // Check 1: Foreign keys pragma is active
-  const fkResult = db.pragma('foreign_keys', { simple: true });
-  if (fkResult !== 1) {
-    throw new Error(`FAIL: Foreign keys not active (got ${fkResult})`);
+  await initDb();
+
+  // Check 1: PostgreSQL Connection pool is active
+  const poolCheck = await pool.query('SELECT 1 as connected');
+  if (!poolCheck.rows || poolCheck.rows[0].connected !== 1) {
+    throw new Error('FAIL: PostgreSQL connection not active');
   }
-  console.log('✔ Check 1: Foreign key enforcement is active.');
+  console.log('✔ Check 1: PostgreSQL 17 connection pool is active.');
   checksPassed++;
 
   // Check 2: Core master tables exist and contain required seed data
-  const linesCount = db.prepare('SELECT COUNT(*) as count FROM lineas').get().count;
-  const statesCount = db.prepare('SELECT COUNT(*) as count FROM estados').get().count;
+  const linesCountRow = await db.prepare('SELECT COUNT(*) as count FROM lineas').get();
+  const statesCountRow = await db.prepare('SELECT COUNT(*) as count FROM estados').get();
+  const linesCount = parseInt(linesCountRow.count, 10);
+  const statesCount = parseInt(statesCountRow.count, 10);
   if (linesCount < 4 || statesCount < 4) {
     throw new Error(`FAIL: Seed data incomplete (lines: ${linesCount}, states: ${statesCount})`);
   }
-  console.log('✔ Check 2: Core catalog seeds are populated.');
+  console.log('✔ Check 2: Core catalog seeds are populated in PostgreSQL.');
   checksPassed++;
 
   // Check 3: Data-driven state flags integrity
-  const terminadaState = db.prepare("SELECT * FROM estados WHERE nombre = 'TERMINADA'").get();
+  const terminadaState = await db.prepare("SELECT * FROM estados WHERE nombre = 'TERMINADA'").get();
   if (!terminadaState || terminadaState.dispara_activacion_siguiente !== 1 || terminadaState.permite_escaneo !== 0) {
     throw new Error('FAIL: TERMINADA state flags do not adhere to specification.');
   }
@@ -52,7 +56,7 @@ async function runProdBootVerification() {
   console.log('✔ Check 5: /api/health answered 200 OK.');
   checksPassed++;
 
-  // Check 6: Fail-closed verification (non-existent route returns 404, not 500 or leak)
+  // Check 6: Fail-closed verification
   const nonExistentRes = await fetch(`http://127.0.0.1:${port}/api/unauthorized-internal-debug`);
   if (nonExistentRes.status !== 404) {
     throw new Error(`FAIL: Debug route returned status ${nonExistentRes.status} instead of 404.`);
@@ -74,11 +78,12 @@ async function runProdBootVerification() {
   checksPassed++;
 
   server.close();
-  console.log(`\nVerified: ${checksPassed}/${checksPassed} production boot checks passed.`);
-  process.exit(0);
+  await pool.end();
+
+  console.log(`\n🎉 All ${checksPassed}/7 production boot checks PASSED successfully!`);
 }
 
-runProdBootVerification().catch(err => {
-  console.error(err);
+runProdBootVerification().catch((err) => {
+  console.error('\n❌ Production boot verification FAILED:', err.message);
   process.exit(1);
 });

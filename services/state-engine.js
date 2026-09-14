@@ -1,16 +1,17 @@
-import db from '../db.js';
+import { pool, query } from '../db.js';
 
 /**
  * State Engine for TUUCI Production Planner.
  * Governs the lifecycle of jobs, pieces, and individual station transitions
  * driven dynamically by the flags defined in the `estados` catalog.
+ * Migrated to PostgreSQL with full transaction and async support.
  */
 
 export class StateEngine {
   /**
    * Phase 1: Create a Job, its N unique Pieces, and its process route based on Line template.
    */
-  static createJob({
+  static async createJob({
     jobCode,
     lineaId,
     rutaId = null,
@@ -25,8 +26,11 @@ export class StateEngine {
       throw new Error('cantidadPiezas must be a positive integer');
     }
 
-    const stateInactivo = db.prepare("SELECT id FROM estados WHERE nombre = 'INACTIVO'").get();
-    const stateEnProceso = db.prepare("SELECT id FROM estados WHERE nombre = 'EN PROCESO'").get();
+    const stateInactivoRes = await query("SELECT id FROM estados WHERE nombre = 'INACTIVO'");
+    const stateEnProcesoRes = await query("SELECT id FROM estados WHERE nombre = 'EN PROCESO'");
+
+    const stateInactivo = stateInactivoRes.rows[0];
+    const stateEnProceso = stateEnProcesoRes.rows[0];
 
     if (!stateInactivo || !stateEnProceso) {
       throw new Error('Required system states INACTIVO/EN PROCESO not found in database');
@@ -34,66 +38,65 @@ export class StateEngine {
 
     let effectiveRutaId = rutaId;
     if (!effectiveRutaId) {
-      const defaultRuta = db.prepare('SELECT id FROM rutas WHERE linea_id = ? AND es_default = 1').get(lineaId)
-        || db.prepare('SELECT id FROM rutas WHERE linea_id = ? LIMIT 1').get(lineaId);
+      const defaultRutaRes = await query('SELECT id FROM rutas WHERE linea_id = $1 AND es_default = 1', [lineaId]);
+      let defaultRuta = defaultRutaRes.rows[0];
+      if (!defaultRuta) {
+        const firstRutaRes = await query('SELECT id FROM rutas WHERE linea_id = $1 LIMIT 1', [lineaId]);
+        defaultRuta = firstRutaRes.rows[0];
+      }
       if (!defaultRuta) throw new Error(`No route found for line ID ${lineaId}`);
       effectiveRutaId = defaultRuta.id;
     }
 
     // Retrieve full ordered route for the selected route
-    const procesos = db.prepare(`
+    const procesosRes = await query(`
       SELECT p.id, p.orden, p.modo_trabajo, p.ruta_id, tp.nombre as tipo_nombre
       FROM procesos p
       JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-      WHERE p.ruta_id = ?
+      WHERE p.ruta_id = $1
       ORDER BY p.orden ASC
-    `).all(effectiveRutaId);
+    `, [effectiveRutaId]);
+    const procesos = procesosRes.rows;
 
     if (procesos.length === 0) {
       throw new Error(`No process route defined for route ID ${effectiveRutaId}`);
     }
 
-    // Ensure jobCode is strictly unique: reject duplicate job traveler creation
-    const existingJob = db.prepare(`
+    // Ensure jobCode is strictly unique
+    const existingJobRes = await query(`
       SELECT j.id, j.job_code, j.created_at, l.nombre as linea_nombre
       FROM jobs j
       LEFT JOIN lineas l ON j.linea_id = l.id
-      WHERE j.job_code = ?
-    `).get(jobCode);
+      WHERE j.job_code = $1
+    `, [jobCode]);
 
-    if (existingJob) {
+    if (existingJobRes.rows.length > 0) {
+      const existingJob = existingJobRes.rows[0];
       throw new Error(`Este Job (${jobCode}) ya fue registrado y cortado anteriormente en la línea ${existingJob.linea_nombre || 'de producción'}. No se puede duplicar.`);
     }
 
-    const insertJobTx = db.transaction(() => {
-      const jobResult = db.prepare(`
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const jobResult = await client.query(`
         INSERT INTO jobs (job_code, linea_id, ruta_id, modelo, specs_raw, cantidad_piezas, creado_por_usuario_id, imagen_etiqueta_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(jobCode, lineaId, effectiveRutaId, modelo, specsRaw, qty, creadoPorUsuarioId, imagenEtiquetaUrl);
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id
+      `, [jobCode, lineaId, effectiveRutaId, modelo, specsRaw, qty, creadoPorUsuarioId, imagenEtiquetaUrl]);
 
-      const jobId = jobResult.lastInsertRowid;
+      const jobId = jobResult.rows[0].id;
       const createdPieces = [];
-
-      const insertPieza = db.prepare(`
-        INSERT INTO piezas (job_id, codigo_qr_unico)
-        VALUES (?, ?)
-      `);
-
-      const insertPiezaProceso = db.prepare(`
-        INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
-        VALUES (?, ?, ?, ?)
-      `);
-
-      const insertEvento = db.prepare(`
-        INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
-        VALUES (?, NULL, ?, ?)
-      `);
 
       for (let i = 1; i <= qty; i++) {
         const pieceNumber = String(i).padStart(2, '0');
         const pieceQr = `${jobCode}-${pieceNumber}`;
-        const pieceResult = insertPieza.run(jobId, pieceQr);
-        const pieceId = pieceResult.lastInsertRowid;
+        const pieceResult = await client.query(`
+          INSERT INTO piezas (job_id, codigo_qr_unico)
+          VALUES ($1, $2)
+          RETURNING id
+        `, [jobId, pieceQr]);
+        const pieceId = pieceResult.rows[0].id;
 
         createdPieces.push({ id: pieceId, codigoQRUnico: pieceQr });
 
@@ -102,14 +105,23 @@ export class StateEngine {
           const proc = procesos[stepIndex];
           const isFirstStep = stepIndex === 0;
 
-          // First step (e.g. Cutting) starts in EN PROCESO, all subsequent steps in INACTIVO
           const initialEstadoId = isFirstStep ? stateEnProceso.id : stateInactivo.id;
-          const fechaInicio = isFirstStep ? new Date().toISOString() : null;
+          const fechaInicio = isFirstStep ? new Date() : null;
 
-          const ppResult = insertPiezaProceso.run(pieceId, proc.id, initialEstadoId, fechaInicio);
-          insertEvento.run(ppResult.lastInsertRowid, initialEstadoId, creadoPorUsuarioId);
+          const ppResult = await client.query(`
+            INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+          `, [pieceId, proc.id, initialEstadoId, fechaInicio]);
+
+          await client.query(`
+            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
+            VALUES ($1, NULL, $2, $3)
+          `, [ppResult.rows[0].id, initialEstadoId, creadoPorUsuarioId]);
         }
       }
+
+      await client.query('COMMIT');
 
       return {
         jobId,
@@ -119,73 +131,89 @@ export class StateEngine {
         cantidadPiezas: qty,
         pieces: createdPieces
       };
-    });
-
-    return insertJobTx();
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**
    * Phase 1 (Close Cutting in LOTE mode):
    * Closes a batch process for all pieces of a Job at once.
    */
-  static closeBatchProcess({ jobId, procesoId, usuarioId = null }) {
-    const proc = db.prepare('SELECT id, orden, modo_trabajo, linea_id, ruta_id FROM procesos WHERE id = ?').get(procesoId);
+  static async closeBatchProcess({ jobId, procesoId, usuarioId = null }) {
+    const procRes = await query('SELECT id, orden, modo_trabajo, linea_id, ruta_id FROM procesos WHERE id = $1', [procesoId]);
+    const proc = procRes.rows[0];
     if (!proc) throw new Error('Process not found');
     if (proc.modo_trabajo !== 'LOTE') {
       throw new Error('Process is not configured for LOTE mode');
     }
 
-    const stateEnProceso = db.prepare("SELECT id FROM estados WHERE nombre = 'EN PROCESO'").get();
-    const stateTerminada = db.prepare("SELECT id FROM estados WHERE nombre = 'TERMINADA'").get();
-    const stateEsperando = db.prepare("SELECT id FROM estados WHERE nombre = 'ESPERANDO'").get();
+    const stateEnProcesoRes = await query("SELECT id FROM estados WHERE nombre = 'EN PROCESO'");
+    const stateTerminadaRes = await query("SELECT id FROM estados WHERE nombre = 'TERMINADA'");
+    const stateEsperandoRes = await query("SELECT id FROM estados WHERE nombre = 'ESPERANDO'");
+
+    const stateEnProceso = stateEnProcesoRes.rows[0];
+    const stateTerminada = stateTerminadaRes.rows[0];
+    const stateEsperando = stateEsperandoRes.rows[0];
 
     // Find next process in this specific route
-    const nextProc = db.prepare(`
+    const nextProcRes = await query(`
       SELECT id FROM procesos
-      WHERE ruta_id = ? AND orden > ?
+      WHERE ruta_id = $1 AND orden > $2
       ORDER BY orden ASC LIMIT 1
-    `).get(proc.ruta_id, proc.orden);
+    `, [proc.ruta_id, proc.orden]);
+    const nextProc = nextProcRes.rows[0] || null;
 
-    const batchTx = db.transaction(() => {
-      const activePieceProcesses = db.prepare(`
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const activeRes = await client.query(`
         SELECT pp.id, pp.pieza_id, pp.estado_id
         FROM pieza_procesos pp
         JOIN piezas p ON pp.pieza_id = p.id
-        WHERE p.job_id = ? AND pp.proceso_id = ? AND pp.estado_id = ?
-      `).all(jobId, procesoId, stateEnProceso.id);
+        WHERE p.job_id = $1 AND pp.proceso_id = $2 AND pp.estado_id = $3
+      `, [jobId, procesoId, stateEnProceso.id]);
+      const activePieceProcesses = activeRes.rows;
 
-      const now = new Date().toISOString();
-      const updateCurrent = db.prepare(`
-        UPDATE pieza_procesos
-        SET estado_id = ?, fecha_fin = ?
-        WHERE id = ?
-      `);
-
-      const insertEvento = db.prepare(`
-        INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
-        VALUES (?, ?, ?, ?)
-      `);
-
-      const updateNext = nextProc ? db.prepare(`
-        UPDATE pieza_procesos
-        SET estado_id = ?
-        WHERE pieza_id = ? AND proceso_id = ?
-      `) : null;
+      const now = new Date();
 
       for (const item of activePieceProcesses) {
-        // Mark current as TERMINADA
-        updateCurrent.run(stateTerminada.id, now, item.id);
-        insertEvento.run(item.id, item.estado_id, stateTerminada.id, usuarioId);
+        await client.query(`
+          UPDATE pieza_procesos
+          SET estado_id = $1, fecha_fin = $2
+          WHERE id = $3
+        `, [stateTerminada.id, now, item.id]);
 
-        // If next process exists and TERMINADA has dispara_activacion_siguiente, activate next
-        if (nextProc && updateNext) {
-          updateNext.run(stateEsperando.id, item.pieza_id, nextProc.id);
-          const nextPP = db.prepare('SELECT id FROM pieza_procesos WHERE pieza_id = ? AND proceso_id = ?').get(item.pieza_id, nextProc.id);
-          if (nextPP) {
-            insertEvento.run(nextPP.id, null, stateEsperando.id, usuarioId);
+        await client.query(`
+          INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
+          VALUES ($1, $2, $3, $4)
+        `, [item.id, item.estado_id, stateTerminada.id, usuarioId]);
+
+        if (nextProc) {
+          await client.query(`
+            UPDATE pieza_procesos
+            SET estado_id = $1
+            WHERE pieza_id = $2 AND proceso_id = $3
+          `, [stateEsperando.id, item.pieza_id, nextProc.id]);
+
+          const nextPPRes = await client.query(
+            'SELECT id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
+            [item.pieza_id, nextProc.id]
+          );
+          if (nextPPRes.rows.length > 0) {
+            await client.query(`
+              INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
+              VALUES ($1, NULL, $2, $3)
+            `, [nextPPRes.rows[0].id, stateEsperando.id, usuarioId]);
           }
         }
       }
+
+      await client.query('COMMIT');
 
       return {
         jobId,
@@ -193,36 +221,35 @@ export class StateEngine {
         closedCount: activePieceProcesses.length,
         nextProcesoId: nextProc ? nextProc.id : null
       };
-    });
-
-    return batchTx();
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**
    * Phase 2: Wireless Scanner Event.
-   * Handles scan on a piece's unique QR.
-   * If codigoEstacion is omitted, auto-detects the active or next station for the piece:
-   * 1. If a process is 'EN PROCESO', scan closes it ('TERMINADA') and sets next process to 'ESPERANDO'.
-   * 2. Else if a process is 'ESPERANDO', scan opens it ('EN PROCESO').
    */
-  static handleScan({ codigoEstacion, codigoQRUnico }) {
+  static async handleScan({ codigoEstacion, codigoQRUnico }) {
     if (!codigoQRUnico) {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' };
     }
 
-    const pieza = db.prepare(`
+    const piezaRes = await query(`
       SELECT p.id, p.job_id, p.codigo_qr_unico, j.linea_id, j.job_code
       FROM piezas p
       JOIN jobs j ON p.job_id = j.id
-      WHERE p.codigo_qr_unico = ?
-    `).get(codigoQRUnico);
+      WHERE p.codigo_qr_unico = $1
+    `, [codigoQRUnico]);
 
+    const pieza = piezaRes.rows[0];
     if (!pieza) {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Piece QR not recognized' };
     }
 
-    // Include modo_trabajo and es_proceso_cierre to differentiate LOTE vs INDIVIDUAL stations
-    const allSteps = db.prepare(`
+    const allStepsRes = await query(`
       SELECT 
         pp.id as pp_id,
         pp.estado_id,
@@ -243,9 +270,10 @@ export class StateEngine {
       JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
       JOIN estados e ON pp.estado_id = e.id
       LEFT JOIN escaneres s ON s.tipo_proceso_id = tp.id AND s.activo = 1
-      WHERE pp.pieza_id = ?
+      WHERE pp.pieza_id = $1
       ORDER BY p.orden ASC
-    `).all(pieza.id);
+    `, [pieza.id]);
+    const allSteps = allStepsRes.rows;
 
     if (!allSteps || allSteps.length === 0) {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Piece has no process steps configured' };
@@ -254,13 +282,14 @@ export class StateEngine {
     let targetStep = null;
 
     if (codigoEstacion) {
-      const scanner = db.prepare(`
+      const scannerRes = await query(`
         SELECT s.id, s.codigo_estacion, s.tipo_proceso_id, s.activo, tp.nombre as tipo_nombre
         FROM escaneres s
         JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
-        WHERE s.codigo_estacion = ?
-      `).get(codigoEstacion);
+        WHERE s.codigo_estacion = $1
+      `, [codigoEstacion]);
 
+      const scanner = scannerRes.rows[0];
       if (!scanner || !scanner.activo) {
         return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Scanner not found or inactive' };
       }
@@ -272,19 +301,13 @@ export class StateEngine {
       targetStep.scanner_id = scanner.id;
       targetStep.default_codigo_estacion = scanner.codigo_estacion;
     } else {
-      // Auto-detection logic for wireless handheld scanner:
-      // A piece MUST be in ESPERANDO (to open) or EN PROCESO (to close) in an INDIVIDUAL station.
-      // 1. If an INDIVIDUAL step is currently EN PROCESO -> this scan will CLOSE it
       targetStep = allSteps.find(s => s.estado_nombre === 'EN PROCESO' && s.modo_trabajo === 'INDIVIDUAL');
 
-      // 2. If no individual step is EN PROCESO, find the step that is currently ESPERANDO -> this scan will OPEN it
       if (!targetStep) {
         targetStep = allSteps.find(s => s.estado_nombre === 'ESPERANDO');
       }
 
-      // If still not found:
       if (!targetStep) {
-        // Check if previous station (like CORTE) is still EN PROCESO in LOTE mode
         const lotStillInProgress = allSteps.find(s => s.estado_nombre === 'EN PROCESO' && s.modo_trabajo === 'LOTE');
         if (lotStillInProgress) {
           return {
@@ -295,7 +318,6 @@ export class StateEngine {
           };
         }
 
-        // Check if all steps are already completed
         const allCompleted = allSteps.every(s => s.estado_nombre === 'TERMINADA');
         if (allCompleted) {
           return {
@@ -315,7 +337,6 @@ export class StateEngine {
       }
     }
 
-    // Check if the target step permits scan
     if (!targetStep.permite_escaneo) {
       return {
         success: false,
@@ -335,25 +356,33 @@ export class StateEngine {
       estado_nombre: targetStep.estado_nombre
     };
 
-    const stateEnProceso = db.prepare("SELECT id FROM estados WHERE nombre = 'EN PROCESO'").get();
-    const stateTerminada = db.prepare("SELECT id FROM estados WHERE nombre = 'TERMINADA'").get();
-    const stateEsperando = db.prepare("SELECT id FROM estados WHERE nombre = 'ESPERANDO'").get();
+    const stateEnProcesoRes = await query("SELECT id FROM estados WHERE nombre = 'EN PROCESO'");
+    const stateTerminadaRes = await query("SELECT id FROM estados WHERE nombre = 'TERMINADA'");
+    const stateEsperandoRes = await query("SELECT id FROM estados WHERE nombre = 'ESPERANDO'");
 
-    const scanTx = db.transaction(() => {
-      const now = new Date().toISOString();
+    const stateEnProceso = stateEnProcesoRes.rows[0];
+    const stateTerminada = stateTerminadaRes.rows[0];
+    const stateEsperando = stateEsperandoRes.rows[0];
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const now = new Date();
 
       if (pp.estado_nombre === 'ESPERANDO') {
         // ACTION 1: OPEN STATION
-        db.prepare(`
+        await client.query(`
           UPDATE pieza_procesos
-          SET estado_id = ?, fecha_inicio = ?, escaner_apertura_id = ?
-          WHERE id = ?
-        `).run(stateEnProceso.id, now, scannerId, pp.id);
+          SET estado_id = $1, fecha_inicio = $2, escaner_apertura_id = $3
+          WHERE id = $4
+        `, [stateEnProceso.id, now, scannerId, pp.id]);
 
-        db.prepare(`
+        await client.query(`
           INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id)
-          VALUES (?, ?, ?, ?)
-        `).run(pp.id, pp.estado_id, stateEnProceso.id, scannerId);
+          VALUES ($1, $2, $3, $4)
+        `, [pp.id, pp.estado_id, stateEnProceso.id, scannerId]);
+
+        await client.query('COMMIT');
 
         return {
           success: true,
@@ -369,41 +398,48 @@ export class StateEngine {
 
       if (pp.estado_nombre === 'EN PROCESO') {
         // ACTION 2: CLOSE STATION
-        db.prepare(`
+        await client.query(`
           UPDATE pieza_procesos
-          SET estado_id = ?, fecha_fin = ?, escaner_cierre_id = ?
-          WHERE id = ?
-        `).run(stateTerminada.id, now, scannerId, pp.id);
+          SET estado_id = $1, fecha_fin = $2, escaner_cierre_id = $3
+          WHERE id = $4
+        `, [stateTerminada.id, now, scannerId, pp.id]);
 
-        db.prepare(`
+        await client.query(`
           INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id)
-          VALUES (?, ?, ?, ?)
-        `).run(pp.id, pp.estado_id, stateTerminada.id, scannerId);
+          VALUES ($1, $2, $3, $4)
+        `, [pp.id, pp.estado_id, stateTerminada.id, scannerId]);
 
-        // Check downstream activation within this specific route
-        const nextProceso = db.prepare(`
+        // Downstream activation
+        const nextProcesoRes = await client.query(`
           SELECT p.id, tp.nombre as tipo_nombre
           FROM procesos p
           JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-          WHERE p.ruta_id = ? AND p.orden > ?
+          WHERE p.ruta_id = $1 AND p.orden > $2
           ORDER BY p.orden ASC LIMIT 1
-        `).get(targetProceso.ruta_id, targetProceso.orden);
+        `, [targetProceso.ruta_id, targetProceso.orden]);
+
+        const nextProceso = nextProcesoRes.rows[0] || null;
 
         if (nextProceso) {
-          db.prepare(`
+          await client.query(`
             UPDATE pieza_procesos
-            SET estado_id = ?
-            WHERE pieza_id = ? AND proceso_id = ?
-          `).run(stateEsperando.id, pieza.id, nextProceso.id);
+            SET estado_id = $1
+            WHERE pieza_id = $2 AND proceso_id = $3
+          `, [stateEsperando.id, pieza.id, nextProceso.id]);
 
-          const nextPP = db.prepare('SELECT id FROM pieza_procesos WHERE pieza_id = ? AND proceso_id = ?').get(pieza.id, nextProceso.id);
-          if (nextPP) {
-            db.prepare(`
+          const nextPPRes = await client.query(
+            'SELECT id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
+            [pieza.id, nextProceso.id]
+          );
+          if (nextPPRes.rows.length > 0) {
+            await client.query(`
               INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id)
-              VALUES (?, NULL, ?, ?)
-            `).run(nextPP.id, stateEsperando.id, scannerId);
+              VALUES ($1, NULL, $2, $3)
+            `, [nextPPRes.rows[0].id, stateEsperando.id, scannerId]);
           }
         }
+
+        await client.query('COMMIT');
 
         const oledMsg = nextProceso
           ? `${stationName} FIN -> ESPERANDO ${nextProceso.tipo_nombre}`
@@ -423,62 +459,67 @@ export class StateEngine {
         };
       }
 
+      await client.query('ROLLBACK');
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Unhandled valid state' };
-    });
-
-    return scanTx();
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**
    * Audits the pieces of a Job against its route to detect completion and any lagging pieces.
    */
-  static auditJobLoteStatus({ jobId }) {
-    const job = db.prepare(`
+  static async auditJobLoteStatus({ jobId }) {
+    const jobRes = await query(`
       SELECT j.*, l.nombre as linea_nombre, r.nombre as ruta_nombre
       FROM jobs j
       JOIN lineas l ON j.linea_id = l.id
       LEFT JOIN rutas r ON j.ruta_id = r.id
-      WHERE j.id = ?
-    `).get(jobId);
+      WHERE j.id = $1
+    `, [jobId]);
 
+    const job = jobRes.rows[0];
     if (!job) throw new Error('Job no encontrado');
 
-    // Retrieve all processes of this job's route in order
-    const procesos = db.prepare(`
+    const procesosRes = await query(`
       SELECT p.id, p.orden, p.modo_trabajo, p.es_proceso_cierre, tp.nombre as tipo_nombre
       FROM procesos p
       JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-      WHERE p.ruta_id = ?
+      WHERE p.ruta_id = $1
       ORDER BY p.orden ASC
-    `).all(job.ruta_id);
+    `, [job.ruta_id]);
+    const procesos = procesosRes.rows;
 
     if (procesos.length === 0) {
       throw new Error('No hay procesos configurados para la ruta de este Job');
     }
 
-    // Use process explicitly designated as closure step, or fallback to the last process
-    const designatedClosure = procesos.find((p) => p.es_proceso_cierre === 1);
+    const designatedClosure = procesos.find((p) => p.es_proceso_cierre === 1 || p.es_proceso_cierre === true);
     const finalProceso = designatedClosure || procesos[procesos.length - 1];
-    const piezas = db.prepare('SELECT id, codigo_qr_unico, cierre_excepcion FROM piezas WHERE job_id = ? ORDER BY id ASC').all(jobId);
+
+    const piezasRes = await query('SELECT id, codigo_qr_unico, cierre_excepcion FROM piezas WHERE job_id = $1 ORDER BY id ASC', [jobId]);
+    const piezas = piezasRes.rows;
 
     const normalPieces = [];
     const laggingPieces = [];
 
-    const getStepsForPieceStmt = db.prepare(`
-      SELECT pp.id as pp_id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, p.orden, tp.nombre as tipo_nombre
-      FROM pieza_procesos pp
-      JOIN procesos p ON pp.proceso_id = p.id
-      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-      JOIN estados e ON pp.estado_id = e.id
-      WHERE pp.pieza_id = ?
-      ORDER BY p.orden ASC
-    `);
-
     for (const pieza of piezas) {
-      const steps = getStepsForPieceStmt.all(pieza.id);
+      const stepsRes = await query(`
+        SELECT pp.id as pp_id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, p.orden, tp.nombre as tipo_nombre
+        FROM pieza_procesos pp
+        JOIN procesos p ON pp.proceso_id = p.id
+        JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
+        JOIN estados e ON pp.estado_id = e.id
+        WHERE pp.pieza_id = $1
+        ORDER BY p.orden ASC
+      `, [pieza.id]);
+      const steps = stepsRes.rows;
+
       const finalStep = steps.find((s) => s.proceso_id === finalProceso.id);
 
-      // A piece is normal if it reached the final process (ESPERANDO, EN PROCESO, or TERMINADA)
       if (finalStep && ['ESPERANDO', 'EN PROCESO', 'TERMINADA'].includes(finalStep.estado_nombre)) {
         normalPieces.push({
           piezaId: pieza.id,
@@ -487,12 +528,10 @@ export class StateEngine {
           cierreExcepcion: pieza.cierre_excepcion
         });
       } else {
-        // Find the last active step (non-INACTIVO)
         const activeSteps = steps.filter((s) => s.estado_nombre !== 'INACTIVO');
         const lastActive = activeSteps.length > 0 ? activeSteps[activeSteps.length - 1] : null;
         const lastActiveOrden = lastActive ? lastActive.orden : 0;
 
-        // Missing steps are all steps after last active up to and including the final/closure step
         const pasosFaltantes = procesos
           .filter((p) => p.orden > lastActiveOrden && p.orden <= finalProceso.orden)
           .map((p) => ({
@@ -526,7 +565,7 @@ export class StateEngine {
       tipo_nombre: finalProceso.tipo_nombre,
       modoTrabajo: finalProceso.modo_trabajo,
       modo_trabajo: finalProceso.modo_trabajo,
-      esProcesoCierre: finalProceso.es_proceso_cierre === 1,
+      esProcesoCierre: finalProceso.es_proceso_cierre === 1 || finalProceso.es_proceso_cierre === true,
       es_proceso_cierre: finalProceso.es_proceso_cierre
     };
 
@@ -561,73 +600,81 @@ export class StateEngine {
   }
 
   /**
-   * Closes the final batch process for a Job, reconciling any uncompleted/lagging pieces
-   * with full audit tracking.
+   * Closes the final batch process for a Job, reconciling any uncompleted/lagging pieces.
    */
-  static closeFinalBatchWithReconciliation({ jobId, procesoId, usuarioId = null, notasCierre = '' }) {
-    const audit = StateEngine.auditJobLoteStatus({ jobId });
+  static async closeFinalBatchWithReconciliation({ jobId, procesoId, usuarioId = null, notasCierre = '' }) {
+    const audit = await StateEngine.auditJobLoteStatus({ jobId });
 
     if (audit.estadoCierre === 'COMPLETADO' || audit.estadoCierre === 'COMPLETADO_CON_INCIDENCIAS') {
       throw new Error('El Job ya se encuentra cerrado');
     }
 
     const targetProcesoId = procesoId || audit.finalProceso.id;
-    const stateTerminada = db.prepare("SELECT id FROM estados WHERE nombre = 'TERMINADA'").get();
-    const now = new Date().toISOString();
+    const stateTerminadaRes = await query("SELECT id FROM estados WHERE nombre = 'TERMINADA'");
+    const stateTerminada = stateTerminadaRes.rows[0];
+    const now = new Date();
 
-    const reconcileTx = db.transaction(() => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
       // 1. Process normal pieces in the final process
-      const updateNormalPP = db.prepare(`
-        UPDATE pieza_procesos
-        SET estado_id = ?, fecha_fin = COALESCE(fecha_fin, ?)
-        WHERE id = ?
-      `);
-
-      const insertEvento = db.prepare(`
-        INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-
       for (const p of audit.normalPieces) {
-        const pp = db.prepare('SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = ? AND proceso_id = ?').get(p.piezaId, targetProcesoId);
-        if (pp) {
-          if (pp.estado_id !== stateTerminada.id) {
-            updateNormalPP.run(stateTerminada.id, now, pp.id);
-            insertEvento.run(pp.id, pp.estado_id, stateTerminada.id, usuarioId, 'Cierre de Lote');
-          }
+        const ppRes = await client.query(
+          'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
+          [p.piezaId, targetProcesoId]
+        );
+        const pp = ppRes.rows[0];
+        if (pp && pp.estado_id !== stateTerminada.id) {
+          await client.query(`
+            UPDATE pieza_procesos
+            SET estado_id = $1, fecha_fin = COALESCE(fecha_fin, $2)
+            WHERE id = $3
+          `, [stateTerminada.id, now, pp.id]);
+
+          await client.query(`
+            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [pp.id, pp.estado_id, stateTerminada.id, usuarioId, 'Cierre de Lote']);
         }
       }
 
-      // 2. Process lagging pieces with explicit audit trail
-      const markPiezaExcepcion = db.prepare('UPDATE piezas SET cierre_excepcion = 1 WHERE id = ?');
-      const updateLaggingPP = db.prepare(`
-        UPDATE pieza_procesos
-        SET estado_id = ?, fecha_inicio = COALESCE(fecha_inicio, ?), fecha_fin = ?
-        WHERE id = ?
-      `);
-
+      // 2. Process lagging pieces
       for (const p of audit.laggingPieces) {
-        markPiezaExcepcion.run(p.piezaId);
+        await client.query('UPDATE piezas SET cierre_excepcion = 1 WHERE id = $1', [p.piezaId]);
 
         const missingStepsStr = p.pasosFaltantes.map((s) => s.tipoNombre).join(', ');
         const lastStepStr = p.ultimoPaso ? `${p.ultimoPaso.tipoNombre} (${p.ultimoPaso.estadoNombre})` : 'Ninguno';
         const obsText = `Cierre forzado en Lote Final: Se omitieron pasos [${missingStepsStr}]. Última estación real: ${lastStepStr}. ${notasCierre ? 'Nota: ' + notasCierre.trim() : ''}`.trim();
 
-        // Ensure final step in pieza_procesos is marked TERMINADA
-        const ppFinal = db.prepare('SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = ? AND proceso_id = ?').get(p.piezaId, targetProcesoId);
+        const ppFinalRes = await client.query(
+          'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
+          [p.piezaId, targetProcesoId]
+        );
+        const ppFinal = ppFinalRes.rows[0];
         if (ppFinal) {
-          updateLaggingPP.run(stateTerminada.id, now, now, ppFinal.id);
-          insertEvento.run(ppFinal.id, ppFinal.estado_id, stateTerminada.id, usuarioId, obsText);
+          await client.query(`
+            UPDATE pieza_procesos
+            SET estado_id = $1, fecha_inicio = COALESCE(fecha_inicio, $2), fecha_fin = $3
+            WHERE id = $4
+          `, [stateTerminada.id, now, now, ppFinal.id]);
+
+          await client.query(`
+            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [ppFinal.id, ppFinal.estado_id, stateTerminada.id, usuarioId, obsText]);
         }
       }
 
       // 3. Update Job status
       const finalJobStatus = audit.laggingPieces.length > 0 ? 'COMPLETADO_CON_INCIDENCIAS' : 'COMPLETADO';
-      db.prepare(`
+      await client.query(`
         UPDATE jobs
-        SET estado_cierre = ?, fecha_cierre = ?, cerrado_por_usuario_id = ?, notas_cierre = ?
-        WHERE id = ?
-      `).run(finalJobStatus, now, usuarioId, notasCierre ? notasCierre.trim() : null, jobId);
+        SET estado_cierre = $1, fecha_cierre = $2, cerrado_por_usuario_id = $3, notas_cierre = $4
+        WHERE id = $5
+      `, [finalJobStatus, now, usuarioId, notasCierre ? notasCierre.trim() : null, jobId]);
+
+      await client.query('COMMIT');
 
       return {
         success: true,
@@ -645,8 +692,11 @@ export class StateEngine {
         laggingCount: audit.laggingCount,
         laggingPieces: audit.laggingPieces
       };
-    });
-
-    return reconcileTx();
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }

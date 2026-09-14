@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tuuci-postgres-17
+    restart: always
+    environment:
+      POSTGRES_DB: tuuci_production
+      POSTGRES_USER: tuuci
+      POSTGRES_PASSWORD: tuuci123
+    ports:
+      - "5432:5432"
+    volumes:
+      - tuuci_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tuuci -d tuuci_production"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  tuuci_pgdata:
+    driver: local

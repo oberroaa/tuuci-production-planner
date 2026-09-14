@@ -261,21 +261,49 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const matchingJobs = jobSearchQuery.trim()
     ? routeJobs.filter((j) => {
         const q = jobSearchQuery.toLowerCase().trim();
+        const baseCode = q.split(/[-_\s]/)[0];
         return (
           j.job_code.toLowerCase().includes(q) ||
+          j.job_code.toLowerCase().includes(baseCode) ||
           (j.modelo && j.modelo.toLowerCase().includes(q)) ||
           (j.linea_nombre && j.linea_nombre.toLowerCase().includes(q))
         );
       })
     : routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').slice(0, 8);
 
-  // Filter items in Kanban based on Job and Piece selection
+  // Filter items in Kanban based on Job, Piece, and direct text search query
   const visibleItems = kanbanData.items.filter((item) => {
+    // 1. Direct explicit piece selection
+    if (selectedPieceCode && item.codigo_qr_unico !== selectedPieceCode) {
+      return false;
+    }
+    // 2. Explicit job selection
     if (selectedJobCode && item.codigo_job !== selectedJobCode) {
       return false;
     }
-    if (selectedPieceCode && item.codigo_qr_unico !== selectedPieceCode) {
-      return false;
+    // 3. Smart inline search if user typed a specific piece QR, suffix (e.g. "JOB026109-01" or "01")
+    if (jobSearchQuery.trim()) {
+      const q = jobSearchQuery.toLowerCase().trim();
+      const qrLower = (item.codigo_qr_unico || '').toLowerCase();
+      const jobLower = (item.codigo_job || '').toLowerCase();
+      const modelLower = (item.modelo || '').toLowerCase();
+
+      // Check if query is looking for a piece like "JOB026109-01", "JOB026109 01", or suffix "-01"
+      const normalizedQ = q.replace(/[\s_]/g, '-');
+      const normalizedQR = qrLower.replace(/[\s_]/g, '-');
+
+      const matchesPiece = normalizedQR.includes(normalizedQ) || qrLower.endsWith(`-${q}`) || qrLower.endsWith(q);
+      const matchesJob = jobLower.includes(q);
+      const matchesModel = modelLower.includes(q);
+
+      // If user typed a piece identifier (has '-' or looks like piece code / suffix), filter strictly down to the piece
+      const isPieceSpecificQuery = q.includes('-') || q.includes(' ') || (/^\d{1,3}$/.test(q) && selectedJobCode);
+      if (isPieceSpecificQuery) {
+        if (!matchesPiece && !matchesJob) return false;
+        if (matchesPiece) return true;
+      } else {
+        if (!matchesJob && !matchesPiece && !matchesModel) return false;
+      }
     }
     return true;
   });
@@ -703,15 +731,43 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   type="text"
                   value={jobSearchQuery}
                   onChange={(e) => {
-                    setJobSearchQuery(e.target.value);
+                    const val = e.target.value;
+                    setJobSearchQuery(val);
                     setIsJobDropdownOpen(true);
-                    if (!e.target.value) {
+
+                    if (!val.trim()) {
                       setSelectedJobCode('');
                       setSelectedPieceCode('');
+                      return;
+                    }
+
+                    // Auto-detect full Piece QR format: JOB123456-01 or JOB123456 01
+                    const cleanVal = val.trim();
+                    const pieceMatch = cleanVal.match(/^([a-zA-Z0-9]+)[-_\s](\d{1,3})$/);
+                    if (pieceMatch) {
+                      const detectedJobCode = pieceMatch[1];
+                      const pieceNum = pieceMatch[2].padStart(2, '0');
+                      const fullPieceQr = `${detectedJobCode}-${pieceNum}`;
+
+                      const matchingJob = routeJobs.find(
+                        (j) => j.job_code.toLowerCase() === detectedJobCode.toLowerCase()
+                      );
+                      if (matchingJob) {
+                        setSelectedJobCode(matchingJob.job_code);
+                        setSelectedPieceCode(fullPieceQr);
+                      }
+                    } else {
+                      // Check if it exactly matches a Job Code
+                      const exactJob = routeJobs.find(
+                        (j) => j.job_code.toLowerCase() === cleanVal.toLowerCase()
+                      );
+                      if (exactJob && selectedJobCode !== exactJob.job_code) {
+                        setSelectedJobCode(exactJob.job_code);
+                      }
                     }
                   }}
                   onFocus={() => setIsJobDropdownOpen(true)}
-                  placeholder="Escribe código o modelo (ej: 861362)..."
+                  placeholder="Escribe Job o Pieza (ej: JOB026109 o JOB026109-01)..."
                   className={`w-full bg-white border text-xs rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:ring-2 shadow-xs transition-all ${
                     selectedJobCode
                       ? 'border-blue-500 font-mono text-blue-900 font-bold focus:ring-blue-500 bg-blue-50/30'

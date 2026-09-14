@@ -3,14 +3,18 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import db, { initDb } from '../db.js';
+import db, { initDb } from '../db-compat.js';
 import { StateEngine } from '../services/state-engine.js';
 import { DashboardService } from '../services/dashboard-service.js';
 
+const env = process.env.NODE_ENV;
 dotenv.config();
+if (env) {
+  process.env.NODE_ENV = env;
+}
 
 // Ensure DB tables & catalogs exist
-initDb();
+await initDb();
 
 const app = express();
 const server = http.createServer(app);
@@ -36,40 +40,44 @@ app.get('/api/health', (req, res) => {
 });
 
 // 2. Catalogs API
-app.get('/api/catalogs', (req, res) => {
-  const lineas = db.prepare('SELECT * FROM lineas').all();
-  const rutas = db.prepare('SELECT * FROM rutas ORDER BY linea_id, id ASC').all();
-  const tipoProcesos = db.prepare('SELECT * FROM tipo_procesos').all();
-  const estados = db.prepare('SELECT * FROM estados ORDER BY orden ASC').all();
-  const escaneres = db.prepare(`
-    SELECT s.*, tp.nombre as tipo_proceso_nombre
-    FROM escaneres s
-    JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
-  `).all();
-  const procesos = db.prepare(`
-    SELECT p.*, l.nombre as linea_nombre, tp.nombre as tipo_nombre, r.nombre as ruta_nombre
-    FROM procesos p
-    JOIN lineas l ON p.linea_id = l.id
-    LEFT JOIN rutas r ON p.ruta_id = r.id
-    JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-    ORDER BY p.linea_id, p.ruta_id, p.orden ASC
-  `).all();
+app.get('/api/catalogs', async (req, res) => {
+  try {
+    const lineas = await db.prepare('SELECT * FROM lineas').all();
+    const rutas = await db.prepare('SELECT * FROM rutas ORDER BY linea_id, id ASC').all();
+    const tipoProcesos = await db.prepare('SELECT * FROM tipo_procesos').all();
+    const estados = await db.prepare('SELECT * FROM estados ORDER BY orden ASC').all();
+    const escaneres = await db.prepare(`
+      SELECT s.*, tp.nombre as tipo_proceso_nombre
+      FROM escaneres s
+      JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
+    `).all();
+    const procesos = await db.prepare(`
+      SELECT p.*, l.nombre as linea_nombre, tp.nombre as tipo_nombre, r.nombre as ruta_nombre
+      FROM procesos p
+      JOIN lineas l ON p.linea_id = l.id
+      LEFT JOIN rutas r ON p.ruta_id = r.id
+      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
+      ORDER BY p.linea_id, p.ruta_id, p.orden ASC
+    `).all();
 
-  res.json({ lineas, rutas, tipoProcesos, estados, escaneres, procesos });
+    res.json({ lineas, rutas, tipoProcesos, estados, escaneres, procesos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 2b. Add / Edit / Delete Line
-app.post('/api/catalogs/lines', (req, res) => {
+app.post('/api/catalogs/lines', async (req, res) => {
   try {
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de línea es requerido' });
     let lineId;
-    const tx = db.transaction(() => {
-      const result = db.prepare('INSERT INTO lineas (nombre) VALUES (?)').run(nombre.trim());
+    const tx = db.transaction(async (txDb) => {
+      const result = await txDb.prepare('INSERT INTO lineas (nombre) VALUES (?)').run(nombre.trim());
       lineId = result.lastInsertRowid;
-      db.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1)').run(lineId, 'Ruta Principal');
+      await txDb.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1)').run(lineId, 'Ruta Principal');
     });
-    tx();
+    await tx();
     notifyDashboardUpdate();
     res.status(201).json({ id: lineId, nombre: nombre.trim() });
   } catch (err) {
@@ -77,12 +85,12 @@ app.post('/api/catalogs/lines', (req, res) => {
   }
 });
 
-app.put('/api/catalogs/lines/:id', (req, res) => {
+app.put('/api/catalogs/lines/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de línea es requerido' });
-    db.prepare('UPDATE lineas SET nombre = ? WHERE id = ?').run(nombre.trim(), id);
+    await db.prepare('UPDATE lineas SET nombre = ? WHERE id = ?').run(nombre.trim(), id);
     notifyDashboardUpdate();
     res.json({ success: true, id, nombre: nombre.trim() });
   } catch (err) {
@@ -90,15 +98,15 @@ app.put('/api/catalogs/lines/:id', (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/lines/:id', (req, res) => {
+app.delete('/api/catalogs/lines/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const tx = db.transaction(() => {
-      db.prepare('DELETE FROM procesos WHERE linea_id = ?').run(id);
-      db.prepare('DELETE FROM rutas WHERE linea_id = ?').run(id);
-      db.prepare('DELETE FROM lineas WHERE id = ?').run(id);
+    const tx = db.transaction(async (txDb) => {
+      await txDb.prepare('DELETE FROM procesos WHERE linea_id = ?').run(id);
+      await txDb.prepare('DELETE FROM rutas WHERE linea_id = ?').run(id);
+      await txDb.prepare('DELETE FROM lineas WHERE id = ?').run(id);
     });
-    tx();
+    await tx();
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -106,25 +114,25 @@ app.delete('/api/catalogs/lines/:id', (req, res) => {
   }
 });
 
-// 2b.2 Add / Edit / Delete Route (Ruta de Proceso por Línea)
-app.post('/api/catalogs/rutas', (req, res) => {
+// 2b.2 Add / Edit / Delete Route
+app.post('/api/catalogs/rutas', async (req, res) => {
   try {
     const { lineaId, nombre, esDefault } = req.body;
     if (!lineaId || !nombre || !nombre.trim()) {
       return res.status(400).json({ error: 'Línea y nombre de ruta son requeridos' });
     }
     let insertedId;
-    const tx = db.transaction(() => {
+    const tx = db.transaction(async (txDb) => {
       if (esDefault) {
-        db.prepare('UPDATE rutas SET es_default = 0 WHERE linea_id = ?').run(lineaId);
+        await txDb.prepare('UPDATE rutas SET es_default = 0 WHERE linea_id = ?').run(lineaId);
       }
-      const result = db.prepare(`
+      const result = await txDb.prepare(`
         INSERT INTO rutas (linea_id, nombre, es_default)
         VALUES (?, ?, ?)
       `).run(lineaId, nombre.trim(), esDefault ? 1 : 0);
       insertedId = result.lastInsertRowid;
     });
-    tx();
+    await tx();
     notifyDashboardUpdate();
     res.status(201).json({ id: insertedId, success: true, nombre: nombre.trim() });
   } catch (err) {
@@ -132,22 +140,22 @@ app.post('/api/catalogs/rutas', (req, res) => {
   }
 });
 
-app.put('/api/catalogs/rutas/:id', (req, res) => {
+app.put('/api/catalogs/rutas/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const current = db.prepare('SELECT * FROM rutas WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM rutas WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Ruta no encontrada' });
 
     const nombre = req.body.nombre !== undefined ? req.body.nombre.trim() : current.nombre;
     const esDefault = req.body.esDefault !== undefined ? (req.body.esDefault ? 1 : 0) : current.es_default;
 
-    const tx = db.transaction(() => {
+    const tx = db.transaction(async (txDb) => {
       if (esDefault === 1) {
-        db.prepare('UPDATE rutas SET es_default = 0 WHERE linea_id = ?').run(current.linea_id);
+        await txDb.prepare('UPDATE rutas SET es_default = 0 WHERE linea_id = ?').run(current.linea_id);
       }
-      db.prepare('UPDATE rutas SET nombre = ?, es_default = ? WHERE id = ?').run(nombre, esDefault, id);
+      await txDb.prepare('UPDATE rutas SET nombre = ?, es_default = ? WHERE id = ?').run(nombre, esDefault, id);
     });
-    tx();
+    await tx();
     notifyDashboardUpdate();
     res.json({ success: true, id, nombre, es_default: esDefault });
   } catch (err) {
@@ -155,33 +163,33 @@ app.put('/api/catalogs/rutas/:id', (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/rutas/:id', (req, res) => {
+app.delete('/api/catalogs/rutas/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const current = db.prepare('SELECT * FROM rutas WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM rutas WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Ruta no encontrada' });
 
-    const countRoutes = db.prepare('SELECT COUNT(*) as count FROM rutas WHERE linea_id = ?').get(current.linea_id).count;
-    if (countRoutes <= 1) {
+    const countRoutesRow = await db.prepare('SELECT COUNT(*) as count FROM rutas WHERE linea_id = ?').get(current.linea_id);
+    if (parseInt(countRoutesRow.count, 10) <= 1) {
       return res.status(400).json({ error: 'No se puede eliminar la única ruta de la línea. Cada línea debe conservar al menos una ruta.' });
     }
 
-    const jobsUsingRuta = db.prepare('SELECT COUNT(*) as count FROM jobs WHERE ruta_id = ?').get(id).count;
-    if (jobsUsingRuta > 0) {
-      return res.status(400).json({ error: `No se puede eliminar la ruta porque está en uso por ${jobsUsingRuta} órdenes (Jobs).` });
+    const jobsUsingRutaRow = await db.prepare('SELECT COUNT(*) as count FROM jobs WHERE ruta_id = ?').get(id);
+    if (parseInt(jobsUsingRutaRow.count, 10) > 0) {
+      return res.status(400).json({ error: `No se puede eliminar la ruta porque está en uso por ${jobsUsingRutaRow.count} órdenes (Jobs).` });
     }
 
-    const tx = db.transaction(() => {
-      db.prepare('DELETE FROM procesos WHERE ruta_id = ?').run(id);
-      db.prepare('DELETE FROM rutas WHERE id = ?').run(id);
-      if (current.es_default === 1) {
-        const another = db.prepare('SELECT id FROM rutas WHERE linea_id = ? LIMIT 1').get(current.linea_id);
+    const tx = db.transaction(async (txDb) => {
+      await txDb.prepare('DELETE FROM procesos WHERE ruta_id = ?').run(id);
+      await txDb.prepare('DELETE FROM rutas WHERE id = ?').run(id);
+      if (current.es_default === 1 || current.es_default === true) {
+        const another = await txDb.prepare('SELECT id FROM rutas WHERE linea_id = ? LIMIT 1').get(current.linea_id);
         if (another) {
-          db.prepare('UPDATE rutas SET es_default = 1 WHERE id = ?').run(another.id);
+          await txDb.prepare('UPDATE rutas SET es_default = 1 WHERE id = ?').run(another.id);
         }
       }
     });
-    tx();
+    await tx();
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -189,12 +197,12 @@ app.delete('/api/catalogs/rutas/:id', (req, res) => {
   }
 });
 
-// 2c. Add / Edit / Delete TipoProceso (Global Master Process)
-app.post('/api/catalogs/tipo-procesos', (req, res) => {
+// 2c. Add / Edit / Delete TipoProceso
+app.post('/api/catalogs/tipo-procesos', async (req, res) => {
   try {
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de tipo de proceso es requerido' });
-    const result = db.prepare('INSERT INTO tipo_procesos (nombre) VALUES (?)').run(nombre.trim().toUpperCase());
+    const result = await db.prepare('INSERT INTO tipo_procesos (nombre) VALUES (?)').run(nombre.trim().toUpperCase());
     notifyDashboardUpdate();
     res.status(201).json({ id: result.lastInsertRowid, nombre: nombre.trim().toUpperCase() });
   } catch (err) {
@@ -202,12 +210,12 @@ app.post('/api/catalogs/tipo-procesos', (req, res) => {
   }
 });
 
-app.put('/api/catalogs/tipo-procesos/:id', (req, res) => {
+app.put('/api/catalogs/tipo-procesos/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre es requerido' });
-    db.prepare('UPDATE tipo_procesos SET nombre = ? WHERE id = ?').run(nombre.trim().toUpperCase(), id);
+    await db.prepare('UPDATE tipo_procesos SET nombre = ? WHERE id = ?').run(nombre.trim().toUpperCase(), id);
     notifyDashboardUpdate();
     res.json({ success: true, id, nombre: nombre.trim().toUpperCase() });
   } catch (err) {
@@ -215,10 +223,10 @@ app.put('/api/catalogs/tipo-procesos/:id', (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/tipo-procesos/:id', (req, res) => {
+app.delete('/api/catalogs/tipo-procesos/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM tipo_procesos WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM tipo_procesos WHERE id = ?').run(id);
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -226,23 +234,22 @@ app.delete('/api/catalogs/tipo-procesos/:id', (req, res) => {
   }
 });
 
-// 2d. Add process step to a line route (auto-shifting existing steps if order is occupied)
-app.post('/api/catalogs/procesos', (req, res) => {
+// 2d. Add process step to a line route
+app.post('/api/catalogs/procesos', async (req, res) => {
   try {
     const { lineaId, rutaId, tipoProcesoId, orden, modoTrabajo } = req.body;
     if (!lineaId || !tipoProcesoId || orden === undefined || orden === null || !modoTrabajo) {
       return res.status(400).json({ error: 'Campos requeridos faltantes' });
     }
 
-    // Determine target route ID
     let targetRutaId = rutaId;
     if (!targetRutaId) {
-      const defaultRuta = db.prepare('SELECT id FROM rutas WHERE linea_id = ? AND es_default = 1').get(lineaId)
-        || db.prepare('SELECT id FROM rutas WHERE linea_id = ? LIMIT 1').get(lineaId);
+      const defaultRuta = await db.prepare('SELECT id FROM rutas WHERE linea_id = ? AND es_default = 1').get(lineaId)
+        || await db.prepare('SELECT id FROM rutas WHERE linea_id = ? LIMIT 1').get(lineaId);
       if (defaultRuta) {
         targetRutaId = defaultRuta.id;
       } else {
-        const createDefault = db.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1)').run(lineaId, 'Ruta Estándar');
+        const createDefault = await db.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1)').run(lineaId, 'Ruta Estándar');
         targetRutaId = createDefault.lastInsertRowid;
       }
     }
@@ -251,44 +258,42 @@ app.post('/api/catalogs/procesos', (req, res) => {
     const esCierre = req.body.esProcesoCierre ? 1 : 0;
     const tiempoDemoraSegundos = req.body.tiempoDemoraSegundos !== undefined ? Math.max(0, parseInt(req.body.tiempoDemoraSegundos, 10) || 0) : 0;
 
-    // Check if this tipoProceso is already in this specific route
-    const existingSameTipo = db.prepare('SELECT id FROM procesos WHERE ruta_id = ? AND tipo_proceso_id = ?').get(targetRutaId, tipoProcesoId);
+    const existingSameTipo = await db.prepare('SELECT id FROM procesos WHERE ruta_id = ? AND tipo_proceso_id = ?').get(targetRutaId, tipoProcesoId);
     if (existingSameTipo) {
       return res.status(400).json({ error: 'Esta estación ya está asignada a esta ruta de proceso.' });
     }
 
-    const existingSteps = db.prepare('SELECT id, orden FROM procesos WHERE ruta_id = ? ORDER BY orden ASC').all(targetRutaId);
+    const existingSteps = await db.prepare('SELECT id, orden FROM procesos WHERE ruta_id = ? ORDER BY orden ASC').all(targetRutaId);
     const conflicting = existingSteps.filter((p) => p.orden >= targetOrder);
 
     let insertedId;
     const finalModo = esCierre === 1 ? 'LOTE' : modoTrabajo;
-    const tx = db.transaction(() => {
+    const tx = db.transaction(async (txDb) => {
       if (esCierre === 1) {
-        db.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(targetRutaId);
+        await txDb.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(targetRutaId);
       }
 
       if (conflicting.length > 0) {
-        // Two-phase shift to avoid UNIQUE(ruta_id, orden) collisions
         for (const p of conflicting) {
-          db.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-p.id, p.id);
+          await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-p.id, p.id);
         }
-        const insertResult = db.prepare(`
+        const insertResult = await txDb.prepare(`
           INSERT INTO procesos (linea_id, ruta_id, tipo_proceso_id, orden, modo_trabajo, es_proceso_cierre, tiempo_demora_segundos)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(lineaId, targetRutaId, tipoProcesoId, targetOrder, finalModo, esCierre, tiempoDemoraSegundos);
         insertedId = insertResult.lastInsertRowid;
         for (const p of conflicting) {
-          db.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(p.orden + 1, p.id);
+          await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(p.orden + 1, p.id);
         }
       } else {
-        const result = db.prepare(`
+        const result = await txDb.prepare(`
           INSERT INTO procesos (linea_id, ruta_id, tipo_proceso_id, orden, modo_trabajo, es_proceso_cierre, tiempo_demora_segundos)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(lineaId, targetRutaId, tipoProcesoId, targetOrder, finalModo, esCierre, tiempoDemoraSegundos);
         insertedId = result.lastInsertRowid;
       }
     });
-    tx();
+    await tx();
 
     notifyDashboardUpdate();
     res.status(201).json({ id: insertedId, rutaId: targetRutaId, success: true });
@@ -297,30 +302,30 @@ app.post('/api/catalogs/procesos', (req, res) => {
   }
 });
 
-// 2e. Delete process step from line route and re-compact sequence
-app.delete('/api/catalogs/procesos/:id', (req, res) => {
+// 2e. Delete process step from line route
+app.delete('/api/catalogs/procesos/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const current = db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Paso no encontrado' });
 
-    const tx = db.transaction(() => {
-      db.prepare('DELETE FROM procesos WHERE id = ?').run(id);
-      const remaining = db.prepare('SELECT id, es_proceso_cierre FROM procesos WHERE ruta_id = ? ORDER BY orden ASC').all(current.ruta_id);
+    const tx = db.transaction(async (txDb) => {
+      await txDb.prepare('DELETE FROM procesos WHERE id = ?').run(id);
+      const remaining = await txDb.prepare('SELECT id, es_proceso_cierre FROM procesos WHERE ruta_id = ? ORDER BY orden ASC').all(current.ruta_id);
       for (const p of remaining) {
-        db.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-p.id, p.id);
+        await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-p.id, p.id);
       }
-      remaining.forEach((p, idx) => {
-        db.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(idx + 1, p.id);
-      });
+      for (let idx = 0; idx < remaining.length; idx++) {
+        const p = remaining[idx];
+        await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(idx + 1, p.id);
+      }
 
-      // If the deleted process was the closure process and there are remaining steps, designate the last step as closure and force LOTE
-      if (current.es_proceso_cierre === 1 && remaining.length > 0) {
+      if ((current.es_proceso_cierre === 1 || current.es_proceso_cierre === true) && remaining.length > 0) {
         const lastStep = remaining[remaining.length - 1];
-        db.prepare("UPDATE procesos SET es_proceso_cierre = 1, modo_trabajo = 'LOTE' WHERE id = ?").run(lastStep.id);
+        await txDb.prepare("UPDATE procesos SET es_proceso_cierre = 1, modo_trabajo = 'LOTE' WHERE id = ?").run(lastStep.id);
       }
     });
-    tx();
+    await tx();
 
     notifyDashboardUpdate();
     res.json({ success: true });
@@ -329,11 +334,11 @@ app.delete('/api/catalogs/procesos/:id', (req, res) => {
   }
 });
 
-// 2e.2 Edit process step (station, order, work mode, closure flag, delay time)
-app.put('/api/catalogs/procesos/:id', (req, res) => {
+// 2e.2 Edit process step
+app.put('/api/catalogs/procesos/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const current = db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Paso de proceso no encontrado' });
 
     const tipoProcesoId = req.body.tipoProcesoId !== undefined ? req.body.tipoProcesoId : current.tipo_proceso_id;
@@ -345,26 +350,25 @@ app.put('/api/catalogs/procesos/:id', (req, res) => {
       modoTrabajo = 'LOTE';
     }
 
-    const tx = db.transaction(() => {
+    const tx = db.transaction(async (txDb) => {
       if (esCierre === 1) {
-        db.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(current.ruta_id);
+        await txDb.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(current.ruta_id);
       }
 
-      // Check if another step in the same route has the same order
-      const existingWithSameOrder = db.prepare('SELECT id FROM procesos WHERE ruta_id = ? AND orden = ? AND id != ?').get(current.ruta_id, orden, id);
+      const existingWithSameOrder = await txDb.prepare('SELECT id FROM procesos WHERE ruta_id = ? AND orden = ? AND id != ?').get(current.ruta_id, orden, id);
       if (existingWithSameOrder) {
-        db.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-existingWithSameOrder.id, existingWithSameOrder.id);
-        db.prepare('UPDATE procesos SET tipo_proceso_id = ?, orden = ?, modo_trabajo = ?, es_proceso_cierre = ?, tiempo_demora_segundos = ? WHERE id = ?').run(tipoProcesoId, orden, modoTrabajo, esCierre, tiempoDemoraSegundos, id);
-        db.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(current.orden, existingWithSameOrder.id);
+        await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-existingWithSameOrder.id, existingWithSameOrder.id);
+        await txDb.prepare('UPDATE procesos SET tipo_proceso_id = ?, orden = ?, modo_trabajo = ?, es_proceso_cierre = ?, tiempo_demora_segundos = ? WHERE id = ?').run(tipoProcesoId, orden, modoTrabajo, esCierre, tiempoDemoraSegundos, id);
+        await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(current.orden, existingWithSameOrder.id);
       } else {
-        db.prepare(`
+        await txDb.prepare(`
           UPDATE procesos
           SET tipo_proceso_id = ?, orden = ?, modo_trabajo = ?, es_proceso_cierre = ?, tiempo_demora_segundos = ?
           WHERE id = ?
         `).run(tipoProcesoId, orden, modoTrabajo, esCierre, tiempoDemoraSegundos, id);
       }
     });
-    tx();
+    await tx();
 
     notifyDashboardUpdate();
     res.json({ success: true, id, tipoProcesoId, orden, modoTrabajo, esProcesoCierre: esCierre === 1, tiempoDemoraSegundos });
@@ -374,15 +378,15 @@ app.put('/api/catalogs/procesos/:id', (req, res) => {
 });
 
 // 2e.2a Quick inline edit for tiempo de demora
-app.patch('/api/catalogs/procesos/:id/tiempo-demora', (req, res) => {
+app.patch('/api/catalogs/procesos/:id/tiempo-demora', async (req, res) => {
   try {
     const { id } = req.params;
     const { segundos } = req.body;
-    const current = db.prepare('SELECT id FROM procesos WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT id FROM procesos WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Paso no encontrado' });
 
     const tiempoSegundos = Math.max(0, parseInt(segundos, 10) || 0);
-    db.prepare('UPDATE procesos SET tiempo_demora_segundos = ? WHERE id = ?').run(tiempoSegundos, id);
+    await db.prepare('UPDATE procesos SET tiempo_demora_segundos = ? WHERE id = ?').run(tiempoSegundos, id);
     notifyDashboardUpdate();
     res.json({ success: true, id, tiempoDemoraSegundos: tiempoSegundos });
   } catch (err) {
@@ -391,19 +395,17 @@ app.patch('/api/catalogs/procesos/:id/tiempo-demora', (req, res) => {
 });
 
 // 2e.2b Set process step as the designated route closure step
-app.post('/api/catalogs/procesos/:id/set-cierre', (req, res) => {
+app.post('/api/catalogs/procesos/:id/set-cierre', async (req, res) => {
   try {
     const { id } = req.params;
-    const current = db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Paso no encontrado' });
 
-    const tx = db.transaction(() => {
-      // Clear closure flag for all processes in this route
-      db.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(current.ruta_id);
-      // Designate this process as the closure step AND enforce modo_trabajo = 'LOTE'
-      db.prepare("UPDATE procesos SET es_proceso_cierre = 1, modo_trabajo = 'LOTE' WHERE id = ?").run(id);
+    const tx = db.transaction(async (txDb) => {
+      await txDb.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(current.ruta_id);
+      await txDb.prepare("UPDATE procesos SET es_proceso_cierre = 1, modo_trabajo = 'LOTE' WHERE id = ?").run(id);
     });
-    tx();
+    await tx();
 
     notifyDashboardUpdate();
     res.json({ success: true, id: current.id, rutaId: current.ruta_id, modoTrabajo: 'LOTE' });
@@ -412,23 +414,20 @@ app.post('/api/catalogs/procesos/:id/set-cierre', (req, res) => {
   }
 });
 
-// 2e.3 Reorder process steps for a line (two-phase to avoid UNIQUE constraint violation)
-app.post('/api/catalogs/procesos/reorder', (req, res) => {
+// 2e.3 Reorder process steps
+app.post('/api/catalogs/procesos/reorder', async (req, res) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: 'Array de items requerido' });
-    const updateStmt = db.prepare('UPDATE procesos SET orden = ? WHERE id = ?');
-    const tx = db.transaction((rows) => {
-      // Phase 1: Set temporary negative order to prevent UNIQUE(linea_id, orden) collisions
+    const tx = db.transaction(async (txDb, rows) => {
       for (const item of rows) {
-        updateStmt.run(-item.id, item.id);
+        await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(-item.id, item.id);
       }
-      // Phase 2: Set final target orders
       for (const item of rows) {
-        updateStmt.run(item.orden, item.id);
+        await txDb.prepare('UPDATE procesos SET orden = ? WHERE id = ?').run(item.orden, item.id);
       }
     });
-    tx(items);
+    await tx(items);
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -436,17 +435,17 @@ app.post('/api/catalogs/procesos/reorder', (req, res) => {
   }
 });
 
-// 2e.4 Toggle work mode (LOTE <-> INDIVIDUAL)
-app.patch('/api/catalogs/procesos/:id/toggle-mode', (req, res) => {
+// 2e.4 Toggle work mode
+app.patch('/api/catalogs/procesos/:id/toggle-mode', async (req, res) => {
   try {
     const { id } = req.params;
-    const current = db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Paso de proceso no encontrado' });
-    if (current.es_proceso_cierre === 1 && current.modo_trabajo === 'LOTE') {
+    if ((current.es_proceso_cierre === 1 || current.es_proceso_cierre === true) && current.modo_trabajo === 'LOTE') {
       return res.status(400).json({ error: 'La estación designada como Cierre de Lote debe operar obligatoriamente en modo LOTE.' });
     }
     const newMode = current.modo_trabajo === 'LOTE' ? 'INDIVIDUAL' : 'LOTE';
-    db.prepare('UPDATE procesos SET modo_trabajo = ? WHERE id = ?').run(newMode, id);
+    await db.prepare('UPDATE procesos SET modo_trabajo = ? WHERE id = ?').run(newMode, id);
     notifyDashboardUpdate();
     res.json({ success: true, id, modo_trabajo: newMode });
   } catch (err) {
@@ -454,12 +453,12 @@ app.patch('/api/catalogs/procesos/:id/toggle-mode', (req, res) => {
   }
 });
 
-// 2f. Add / Edit / Delete State with behavioral flags
-app.post('/api/catalogs/estados', (req, res) => {
+// 2f. Add / Edit / Delete State
+app.post('/api/catalogs/estados', async (req, res) => {
   try {
     const { nombre, orden, visibleParaOperador, permiteEscaneo, disparaActivacionSiguiente } = req.body;
     if (!nombre || !orden) return res.status(400).json({ error: 'Nombre y orden son requeridos' });
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO estados (nombre, orden, visible_para_operador, permite_escaneo, dispara_activacion_siguiente)
       VALUES (?, ?, ?, ?, ?)
     `).run(
@@ -476,10 +475,10 @@ app.post('/api/catalogs/estados', (req, res) => {
   }
 });
 
-app.put('/api/catalogs/estados/:id', (req, res) => {
+app.put('/api/catalogs/estados/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const currentState = db.prepare('SELECT * FROM estados WHERE id = ?').get(id);
+    const currentState = await db.prepare('SELECT * FROM estados WHERE id = ?').get(id);
     if (!currentState) return res.status(404).json({ error: 'Estado no encontrado' });
 
     const nombre = req.body.nombre !== undefined ? req.body.nombre.trim().toUpperCase() : currentState.nombre;
@@ -494,7 +493,7 @@ app.put('/api/catalogs/estados/:id', (req, res) => {
       ? (req.body.disparaActivacionSiguiente ? 1 : 0) 
       : currentState.dispara_activacion_siguiente;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE estados
       SET nombre = ?, orden = ?, visible_para_operador = ?, permite_escaneo = ?, dispara_activacion_siguiente = ?
       WHERE id = ?
@@ -506,8 +505,7 @@ app.put('/api/catalogs/estados/:id', (req, res) => {
   }
 });
 
-// 2f.2 Quick atomic toggle for state flags
-app.patch('/api/catalogs/estados/:id/toggle', (req, res) => {
+app.patch('/api/catalogs/estados/:id/toggle', async (req, res) => {
   try {
     const { id } = req.params;
     const { field } = req.body;
@@ -515,19 +513,19 @@ app.patch('/api/catalogs/estados/:id/toggle', (req, res) => {
     if (!allowed.includes(field)) {
       return res.status(400).json({ error: 'Campo no permitido para alternar' });
     }
-    db.prepare(`UPDATE estados SET ${field} = CASE WHEN ${field} = 1 THEN 0 ELSE 1 END WHERE id = ?`).run(id);
+    await db.prepare(`UPDATE estados SET ${field} = CASE WHEN ${field} = 1 THEN 0 ELSE 1 END WHERE id = ?`).run(id);
     notifyDashboardUpdate();
-    const updated = db.prepare('SELECT * FROM estados WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM estados WHERE id = ?').get(id);
     res.json({ success: true, estado: updated });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.delete('/api/catalogs/estados/:id', (req, res) => {
+app.delete('/api/catalogs/estados/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM estados WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM estados WHERE id = ?').run(id);
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -535,17 +533,16 @@ app.delete('/api/catalogs/estados/:id', (req, res) => {
   }
 });
 
-app.post('/api/catalogs/estados/reorder', (req, res) => {
+app.post('/api/catalogs/estados/reorder', async (req, res) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: 'Items array required' });
-    const updateStmt = db.prepare('UPDATE estados SET orden = ? WHERE id = ?');
-    const tx = db.transaction((rows) => {
+    const tx = db.transaction(async (txDb, rows) => {
       for (const item of rows) {
-        updateStmt.run(item.orden, item.id);
+        await txDb.prepare('UPDATE estados SET orden = ? WHERE id = ?').run(item.orden, item.id);
       }
     });
-    tx(items);
+    await tx(items);
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -554,11 +551,11 @@ app.post('/api/catalogs/estados/reorder', (req, res) => {
 });
 
 // 2g. Register / Edit / Delete physical scanner
-app.post('/api/catalogs/scanners', (req, res) => {
+app.post('/api/catalogs/scanners', async (req, res) => {
   try {
     const { codigoEstacion, tipoProcesoId } = req.body;
     if (!codigoEstacion || !tipoProcesoId) return res.status(400).json({ error: 'Código de estación y proceso son requeridos' });
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, activo)
       VALUES (?, ?, 1)
     `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId);
@@ -569,11 +566,11 @@ app.post('/api/catalogs/scanners', (req, res) => {
   }
 });
 
-app.put('/api/catalogs/scanners/:id', (req, res) => {
+app.put('/api/catalogs/scanners/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { codigoEstacion, tipoProcesoId, activo } = req.body;
-    db.prepare(`
+    await db.prepare(`
       UPDATE escaneres
       SET codigo_estacion = ?, tipo_proceso_id = ?, activo = ?
       WHERE id = ?
@@ -585,10 +582,10 @@ app.put('/api/catalogs/scanners/:id', (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/scanners/:id', (req, res) => {
+app.delete('/api/catalogs/scanners/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM escaneres WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM escaneres WHERE id = ?').run(id);
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
@@ -597,9 +594,9 @@ app.delete('/api/catalogs/scanners/:id', (req, res) => {
 });
 
 // 2h. Users & Roles Management
-app.get('/api/users', (req, res) => {
+app.get('/api/users', async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT u.*, l.nombre as linea_nombre
       FROM usuarios u
       LEFT JOIN lineas l ON u.linea_id = l.id
@@ -611,14 +608,14 @@ app.get('/api/users', (req, res) => {
   }
 });
 
-app.post('/api/users', (req, res) => {
+app.post('/api/users', async (req, res) => {
   try {
     const { microsoftId, nombre, email, rol, lineaId } = req.body;
     if (!nombre || !email || !rol) {
       return res.status(400).json({ error: 'Nombre, email y rol son requeridos' });
     }
     const msId = microsoftId && microsoftId.trim() ? microsoftId.trim() : `ms-${Date.now()}`;
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
       VALUES (?, ?, ?, ?, ?)
     `).run(msId, nombre.trim(), email.trim(), rol, rol === 'ADMIN' ? null : (lineaId || null));
@@ -628,11 +625,11 @@ app.post('/api/users', (req, res) => {
   }
 });
 
-app.put('/api/users/:id', (req, res) => {
+app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, email, rol, lineaId } = req.body;
-    db.prepare(`
+    await db.prepare(`
       UPDATE usuarios
       SET nombre = ?, email = ?, rol = ?, linea_id = ?
       WHERE id = ?
@@ -643,10 +640,10 @@ app.put('/api/users/:id', (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', (req, res) => {
+app.delete('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -654,23 +651,26 @@ app.delete('/api/users/:id', (req, res) => {
 });
 
 // 3. Wireless Wi-Fi Scanner endpoint
-app.post('/api/scan', (req, res) => {
-  const { codigoEstacion, codigoQRUnico } = req.body;
-  const result = StateEngine.handleScan({ codigoEstacion, codigoQRUnico });
+app.post('/api/scan', async (req, res) => {
+  try {
+    const { codigoEstacion, codigoQRUnico } = req.body;
+    const result = await StateEngine.handleScan({ codigoEstacion, codigoQRUnico });
 
-  if (result.success) {
-    io.emit('scan:event', result);
-    notifyDashboardUpdate();
+    if (result.success) {
+      io.emit('scan:event', result);
+      notifyDashboardUpdate();
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, oled_message: 'ERROR', tone: 'red', reason: err.message });
   }
-
-  // Always return the response tailored for the physical scanner's OLED display
-  res.json(result);
 });
 
-// 4a. Check if Job Code already exists in database (prevent duplicate cutting & inspect state)
-app.get('/api/jobs/check/:jobCode', (req, res) => {
+// 4a. Check if Job Code exists
+app.get('/api/jobs/check/:jobCode', async (req, res) => {
   try {
-    const existing = db.prepare(`
+    const existing = await db.prepare(`
       SELECT 
         j.id, 
         j.job_code, 
@@ -719,10 +719,10 @@ app.get('/api/jobs/check/:jobCode', (req, res) => {
 });
 
 // 4. Cutting Station (Fase 1): Create Job and Pieces
-app.post('/api/jobs', (req, res) => {
+app.post('/api/jobs', async (req, res) => {
   try {
     const { jobCode, lineaId, rutaId, modelo, specsRaw, cantidadPiezas, creadoPorUsuarioId } = req.body;
-    const job = StateEngine.createJob({
+    const job = await StateEngine.createJob({
       jobCode,
       lineaId,
       rutaId,
@@ -740,30 +740,28 @@ app.post('/api/jobs', (req, res) => {
 });
 
 // 5. Cutting Station: Close batch process (Modo LOTE)
-app.post('/api/cutting/batch-close', (req, res) => {
+app.post('/api/cutting/batch-close', async (req, res) => {
   try {
     let { jobId, jobCode, procesoId, usuarioId } = req.body;
 
-    // If jobCode is provided instead of jobId, resolve the job
     if (!jobId && jobCode) {
       const cleanCode = String(jobCode).trim();
-      const job = db.prepare('SELECT id, linea_id, ruta_id FROM jobs WHERE job_code = ?').get(cleanCode);
+      const job = await db.prepare('SELECT id, linea_id, ruta_id FROM jobs WHERE job_code = ?').get(cleanCode);
       if (!job) {
         return res.status(404).json({ success: false, error: `No se encontró ningún Job con el código "${cleanCode}"` });
       }
       jobId = job.id;
 
-      // If procesoId was not provided, auto-find the initial LOTE batch process for this job's route
       if (!procesoId) {
-        const initialLoteProc = db.prepare(`
+        const initialLoteProc = await db.prepare(`
           SELECT p.id FROM procesos p
           WHERE p.ruta_id = ? AND p.modo_trabajo = 'LOTE'
           ORDER BY p.orden ASC LIMIT 1
-        `).get(job.ruta_id) || db.prepare(`
+        `).get(job.ruta_id) || await db.prepare(`
           SELECT p.id FROM procesos p
           WHERE p.linea_id = ? AND p.modo_trabajo = 'LOTE'
           ORDER BY p.orden ASC LIMIT 1
-        `).get(job.linea_id) || db.prepare(`
+        `).get(job.linea_id) || await db.prepare(`
           SELECT p.id FROM procesos p
           WHERE p.ruta_id = ?
           ORDER BY p.orden ASC LIMIT 1
@@ -780,7 +778,7 @@ app.post('/api/cutting/batch-close', (req, res) => {
       return res.status(400).json({ success: false, error: 'jobId/jobCode y procesoId son requeridos' });
     }
 
-    const result = StateEngine.closeBatchProcess({ jobId, procesoId, usuarioId });
+    const result = await StateEngine.closeBatchProcess({ jobId, procesoId, usuarioId });
 
     notifyDashboardUpdate();
     res.json({ success: true, result });
@@ -789,9 +787,9 @@ app.post('/api/cutting/batch-close', (req, res) => {
   }
 });
 
-// Helpers for Duration and Time Tracking
 function parseDateUtc(d) {
   if (!d) return null;
+  if (d instanceof Date) return d;
   if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(d)) {
     return new Date(d.replace(' ', 'T') + 'Z');
   }
@@ -817,8 +815,8 @@ function formatDuration(ms) {
   return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
-// 5b. Get Jobs with line, route, progress stats, and duration
-app.get('/api/jobs', (req, res) => {
+// 5b. Get Jobs
+app.get('/api/jobs', async (req, res) => {
   try {
     const { lineaId, rutaId } = req.query;
     let query = `
@@ -828,8 +826,8 @@ app.get('/api/jobs', (req, res) => {
         r.nombre as ruta_nombre,
         u.nombre as creado_por_nombre,
         cu.nombre as cerrado_por_nombre,
-        (SELECT COUNT(*) FROM piezas p WHERE p.job_id = j.id) as total_piezas,
-        (SELECT COUNT(*) FROM piezas p WHERE p.job_id = j.id AND p.cierre_excepcion = 1) as piezas_con_excepcion
+        (SELECT COUNT(*)::int FROM piezas p WHERE p.job_id = j.id) as total_piezas,
+        (SELECT COUNT(*)::int FROM piezas p WHERE p.job_id = j.id AND p.cierre_excepcion = 1) as piezas_con_excepcion
       FROM jobs j
       JOIN lineas l ON j.linea_id = l.id
       LEFT JOIN rutas r ON j.ruta_id = r.id
@@ -846,8 +844,8 @@ app.get('/api/jobs', (req, res) => {
 
     if (rutaId && rutaId !== 'ALL' && rutaId !== 'TODAS') {
       const parsedRutaId = parseInt(rutaId, 10);
-      const rutaRow = db.prepare('SELECT es_default FROM rutas WHERE id = ?').get(parsedRutaId);
-      if (rutaRow && rutaRow.es_default === 1) {
+      const rutaRow = await db.prepare('SELECT es_default FROM rutas WHERE id = ?').get(parsedRutaId);
+      if (rutaRow && (rutaRow.es_default === 1 || rutaRow.es_default === true)) {
         conditions.push('(j.ruta_id = ? OR j.ruta_id IS NULL)');
         params.push(parsedRutaId);
       } else {
@@ -861,7 +859,7 @@ app.get('/api/jobs', (req, res) => {
     }
 
     query += ' ORDER BY j.id DESC ';
-    const rawJobs = db.prepare(query).all(...params);
+    const rawJobs = await db.prepare(query).all(...params);
     const now = new Date();
 
     const jobs = rawJobs.map((j) => {
@@ -885,11 +883,11 @@ app.get('/api/jobs', (req, res) => {
   }
 });
 
-// 5b-2. Get Job detail with pieces, piece station history, and audit events
-app.get('/api/jobs/:id', (req, res) => {
+// 5b-2. Get Job detail
+app.get('/api/jobs/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const job = db.prepare(`
+    const job = await db.prepare(`
       SELECT 
         j.*,
         l.nombre as linea_nombre,
@@ -919,7 +917,7 @@ app.get('/api/jobs/:id', (req, res) => {
     job.duracion_texto = formatDuration(jobDurationMs);
     job.es_en_curso = !job.fecha_cierre;
 
-    const pieces = db.prepare(`
+    const pieces = await db.prepare(`
       SELECT p.*,
         (
           SELECT tp.nombre 
@@ -942,8 +940,7 @@ app.get('/api/jobs/:id', (req, res) => {
       ORDER BY p.id ASC
     `).all(job.id);
 
-    // Fetch all process steps for all pieces of this job
-    const allPieceProcesses = db.prepare(`
+    const allPieceProcesses = await db.prepare(`
       SELECT 
         pp.*,
         tp.nombre as proceso_nombre,
@@ -1001,7 +998,7 @@ app.get('/api/jobs/:id', (req, res) => {
       };
     });
 
-    const auditEvents = db.prepare(`
+    const auditEvents = await db.prepare(`
       SELECT 
         ev.*,
         e.nombre as estado_nombre,
@@ -1026,8 +1023,8 @@ app.get('/api/jobs/:id', (req, res) => {
   }
 });
 
-// 5b-3. Dynamic Kanban board data with station elapsed times
-app.get('/api/kanban', (req, res) => {
+// 5b-3. Dynamic Kanban board data
+app.get('/api/kanban', async (req, res) => {
   try {
     const { lineaId, rutaId } = req.query;
     const isAllLines = !lineaId || lineaId === 'ALL' || lineaId === 'TODAS';
@@ -1035,27 +1032,32 @@ app.get('/api/kanban', (req, res) => {
     let lineRow = null;
     let currentLineId = null;
     if (!isAllLines) {
-      lineRow = db.prepare('SELECT id, nombre FROM lineas WHERE id = ? OR nombre = ?').get(lineaId, lineaId);
+      const parsedLineId = parseInt(lineaId, 10);
+      if (!isNaN(parsedLineId)) {
+        lineRow = await db.prepare('SELECT id, nombre FROM lineas WHERE id = ?').get(parsedLineId);
+      } else {
+        lineRow = await db.prepare('SELECT id, nombre FROM lineas WHERE nombre = ?').get(lineaId);
+      }
       if (lineRow) {
         currentLineId = lineRow.id;
       }
     }
     if (!lineRow && !isAllLines) {
-      lineRow = db.prepare("SELECT id, nombre FROM lineas WHERE nombre = 'Clásica'").get()
-        || db.prepare('SELECT id, nombre FROM lineas LIMIT 1').get();
+      lineRow = await db.prepare("SELECT id, nombre FROM lineas WHERE nombre = 'Clásica'").get()
+        || await db.prepare('SELECT id, nombre FROM lineas LIMIT 1').get();
       currentLineId = lineRow.id;
     }
 
     const isAllRutas = rutaId === 'ALL' || rutaId === 'TODAS' || !rutaId;
 
     const lineRutas = isAllLines
-      ? db.prepare(`
+      ? await db.prepare(`
           SELECT r.*, l.nombre as linea_nombre 
           FROM rutas r 
           JOIN lineas l ON r.linea_id = l.id 
           ORDER BY l.id ASC, r.es_default DESC, r.id ASC
         `).all()
-      : db.prepare(`
+      : await db.prepare(`
           SELECT r.*, l.nombre as linea_nombre 
           FROM rutas r 
           JOIN lineas l ON r.linea_id = l.id 
@@ -1066,7 +1068,7 @@ app.get('/api/kanban', (req, res) => {
     let procesos;
     if (isAllLines) {
       procesos = isAllRutas
-        ? db.prepare(`
+        ? await db.prepare(`
             SELECT p.*, tp.nombre as tipo_nombre, r.nombre as ruta_nombre, r.es_default as ruta_es_default, l.nombre as linea_nombre
             FROM procesos p
             JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
@@ -1074,7 +1076,7 @@ app.get('/api/kanban', (req, res) => {
             LEFT JOIN lineas l ON p.linea_id = l.id
             ORDER BY p.linea_id ASC, p.ruta_id ASC, p.orden ASC
           `).all()
-        : db.prepare(`
+        : await db.prepare(`
             SELECT p.*, tp.nombre as tipo_nombre, r.nombre as ruta_nombre, r.es_default as ruta_es_default, l.nombre as linea_nombre
             FROM procesos p
             JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
@@ -1085,7 +1087,7 @@ app.get('/api/kanban', (req, res) => {
           `).all(parseInt(rutaId, 10));
     } else {
       procesos = isAllRutas
-        ? db.prepare(`
+        ? await db.prepare(`
             SELECT p.*, tp.nombre as tipo_nombre, r.nombre as ruta_nombre, r.es_default as ruta_es_default, l.nombre as linea_nombre
             FROM procesos p
             JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
@@ -1094,7 +1096,7 @@ app.get('/api/kanban', (req, res) => {
             WHERE p.linea_id = ?
             ORDER BY p.ruta_id ASC, p.orden ASC
           `).all(currentLineId)
-        : db.prepare(`
+        : await db.prepare(`
             SELECT p.*, tp.nombre as tipo_nombre, r.nombre as ruta_nombre, r.es_default as ruta_es_default, l.nombre as linea_nombre
             FROM procesos p
             JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
@@ -1241,7 +1243,7 @@ app.get('/api/kanban', (req, res) => {
       }
     }
 
-    const rawItems = db.prepare(itemsQuery).all(...itemsParams);
+    const rawItems = await db.prepare(itemsQuery).all(...itemsParams);
     const now = new Date();
 
     const items = rawItems.map((item) => {
@@ -1266,23 +1268,23 @@ app.get('/api/kanban', (req, res) => {
   }
 });
 
-// 5c. Audit Job Lote Status (pre-cierre analysis of normal vs lagging pieces)
-app.get('/api/jobs/:id/audit-lote', (req, res) => {
+// 5c. Audit Job Lote Status
+app.get('/api/jobs/:id/audit-lote', async (req, res) => {
   try {
     const { id } = req.params;
-    const audit = StateEngine.auditJobLoteStatus({ jobId: parseInt(id, 10) });
+    const audit = await StateEngine.auditJobLoteStatus({ jobId: parseInt(id, 10) });
     res.json(audit);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// 5d. Close Final Batch with Reconciliation of Lagging Pieces
-app.post('/api/jobs/:id/close-final-batch', (req, res) => {
+// 5d. Close Final Batch with Reconciliation
+app.post('/api/jobs/:id/close-final-batch', async (req, res) => {
   try {
     const { id } = req.params;
     const { procesoId, usuarioId, notasCierre } = req.body;
-    const result = StateEngine.closeFinalBatchWithReconciliation({
+    const result = await StateEngine.closeFinalBatchWithReconciliation({
       jobId: parseInt(id, 10),
       procesoId: procesoId ? parseInt(procesoId, 10) : null,
       usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
@@ -1296,44 +1298,52 @@ app.post('/api/jobs/:id/close-final-batch', (req, res) => {
 });
 
 // 6. Dashboard Analytics Summary
-app.get('/api/dashboard/summary', (req, res) => {
-  const { lineaId, rutaId, jobCode } = req.query;
-  const summary = DashboardService.getSummary({
-    lineaId: (lineaId && lineaId !== 'ALL' && lineaId !== 'TODAS') ? parseInt(lineaId, 10) : null,
-    rutaId: (rutaId && rutaId !== 'ALL' && rutaId !== 'TODAS') ? parseInt(rutaId, 10) : null,
-    jobCode: jobCode || null
-  });
-  res.json(summary);
+app.get('/api/dashboard/summary', async (req, res) => {
+  try {
+    const { lineaId, rutaId, jobCode } = req.query;
+    const summary = await DashboardService.getSummary({
+      lineaId: (lineaId && lineaId !== 'ALL' && lineaId !== 'TODAS') ? parseInt(lineaId, 10) : null,
+      rutaId: (rutaId && rutaId !== 'ALL' && rutaId !== 'TODAS') ? parseInt(rutaId, 10) : null,
+      jobCode: jobCode || null
+    });
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 7. Seed demo order if empty
-app.post('/api/seed-demo', (req, res) => {
-  const existingJobs = db.prepare('SELECT COUNT(*) as count FROM jobs').get().count;
-  if (existingJobs === 0) {
-    const muebleLine = db.prepare("SELECT id FROM lineas WHERE nombre = 'Mueble'").get();
-    const demoJob = StateEngine.createJob({
-      jobCode: 'JOB02123456',
-      lineaId: muebleLine.id,
-      modelo: 'Ocean Master M1 Classic 7.5 SQ',
-      specsRaw: 'Fabric: Sunbrella Navy Blue 4608; Frame: Polished Silver Aluminum',
-      cantidadPiezas: 2
-    });
-    notifyDashboardUpdate();
-    return res.json({ seeded: true, job: demoJob });
+app.post('/api/seed-demo', async (req, res) => {
+  try {
+    const existingJobs = await db.prepare('SELECT COUNT(*) as count FROM jobs').get();
+    if (parseInt(existingJobs.count, 10) === 0) {
+      const muebleLine = await db.prepare("SELECT id FROM lineas WHERE nombre = 'Mueble'").get();
+      const demoJob = await StateEngine.createJob({
+        jobCode: 'JOB02123456',
+        lineaId: muebleLine.id,
+        modelo: 'Ocean Master M1 Classic 7.5 SQ',
+        specsRaw: 'Fabric: Sunbrella Navy Blue 4608; Frame: Polished Silver Aluminum',
+        cantidadPiezas: 2
+      });
+      notifyDashboardUpdate();
+      return res.json({ seeded: true, job: demoJob });
+    }
+    res.json({ seeded: false, message: 'Jobs already exist' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json({ seeded: false, message: 'Jobs already exist' });
 });
 
-// 8. Clean all operational jobs, pieces and tracking events
-app.post('/api/admin/clean-jobs', (req, res) => {
+// 8. Clean all operational jobs
+app.post('/api/admin/clean-jobs', async (req, res) => {
   try {
-    const tx = db.transaction(() => {
-      db.prepare('DELETE FROM evento_estados').run();
-      db.prepare('DELETE FROM pieza_procesos').run();
-      db.prepare('DELETE FROM piezas').run();
-      db.prepare('DELETE FROM jobs').run();
+    const tx = db.transaction(async (txDb) => {
+      await txDb.prepare('DELETE FROM evento_estados').run();
+      await txDb.prepare('DELETE FROM pieza_procesos').run();
+      await txDb.prepare('DELETE FROM piezas').run();
+      await txDb.prepare('DELETE FROM jobs').run();
     });
-    tx();
+    await tx();
     notifyDashboardUpdate();
     io.emit('scan:event', { cleaned: true });
     res.json({ success: true, message: 'Todos los jobs y procesos operativos han sido limpiados exitosamente' });
@@ -1343,17 +1353,18 @@ app.post('/api/admin/clean-jobs', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  // Client connected for live updates
   socket.on('disconnect', () => {});
 });
 
 const PORT = process.env.PORT || 3001;
 
-// Export app and server for testing & production boot
 export { app, server };
 
-if (process.env.NODE_ENV !== 'test') {
+import { fileURLToPath } from 'url';
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isMain && process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => {
-    console.log(`[TUUCI Production Planner API] listening on port ${PORT}`);
+    console.log(`[TUUCI Production Planner API] listening on port ${PORT} (PostgreSQL 17)`);
   });
 }
