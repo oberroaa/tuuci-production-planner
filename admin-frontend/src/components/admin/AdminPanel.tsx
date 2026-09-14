@@ -1698,7 +1698,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       <div>
                         <span className="font-bold text-slate-800">Estación de Cierre de Lote</span>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Al cerrar esta estación, el sistema aplica la lógica de reconciliación de sombrillas faltantes y cierra la orden completa en modo LOTE.
+                          Al cerrar esta estación, el sistema aplica la lógica de reconciliación de piezas faltantes y cierra la orden completa en modo LOTE.
                         </p>
                       </div>
                     </label>

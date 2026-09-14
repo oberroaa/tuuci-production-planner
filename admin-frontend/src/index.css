@@ -73,3 +73,39 @@ body {
 .animate-scaleIn {
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Print stylesheet for Thermal & Zebra Label printing, and Job Audit PDF */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-qr-tickets, #printable-qr-tickets * {
+    visibility: visible;
+  }
+  #printable-qr-tickets {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10px;
+    background: white !important;
+  }
+
+  #printable-job-audit, #printable-job-audit * {
+    visibility: visible;
+  }
+  #printable-job-audit {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+

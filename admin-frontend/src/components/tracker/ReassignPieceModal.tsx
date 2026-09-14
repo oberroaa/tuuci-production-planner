@@ -18,6 +18,7 @@ interface ReassignPieceModalProps {
     pieza_id: number;
     codigo_qr_unico: string;
     codigo_job: string;
+    item_code?: string;
     modelo: string;
     proceso_id: number;
     proceso_nombre: string;
@@ -59,9 +60,11 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
     .filter((p) => !pieceRutaId || p.ruta_id === pieceRutaId)
     .sort((a, b) => a.orden - b.orden);
 
-  // Available destination processes (all other processes, especially previous ones)
-  const previousProcesos = routeProcesos.filter((p) => p.orden < piece.proceso_orden);
-  const otherProcesos = routeProcesos.filter((p) => p.id !== piece.proceso_id);
+  // Available destination processes (if piece is TERMINADA, allow reselecting the current station to put it back in ESPERANDO)
+  const isPieceTerminada = piece.estado_nombre === 'TERMINADA';
+  const otherProcesos = isPieceTerminada
+    ? routeProcesos
+    : routeProcesos.filter((p) => p.id !== piece.proceso_id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,9 +149,20 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-medium">Job / Modelo:</span>
-              <span className="text-slate-700 font-semibold truncate max-w-[240px]">
-                {piece.codigo_job} • {piece.modelo}
+              <span className="text-slate-500 font-medium">Job / Item:</span>
+              <span className="text-slate-700 font-semibold flex items-center space-x-1.5">
+                <span className="font-mono text-purple-700 font-bold">{piece.codigo_job}</span>
+                {piece.item_code && (
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono text-[10px] font-extrabold border border-indigo-200 shadow-2xs">
+                    Item: {piece.item_code}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 font-medium">Modelo:</span>
+              <span className="text-slate-700 font-medium truncate max-w-[240px]" title={piece.modelo}>
+                {piece.modelo}
               </span>
             </div>
             {piece.tiempo_estacion_texto && (
@@ -175,34 +189,36 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
                     key={proc.id}
                     type="button"
                     onClick={() => setTargetProcesoId(proc.id)}
-                    className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
-                      isSelected
+                    className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${isSelected
                         ? 'border-indigo-500 bg-indigo-50/80 ring-2 ring-indigo-200'
                         : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center space-x-2.5">
                       <span
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          isBackward
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isBackward
                             ? 'bg-amber-100 text-amber-800'
                             : 'bg-slate-100 text-slate-700'
-                        }`}
+                          }`}
                       >
                         {proc.orden}
                       </span>
                       <div>
                         <div className="text-xs font-bold text-slate-800">{procName}</div>
                         <div className="text-[10px] text-slate-500">
-                          Modo {proc.modo_trabajo} {isBackward ? '• ⮌ Regresar a esta estación' : '• Adelantar'}
+                          Modo {proc.modo_trabajo} {proc.id === piece.proceso_id ? '• ↺ Reiniciar a ESPERANDO' : isBackward ? '• ⮌ Regresar a esta estación' : '• ➔ Avanzar'}
                         </div>
                       </div>
                     </div>
-                    {isBackward && (
+                    {proc.id === piece.proceso_id ? (
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        Reiniciar
+                      </span>
+                    ) : isBackward ? (
                       <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
                         Regresar
                       </span>
-                    )}
+                    ) : null}
                   </button>
                 );
               })}
@@ -218,7 +234,7 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
               rows={2}
               value={observacion}
               onChange={(e) => setObservacion(e.target.value)}
-              placeholder="Ej: Defecto en costura de sombrilla, se regresa a Fabricación para corrección..."
+              placeholder="Ej: Defecto o reproceso en pieza, se regresa para corrección..."
               className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-slate-800 placeholder-slate-400"
             ></textarea>
             <p className="text-[10px] text-slate-400 mt-0.5">

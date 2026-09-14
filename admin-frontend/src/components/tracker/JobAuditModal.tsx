@@ -9,16 +9,20 @@ import {
   History,
   FileText,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  Printer,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 
 interface JobAuditModalProps {
   jobId: number | null;
   isOpen: boolean;
   onClose: () => void;
+  onReassignPiece?: (piece: any) => void;
 }
 
-export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onClose }) => {
+export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onClose, onReassignPiece }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,16 +71,41 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {data && !loading && (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer"
+                title="Exportar auditoría a PDF o imprimir"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Exportar a PDF</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-6 overflow-y-auto space-y-6 flex-1" id="printable-job-audit">
+          {/* Printable Report Header */}
+          <div className="hidden print:flex items-center justify-between pb-4 border-b-2 border-slate-800 mb-4">
+            <div>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">TUUCI • Trazabilidad y Auditoría de Producción</h1>
+              <p className="text-xs text-slate-600 mt-0.5">Reporte Forense Oficial de Reconciliación de Job y Piezas</p>
+            </div>
+            <div className="text-right text-xs text-slate-500 font-mono">
+              <div>Fecha de Emisión: {new Date().toLocaleDateString()}</div>
+              <div>Hora: {new Date().toLocaleTimeString()}</div>
+            </div>
+          </div>
+
           {loading ? (
             <div className="py-12 text-center space-y-3">
               <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -179,7 +208,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
               {/* Pieces Summary with Individual Umbrella Durations */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                  <span>Piezas / Sombrillas del Job ({data.pieces.length})</span>
+                  <span>Piezas del Job ({data.pieces.length})</span>
                   {data.pieces.some((p: any) => p.cierre_excepcion === 1) && (
                     <span className="text-rose-600 font-bold normal-case text-[11px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
                       {data.pieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción
@@ -205,10 +234,10 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                         </div>
 
                         <div className="flex items-center space-x-2">
-                          {/* Umbrella Duration Badge */}
-                          <span className="inline-flex items-center space-x-1.5 font-mono text-[11px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-800 px-2.5 py-1 rounded-md" title="Tiempo total de ciclo de esta sombrilla">
+                          {/* Piece Duration Badge */}
+                          <span className="inline-flex items-center space-x-1.5 font-mono text-[11px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-800 px-2.5 py-1 rounded-md" title="Tiempo total de ciclo de esta pieza">
                             <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Tiempo Sombrilla: {piece.duracion_texto || '—'}</span>
+                            <span>Tiempo Pieza: {piece.duracion_texto || '—'}</span>
                             {piece.es_finalizada ? (
                               <span className="text-[9px] text-emerald-600 font-extrabold uppercase ml-1">✓ OK</span>
                             ) : (
@@ -224,6 +253,32 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                             <span className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
                               Normal
                             </span>
+                          )}
+
+                          {onReassignPiece && (
+                            <button
+                              onClick={() => {
+                                const lastPaso = piece.pasos && piece.pasos.length > 0 ? piece.pasos[piece.pasos.length - 1] : null;
+                                onReassignPiece({
+                                  pieza_id: piece.id,
+                                  codigo_qr_unico: piece.codigo_qr_unico,
+                                  codigo_job: data.job.job_code,
+                                  item_code: data.job.item_code,
+                                  modelo: data.job.modelo,
+                                  proceso_id: lastPaso?.proceso_id || 0,
+                                  proceso_nombre: piece.estacion_actual || lastPaso?.proceso_nombre || 'Completado',
+                                  proceso_orden: lastPaso?.proceso_orden || 999,
+                                  estado_nombre: piece.estado_actual || (piece.es_finalizada ? 'TERMINADA' : 'ESPERANDO'),
+                                  job_ruta_id: data.job.ruta_id,
+                                  tiempo_estacion_texto: piece.duracion_texto
+                                });
+                              }}
+                              className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors flex items-center space-x-1"
+                              title="Reasignar o mover esta pieza a otra estación"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Mover Estación</span>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -311,13 +366,28 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
-          >
-            Cerrar
-          </button>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between no-print">
+          <span className="text-[11px] text-slate-500">
+            TUUCI Production Planner • Reporte de Auditoría y Reconciliación
+          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              Cerrar
+            </button>
+            {data && !loading && (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Exportar a PDF</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -17,7 +17,8 @@ import {
   X,
   Target,
   Search,
-  RotateCcw
+  RotateCcw,
+  Printer
 } from 'lucide-react';
 import { BatchCloseModal } from './BatchCloseModal';
 import { JobAuditModal } from './JobAuditModal';
@@ -74,6 +75,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const jobDropdownRef = useRef<HTMLDivElement>(null);
 
   const [selectedPieceCode, setSelectedPieceCode] = useState<string>('');
+  const [selectedItemCode, setSelectedItemCode] = useState<string>('');
   const [selectedJobPieces, setSelectedJobPieces] = useState<any[]>([]);
   const [loadingJobPieces, setLoadingJobPieces] = useState(false);
 
@@ -81,7 +83,47 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const [closingJobId, setClosingJobId] = useState<number | null>(null);
   const [auditJobId, setAuditJobId] = useState<number | null>(null);
   const [reassigningPiece, setReassigningPiece] = useState<any | null>(null);
+  const [printingJob, setPrintingJob] = useState<any | null>(null);
+  const [loadingPrintJob, setLoadingPrintJob] = useState<boolean>(false);
   const [jobFilter, setJobFilter] = useState<'ALL' | 'EN_PROCESO' | 'COMPLETADO' | 'COMPLETADO_CON_INCIDENCIAS'>('ALL');
+
+  // Trigger thermal ticket print modal for a job from tracker
+  const handleOpenPrintJob = async (jobItem: any) => {
+    if (!jobItem) return;
+    setLoadingPrintJob(true);
+    const jobCode = jobItem.job_code || jobItem.codigo_job || jobItem.jobCode;
+
+    try {
+      const res = await fetch(`/api/jobs/check/${encodeURIComponent(jobCode)}`);
+      const data = await res.json();
+      if (data.exists && data.job) {
+        setPrintingJob({
+          ...data.job,
+          piecesList: data.job.pieces?.map((p: any) => p.codigoQRUnico) || []
+        });
+      } else {
+        // Fallback with pieces count
+        const qty = jobItem.cantidad_piezas || jobItem.piezas_count || 1;
+        const fallbackPieces = Array.from({ length: qty }, (_, i) => `${jobCode}-PZ${String(i + 1).padStart(3, '0')}`);
+        setPrintingJob({
+          ...jobItem,
+          job_code: jobCode,
+          piecesList: fallbackPieces
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching job pieces for printing:', e);
+      const qty = jobItem.cantidad_piezas || jobItem.piezas_count || 1;
+      const fallbackPieces = Array.from({ length: qty }, (_, i) => `${jobCode}-PZ${String(i + 1).padStart(3, '0')}`);
+      setPrintingJob({
+        ...jobItem,
+        job_code: jobCode,
+        piecesList: fallbackPieces
+      });
+    } finally {
+      setLoadingPrintJob(false);
+    }
+  };
 
   // Resolve current line object safely: supports global view ('TODAS' / 'ALL') or dedicated line
   const isAllLines = activeLine === 'TODAS' || activeLine === 'ALL';
@@ -268,11 +310,37 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         return (
           j.job_code.toLowerCase().includes(q) ||
           j.job_code.toLowerCase().includes(baseCode) ||
+          (j.item_code && j.item_code.toLowerCase().includes(q)) ||
           (j.modelo && j.modelo.toLowerCase().includes(q)) ||
           (j.linea_nombre && j.linea_nombre.toLowerCase().includes(q))
         );
       })
     : routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').slice(0, 8);
+
+  // Group matching items (P/N / item_code) that have one or more jobs
+  const matchingItems = React.useMemo(() => {
+    const rawQ = jobSearchQuery.trim();
+    if (!rawQ) return [];
+    const q = rawQ.toLowerCase();
+
+    const itemMap = new Map<string, { item_code: string; jobs: any[]; modelo: string }>();
+    routeJobs.forEach((j) => {
+      if (!j.item_code) return;
+      const itCodeLower = j.item_code.toLowerCase();
+      if (itCodeLower.includes(q)) {
+        if (!itemMap.has(j.item_code)) {
+          itemMap.set(j.item_code, {
+            item_code: j.item_code,
+            jobs: [],
+            modelo: j.modelo || ''
+          });
+        }
+        itemMap.get(j.item_code)!.jobs.push(j);
+      }
+    });
+
+    return Array.from(itemMap.values()).slice(0, 6);
+  }, [jobSearchQuery, routeJobs]);
 
   // Dynamic matching for specific pieces (e.g. JOB569057-01, -01, etc.)
   const matchingPieces = React.useMemo(() => {
@@ -362,21 +430,26 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
     return results.slice(0, 10);
   }, [jobSearchQuery, routeJobs, kanbanData.items, matchingJobs]);
 
-  // Filter items in Kanban based on Job, Piece, and direct text search query
+  // Filter items in Kanban based on Item, Job, Piece, and direct text search query
   const visibleItems = kanbanData.items.filter((item) => {
     // 1. Direct explicit piece selection
     if (selectedPieceCode && item.codigo_qr_unico !== selectedPieceCode) {
       return false;
     }
-    // 2. Explicit job selection
+    // 2. Explicit item selection (item_code can have multiple jobs)
+    if (selectedItemCode && (item.item_code || '').toLowerCase() !== selectedItemCode.toLowerCase()) {
+      return false;
+    }
+    // 3. Explicit job selection
     if (selectedJobCode && item.codigo_job !== selectedJobCode) {
       return false;
     }
-    // 3. Smart inline search if user typed a specific piece QR, suffix (e.g. "JOB026109-01" or "01")
+    // 4. Smart inline search if user typed a specific piece QR, suffix (e.g. "JOB026109-01" or "01")
     if (jobSearchQuery.trim()) {
       const q = jobSearchQuery.toLowerCase().trim();
       const qrLower = (item.codigo_qr_unico || '').toLowerCase();
       const jobLower = (item.codigo_job || '').toLowerCase();
+      const itemLower = (item.item_code || '').toLowerCase();
       const modelLower = (item.modelo || '').toLowerCase();
 
       // Check if query is looking for a piece like "JOB026109-01", "JOB026109 01", or suffix "-01"
@@ -385,6 +458,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
       const matchesPiece = normalizedQR.includes(normalizedQ) || qrLower.endsWith(`-${q}`) || qrLower.endsWith(q);
       const matchesJob = jobLower.includes(q);
+      const matchesItem = itemLower.includes(q);
       const matchesModel = modelLower.includes(q);
 
       // If user typed a piece identifier (has '-' or looks like piece code / suffix), filter strictly down to the piece
@@ -393,7 +467,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         if (!matchesPiece && !matchesJob) return false;
         if (matchesPiece) return true;
       } else {
-        if (!matchesJob && !matchesPiece && !matchesModel) return false;
+        if (!matchesJob && !matchesPiece && !matchesItem && !matchesModel) return false;
       }
     }
     return true;
@@ -402,6 +476,9 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   // Filter jobs in the Jobs table view strictly from routeJobs
   const filteredJobs = routeJobs.filter((j) => {
     if (jobFilter !== 'ALL' && j.estado_cierre !== jobFilter) {
+      return false;
+    }
+    if (selectedItemCode && (j.item_code || '').toLowerCase() !== selectedItemCode.toLowerCase()) {
       return false;
     }
     if (selectedJobCode && j.job_code !== selectedJobCode) {
@@ -425,6 +502,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               acc[key] = {
                 job_id: item.job_id,
                 codigo_job: item.codigo_job,
+                item_code: item.item_code,
                 modelo: item.modelo,
                 linea_nombre: item.linea_nombre,
                 estado_nombre: item.estado_nombre,
@@ -507,34 +585,33 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         : 'border-slate-200 hover:border-purple-300 hover:shadow'
                     }`}
                   >
-                    {/* Header: Job Code & Lote count badge */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        <Layers className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                        <span className="text-xs font-black text-purple-900 font-mono tracking-wide">
-                          {group.codigo_job}
-                        </span>
-                        {hasTargetPiece && (
-                          <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase bg-purple-600 text-white tracking-wider">
-                            FOCO
+                    {/* Header: Job Code, Item, and Total EA badge (Responsive wrap) */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                          <Layers className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
+                          <span className="text-xs font-black text-purple-900 font-mono tracking-wide whitespace-nowrap">
+                            {group.codigo_job}
                           </span>
-                        )}
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
-                        {totalInLote} {totalInLote === 1 ? 'Pieza' : 'Piezas en Job'}
-                      </span>
-                    </div>
+                          {group.item_code && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-extrabold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap shadow-2xs"
+                              title={`Item: ${group.item_code}`}
+                            >
+                              {group.item_code}
+                            </span>
+                          )}
+                          {hasTargetPiece && (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase bg-purple-600 text-white tracking-wider">
+                              FOCO
+                            </span>
+                          )}
+                        </div>
 
-                    {/* Range tag */}
-                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] space-y-1">
-                      <div className="flex items-center justify-between text-slate-700 font-semibold">
-                        <span>Rango correlativo:</span>
-                        <span className="text-purple-700 font-bold font-mono">
-                          {totalInLote > 1 ? `Pieza 1 a ${totalInLote}` : 'Pieza 1'}
+                        {/* Total EA badge */}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold font-mono bg-purple-100/90 text-purple-800 border border-purple-200 shadow-2xs flex-shrink-0 whitespace-nowrap">
+                          {totalInLote} EA
                         </span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono truncate">
-                        {firstQr} {totalInLote > 1 ? `➔ ${lastQr}` : ''}
                       </div>
                     </div>
 
@@ -544,15 +621,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <span className="truncate font-medium">{group.modelo}</span>
                     </div>
 
-                    {/* Metadata tags: Line and Status */}
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      {isAllLines && group.linea_nombre && (
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-sans font-semibold text-[9px]">
-                          {group.linea_nombre}
-                        </span>
-                      )}
+                    {/* Status & Elapsed time in current station */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-100">
+                      <div className="flex items-center space-x-1">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span>{group.tiempo_estacion_texto || '—'}</span>
+                      </div>
                       <span
-                        className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase ml-auto ${
+                        className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase ${
                           group.estado_nombre === 'EN PROCESO'
                             ? 'bg-amber-100 text-amber-800'
                             : 'bg-slate-100 text-slate-700'
@@ -562,21 +638,17 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       </span>
                     </div>
 
-                    {/* Elapsed time in current station */}
-                    <div className="flex items-center space-x-1 text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-100">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>En estación: <strong>{group.tiempo_estacion_texto || '—'}</strong></span>
-                    </div>
-
-                    {/* Quick action: If item is in closure station, button to close batch */}
+                    {/* Quick action: only if this column is the designated batch closure process */}
                     {isClosureColumn && group.job_estado_cierre === 'EN_PROCESO' && (
-                      <button
-                        onClick={() => setClosingJobId(group.job_id)}
-                        className="w-full mt-1.5 py-1 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
-                      >
-                        <Package className="w-3 h-3" />
-                        <span>Cerrar Job Final</span>
-                      </button>
+                      <div className="mt-1">
+                        <button
+                          onClick={() => setClosingJobId(group.job_id)}
+                          className="w-full py-1 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
+                        >
+                          <Package className="w-3 h-3" />
+                          <span>Cerrar Job Final</span>
+                        </button>
+                      </div>
                     )}
 
                     <div
@@ -606,21 +678,62 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         : 'border-slate-200 hover:border-blue-400 hover:shadow'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="text-[11px] font-bold text-blue-700 font-mono">
+                    {/* Header: Piece QR Code & Mover Action Button */}
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center space-x-1.5 min-w-0">
+                        <span className="text-[11px] font-bold text-blue-700 font-mono truncate">
                           {item.codigo_qr_unico}
                         </span>
                         {isTargetPiece && (
-                          <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase bg-blue-600 text-white tracking-wider">
+                          <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase bg-blue-600 text-white tracking-wider flex-shrink-0">
                             FOCO
                           </span>
                         )}
                       </div>
+
+                      <div className="flex items-center space-x-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setReassigningPiece(item)}
+                          className="py-0.5 px-2 rounded-md bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 text-[10px] font-bold transition-colors flex items-center space-x-1 border border-slate-200 shadow-2xs"
+                          title="Mover o regresar pieza a otro proceso (reproceso o corrección)"
+                        >
+                          <RotateCcw className="w-3 h-3 text-amber-600" />
+                          <span>Mover</span>
+                        </button>
+
+                        {isClosureColumn && item.job_estado_cierre === 'EN_PROCESO' && (
+                          <button
+                            type="button"
+                            onClick={() => setClosingJobId(item.job_id)}
+                            className="py-0.5 px-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center space-x-1 shadow-xs"
+                            title="Cerrar Job Final"
+                          >
+                            <Package className="w-3 h-3" />
+                            <span>Cerrar</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Model */}
+                    <div className="text-[10px] text-slate-500 flex items-center space-x-1 truncate" title={item.modelo}>
+                      <QrCode className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{item.modelo}</span>
+                    </div>
+
+                    {/* Elapsed Time & Status Badge (Inline at bottom like LOTE mode) */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-100">
+                      <div className="flex items-center space-x-1">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span>{item.tiempo_estacion_texto || '—'}</span>
+                      </div>
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                        className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase ${
                           item.estado_nombre === 'EN PROCESO'
                             ? 'bg-amber-100 text-amber-800'
+                            : item.estado_nombre === 'TERMINADA'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
@@ -628,68 +741,13 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       </span>
                     </div>
 
-                    <div className="text-[10px] text-slate-500 flex items-center space-x-1 truncate" title={item.modelo}>
-                      <QrCode className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                      <span className="truncate">{item.modelo}</span>
-                    </div>
-
-                    {/* Metadata tags: Line, Job, and Item */}
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                      {!selectedJobCode && (
-                        <span>
-                          Job: <strong className="text-slate-600">{item.codigo_job}</strong>
-                          {item.item_code && (
-                            <span className="ml-1.5 px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 text-[9px]">
-                              {item.item_code}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      {selectedJobCode && item.item_code && (
-                        <span className="px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 text-[9px]">
-                          Item: {item.item_code}
-                        </span>
-                      )}
-                      {isAllLines && item.linea_nombre && (
-                        <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-sans font-semibold text-[9px]">
-                          {item.linea_nombre}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Elapsed time in current station */}
-                    <div className="flex items-center space-x-1 text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-100">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>En estación: <strong>{item.tiempo_estacion_texto || '—'}</strong></span>
-                    </div>
-
-                    {/* Actions: Reassign / Mover estación & Cerrar Lote */}
-                    <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setReassigningPiece(item)}
-                        className="flex-1 py-1 px-2 rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 border border-slate-200"
-                        title="Mover o regresar pieza a otro proceso (reproceso o corrección)"
-                      >
-                        <RotateCcw className="w-3 h-3 text-amber-600" />
-                        <span>Mover Estación</span>
-                      </button>
-
-                      {isClosureColumn && item.job_estado_cierre === 'EN_PROCESO' && (
-                        <button
-                          type="button"
-                          onClick={() => setClosingJobId(item.job_id)}
-                          className="py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
-                        >
-                          <Package className="w-3 h-3" />
-                          <span>Cerrar Job</span>
-                        </button>
-                      )}
-                    </div>
-
                     <div
                       className={`w-full h-1 rounded-full ${
-                        item.estado_nombre === 'EN PROCESO' ? 'bg-amber-500' : 'bg-slate-300'
+                        item.estado_nombre === 'EN PROCESO'
+                          ? 'bg-amber-500'
+                          : item.estado_nombre === 'TERMINADA'
+                          ? 'bg-emerald-400'
+                          : 'bg-slate-300'
                       }`}
                     ></div>
                   </div>
@@ -852,6 +910,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     if (!val.trim()) {
                       setSelectedJobCode('');
                       setSelectedPieceCode('');
+                      setSelectedItemCode('');
                       return;
                     }
 
@@ -869,6 +928,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       if (matchingJob) {
                         setSelectedJobCode(matchingJob.job_code);
                         setSelectedPieceCode(fullPieceQr);
+                        setSelectedItemCode('');
                       }
                     } else {
                       // Check if it exactly matches a Job Code
@@ -877,13 +937,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       );
                       if (exactJob && selectedJobCode !== exactJob.job_code) {
                         setSelectedJobCode(exactJob.job_code);
+                        setSelectedItemCode('');
                       }
                     }
                   }}
                   onFocus={() => setIsJobDropdownOpen(true)}
-                  placeholder="Escribe Job o Pieza (ej: JOB026109 o JOB026109-01)..."
+                  placeholder="Buscar por Job, Item o Pieza (ej: 1015498, JOB0284112)..."
                   className={`w-full bg-white border text-xs rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:ring-2 shadow-xs transition-all ${
-                    selectedJobCode
+                    selectedJobCode || selectedItemCode
                       ? 'border-blue-500 font-mono text-blue-900 font-bold focus:ring-blue-500 bg-blue-50/30'
                       : 'border-slate-300 text-slate-800 font-medium focus:ring-blue-500'
                   }`}
@@ -897,6 +958,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       setJobSearchQuery('');
                       setSelectedJobCode('');
                       setSelectedPieceCode('');
+                      setSelectedItemCode('');
                       setIsJobDropdownOpen(false);
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded transition-colors"
@@ -910,19 +972,20 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
             {/* Autocomplete Dropdown Panel */}
             {isJobDropdownOpen && (
-              <div className="absolute left-[92px] top-full mt-1.5 w-[420px] max-h-80 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-50 p-1.5 animate-in fade-in duration-150">
+              <div className="absolute left-[92px] top-full mt-1.5 w-[440px] max-h-80 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-50 p-1.5 animate-in fade-in duration-150">
                 <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
                   <span>
                     {jobSearchQuery.trim()
-                      ? `Resultados (${matchingJobs.length + matchingPieces.length})`
+                      ? `Resultados (${matchingJobs.length + matchingPieces.length + matchingItems.length})`
                       : 'Jobs sugeridos en proceso'}
                   </span>
-                  {(selectedJobCode || selectedPieceCode) && (
+                  {(selectedJobCode || selectedPieceCode || selectedItemCode) && (
                     <button
                       onClick={() => {
                         setSelectedJobCode('');
                         setJobSearchQuery('');
                         setSelectedPieceCode('');
+                        setSelectedItemCode('');
                         setIsJobDropdownOpen(false);
                       }}
                       className="text-rose-600 hover:underline capitalize"
@@ -931,6 +994,52 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Item Matches (Item Code with Multiple Jobs) */}
+                {matchingItems.length > 0 && (
+                  <div className="mt-1">
+                    <div className="px-2 py-1 text-[9px] font-extrabold text-amber-700 uppercase tracking-wider bg-amber-50 rounded flex items-center gap-1">
+                      <QrCode className="w-3 h-3 text-amber-600" />
+                      <span>Items coincidentes ({matchingItems.length})</span>
+                    </div>
+                    <div className="divide-y divide-slate-50 mt-1">
+                      {matchingItems.map((itemGroup) => {
+                        const isSelected = selectedItemCode === itemGroup.item_code;
+                        return (
+                          <button
+                            key={itemGroup.item_code}
+                            type="button"
+                            onClick={() => {
+                              setSelectedItemCode(itemGroup.item_code);
+                              setSelectedJobCode('');
+                              setSelectedPieceCode('');
+                              setJobSearchQuery(`Item: ${itemGroup.item_code}`);
+                              setIsJobDropdownOpen(false);
+                            }}
+                            className={`w-full text-left p-2 rounded-lg transition-colors flex items-center justify-between gap-2 ${
+                              isSelected ? 'bg-amber-50/80 border border-amber-300' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono font-extrabold text-xs text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded border border-amber-200">
+                                  Item: {itemGroup.item_code}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-600">
+                                  {itemGroup.jobs.length} {itemGroup.jobs.length === 1 ? 'Job asociado' : 'Jobs asociados'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 truncate mt-0.5">{itemGroup.modelo}</div>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                              Filtrar todos ➔
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Specific Piece matches (e.g., JOB569057-01) */}
                 {matchingPieces.length > 0 && (
@@ -1009,6 +1118,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                               setSelectedJobCode(j.job_code);
                               setJobSearchQuery(j.job_code);
                               setSelectedPieceCode('');
+                              setSelectedItemCode('');
                               setIsJobDropdownOpen(false);
                             }}
                             className={`w-full text-left p-2 rounded-lg transition-colors flex items-center justify-between gap-2 ${
@@ -1018,6 +1128,11 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center space-x-2">
                                 <span className="font-mono font-bold text-xs text-blue-700">{j.job_code}</span>
+                                {j.item_code && (
+                                  <span className="text-[8px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 py-0.2 rounded font-mono">
+                                    Item: {j.item_code}
+                                  </span>
+                                )}
                                 {j.linea_nombre && (
                                   <span className="text-[8px] font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
                                     {j.linea_nombre}
@@ -1173,6 +1288,24 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 {selectedJobCode}
               </code>
             </span>
+          ) : selectedItemCode ? (
+            <span className="inline-flex items-center space-x-1.5 bg-amber-100 text-amber-900 px-3 py-1 rounded-full font-bold border border-amber-300">
+              <span>Mostrando todos los jobs del Item:</span>
+              <code className="font-mono text-amber-950 bg-white/90 px-1.5 py-0.5 rounded shadow-2xs">
+                {selectedItemCode}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedItemCode('');
+                  setJobSearchQuery('');
+                }}
+                className="ml-1 text-amber-700 hover:text-amber-950 p-0.5"
+                title="Quitar filtro de Item"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
           ) : (
             <span className="text-slate-400">
               {isAllLines
@@ -1251,6 +1384,11 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 <span className="text-sm font-extrabold font-mono text-blue-800">
                   {currentSelectedJob.job_code}
                 </span>
+                {currentSelectedJob.item_code && (
+                  <span className="text-xs font-bold font-mono bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded border border-indigo-200">
+                    Item: {currentSelectedJob.item_code}
+                  </span>
+                )}
                 <span className="text-xs text-slate-500 font-semibold">
                   • {currentSelectedJob.modelo}
                 </span>
@@ -1277,6 +1415,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleOpenPrintJob(currentSelectedJob)}
+              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded-lg border border-blue-200 shadow-xs transition-colors flex items-center space-x-1"
+              title="Imprimir etiquetas térmicas del Job enfocado"
+            >
+              <Printer className="w-3.5 h-3.5 text-blue-600" />
+              <span>Imprimir QR</span>
+            </button>
             <button
               onClick={() => setAuditJobId(currentSelectedJob.id)}
               className="text-xs bg-white hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs transition-colors flex items-center space-x-1"
@@ -1340,7 +1486,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             <div className="space-y-6">
               {rutas.map((ruta) => {
                 const routeProcesos = kanbanData.procesos.filter((p) => p.ruta_id === ruta.id);
-                const routeItems = visibleItems.filter((item) => item.proceso_ruta_id === ruta.id);
+                const routeItems = visibleItems.filter((item) => {
+                  const itemRuta = item.proceso_ruta_id || item.job_ruta_id;
+                  return itemRuta === ruta.id || routeProcesos.some((rp) => rp.id === item.proceso_id);
+                });
                 const lineName = lines.find((l) => l.id === ruta.linea_id)?.nombre || ruta.linea_nombre;
 
                 return (
@@ -1405,7 +1554,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 : kanbanData.procesos.filter((p) => !p.ruta_id || p.ruta_id === selectedRutaId);
               const focusedItems = selectedRutaId === 'ALL'
                 ? visibleItems
-                : visibleItems.filter((item) => !item.proceso_ruta_id || item.proceso_ruta_id === selectedRutaId);
+                : visibleItems.filter((item) => {
+                    const itemRuta = item.proceso_ruta_id || item.job_ruta_id;
+                    return !itemRuta || itemRuta === selectedRutaId || focusedProcesos.some((fp) => fp.id === item.proceso_id);
+                  });
 
               return (
                 <div className="space-y-4">
@@ -1435,9 +1587,9 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   </div>
 
                   <div
-                    className="grid gap-4 items-start pb-4 overflow-x-auto min-h-[500px]"
+                    className="grid gap-3.5 items-start pb-4 overflow-x-auto min-h-[500px]"
                     style={{
-                      gridTemplateColumns: `repeat(${Math.max(focusedProcesos.length, 1)}, minmax(240px, 1fr))`
+                      gridTemplateColumns: `repeat(${Math.max(focusedProcesos.length, 1)}, minmax(250px, 1fr))`
                     }}
                   >
                     {focusedProcesos.map((col, idx) =>
@@ -1522,7 +1674,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         </td>
                       )}
                       <td className="py-3 px-4">
-                        <span className="font-semibold text-slate-800">{j.modelo}</span>
+                        <div className="flex items-center space-x-1.5">
+                          {j.item_code && (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono font-bold text-[10px] border border-indigo-200">
+                              {j.item_code}
+                            </span>
+                          )}
+                          <span className="font-semibold text-slate-800">{j.modelo}</span>
+                        </div>
                         {j.specs_raw && (
                           <span className="block text-[10px] text-slate-500 truncate max-w-xs">{j.specs_raw}</span>
                         )}
@@ -1579,7 +1738,17 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <td className="py-3 px-4 text-slate-500 text-[11px]">
                         {new Date(j.created_at).toLocaleDateString()}
                       </td>
-                      <td className="py-3 px-4 text-right space-x-2">
+                      <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                        {/* Imprimir Etiquetas QR */}
+                        <button
+                          onClick={() => handleOpenPrintJob(j)}
+                          className="px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-colors shadow-2xs inline-flex items-center space-x-1"
+                          title="Imprimir o reimprimir etiquetas QR para este Job"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Imprimir QR</span>
+                        </button>
+
                         {/* If in process, show "Cerrar Lote Final" */}
                         {j.estado_cierre === 'EN_PROCESO' && (
                           <button
@@ -1630,6 +1799,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         isOpen={auditJobId !== null}
         jobId={auditJobId}
         onClose={() => setAuditJobId(null)}
+        onReassignPiece={(piece) => {
+          setAuditJobId(null);
+          setReassigningPiece(piece);
+        }}
       />
 
       {/* Reassign Piece Modal (Move / Rework backward) */}
@@ -1644,6 +1817,108 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           onRefreshTrigger();
         }}
       />
+
+      {/* Modal: Vista Previa y Reimpresión de Etiquetas Térmicas QR desde Tracker */}
+      {printingJob && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
+                    <span>Impresión de Etiquetas QR</span>
+                    <span className="font-mono text-blue-600 text-sm font-extrabold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {printingJob.job_code || printingJob.codigo_job || printingJob.jobCode}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {printingJob.modelo || 'Lote de Producción'} • Total:{' '}
+                    <strong className="text-slate-800">
+                      {printingJob.piecesList?.length || printingJob.cantidad_piezas || 0} piezas
+                    </strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrintingJob(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Printable ticket section for Zebra / window.print() */}
+            <div className="overflow-y-auto flex-1 pr-1 space-y-3" id="printable-qr-tickets">
+              <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+                <span>
+                  🖨️ Etiquetas generadas para este Job. Puedes mandar a imprimir directamente a tu impresora térmica Zebra.
+                </span>
+                <span className="text-[11px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-blue-300">
+                  Zebra 2x1"
+                </span>
+              </div>
+
+              {/* Individual Piece Tickets Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {(printingJob.piecesList || []).map((qrCode: string, idx: number) => (
+                  <div
+                    key={idx}
+                    className="p-3 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 hover:bg-blue-50/40 transition-colors flex items-center space-x-3 text-left"
+                  >
+                    <div className="w-12 h-12 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-800 flex-shrink-0 shadow-2xs">
+                      <QrCode className="w-8 h-8 text-slate-800" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold text-slate-400">
+                          PIEZA #{idx + 1} de {printingJob.piecesList.length}
+                        </span>
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-slate-200/70 text-slate-700">
+                          TUUCI
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-extrabold text-blue-900 truncate mt-0.5">
+                        {qrCode}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                        {printingJob.modelo || 'Lote de Producción'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions footer */}
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-slate-500 font-mono">
+                {printingJob.piecesList?.length || 0} tickets disponibles para imprimir.
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setPrintingJob(null)}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md flex items-center space-x-1.5 transition-all"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Mandar a Imprimir</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

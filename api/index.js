@@ -807,10 +807,18 @@ app.get('/api/jobs/check/:jobCode', async (req, res) => {
     `).get(req.params.jobCode.trim());
 
     if (existing) {
+      const pieces = await db.prepare(`
+        SELECT p.id, p.codigo_qr_unico
+        FROM piezas p
+        WHERE p.job_id = ?
+        ORDER BY p.id ASC
+      `).all(existing.id);
+
       return res.json({ 
         exists: true, 
         job: {
           ...existing,
+          pieces: pieces.map(p => ({ codigoQRUnico: p.codigo_qr_unico, id: p.id })),
           corte_cerrado: existing.corte_estado_nombre === 'TERMINADA',
           lote_completado: existing.estado_cierre !== 'EN_PROCESO'
         }
@@ -1244,7 +1252,7 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE e.nombre IN ('ESPERANDO', 'EN PROCESO')
+          WHERE e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
           ORDER BY j.id DESC, p.id ASC
         `;
         itemsParams = [];
@@ -1277,7 +1285,7 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
+          WHERE pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
           ORDER BY j.id DESC, p.id ASC
         `;
         itemsParams = [parseInt(rutaId, 10)];
@@ -1312,7 +1320,7 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE j.linea_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
+          WHERE j.linea_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
           ORDER BY j.id DESC, p.id ASC
         `;
         itemsParams = [currentLineId];
@@ -1345,7 +1353,7 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE j.linea_id = ? AND pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO')
+          WHERE j.linea_id = ? AND pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
           ORDER BY j.id DESC, p.id ASC
         `;
         itemsParams = [currentLineId, parseInt(rutaId, 10)];

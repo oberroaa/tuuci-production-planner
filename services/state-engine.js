@@ -740,14 +740,14 @@ export class StateEngine {
       await client.query('BEGIN');
       const now = new Date();
 
-      // Find current active step for this piece
+      // Find current active/last step for this piece
       const currentActiveStepRes = await client.query(`
         SELECT pp.id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, pr.orden, tp.nombre as tipo_nombre
         FROM pieza_procesos pp
         JOIN procesos pr ON pp.proceso_id = pr.id
         JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
         JOIN estados e ON pp.estado_id = e.id
-        WHERE pp.pieza_id = $1 AND e.nombre IN ('EN PROCESO', 'ESPERANDO')
+        WHERE pp.pieza_id = $1 AND e.nombre IN ('EN PROCESO', 'ESPERANDO', 'TERMINADA')
         ORDER BY pr.orden DESC LIMIT 1
       `, [pieza.id]);
 
@@ -773,16 +773,15 @@ export class StateEngine {
       if (!targetPP) {
         // If row doesn't exist, insert it
         const newPP = await client.query(`
-          INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio, fecha_fin)
+          VALUES ($1, $2, $3, $4, NULL)
           RETURNING id, estado_id, fecha_inicio
         `, [pieza.id, targetProc.id, stateEsperando.id, now]);
         targetPP = newPP.rows[0];
       } else {
         await client.query(`
           UPDATE pieza_procesos
-          SET estado_id = $1, fecha_fin = NULL,
-              fecha_inicio = COALESCE(fecha_inicio, $2)
+          SET estado_id = $1, fecha_fin = NULL, fecha_inicio = $2
           WHERE id = $3
         `, [stateEsperando.id, now, targetPP.id]);
       }
