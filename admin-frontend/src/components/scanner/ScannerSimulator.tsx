@@ -25,7 +25,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   const [history, setHistory] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [cooldown, setCooldown] = useState<number>(0);
-  const [configCooldownSecs, setConfigCooldownSecs] = useState<number>(5);
+  const [configCooldownSecs, setConfigCooldownSecs] = useState<number>(3);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus barcode input on load so physical barcode scanner gun is ready instantly
@@ -142,7 +142,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         onScanSuccess();
       } else {
         if (data.cooldown) {
-          setCooldown(data.remainingSecs || 5);
+          setCooldown(data.remainingSecs || configCooldownSecs);
         }
         setOledDisplay({
           line1: data.oled_message || 'ERROR',
