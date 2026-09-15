@@ -1,9 +1,129 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy, Search, ChevronDown } from 'lucide-react';
 
 interface AdminPanelProps {
   onCatalogUpdated: () => void;
 }
+
+interface SearchableProcessSelectProps {
+  tipoProcesos: any[];
+  selectedId: number | '' | null;
+  onChange: (id: number) => void;
+  placeholder?: string;
+}
+
+const SearchableProcessSelect: React.FC<SearchableProcessSelectProps> = ({
+  tipoProcesos,
+  selectedId,
+  onChange,
+  placeholder = 'Buscar y seleccionar proceso...'
+}) => {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedItem = tipoProcesos.find((tp) => Number(tp.id) === Number(selectedId));
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = query.trim()
+    ? tipoProcesos.filter((tp) =>
+        (tp.nombre || '').toLowerCase().includes(query.trim().toLowerCase())
+      )
+    : tipoProcesos;
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div
+        onClick={() => {
+          setIsOpen(true);
+        }}
+        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 flex items-center justify-between cursor-pointer focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 shadow-2xs transition-all"
+      >
+        <div className="flex items-center space-x-2 flex-1 min-w-0">
+          <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <input
+            type="text"
+            value={isOpen ? query : (selectedItem ? selectedItem.nombre : '')}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (!isOpen) setIsOpen(true);
+            }}
+            onFocus={() => {
+              setQuery('');
+              setIsOpen(true);
+            }}
+            placeholder={selectedItem ? selectedItem.nombre : placeholder}
+            className="w-full bg-transparent text-xs text-slate-900 placeholder-slate-400 focus:outline-none font-medium truncate cursor-text"
+          />
+        </div>
+        <div className="flex items-center space-x-1 flex-shrink-0 ml-1.5">
+          {selectedId ? (
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+              Asignado
+            </span>
+          ) : null}
+          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''}`} />
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto py-1 animate-in fade-in zoom-in-95 duration-100">
+          <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
+            <span>Filtrar Proceso ({filtered.length})</span>
+            {query && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuery('');
+                }}
+                className="text-blue-600 hover:underline"
+              >
+                Limpiar filtro
+              </button>
+            )}
+          </div>
+          {filtered.length > 0 ? (
+            filtered.map((tp) => {
+              const isSelected = Number(tp.id) === Number(selectedId);
+              return (
+                <div
+                  key={tp.id}
+                  onClick={() => {
+                    onChange(Number(tp.id));
+                    setIsOpen(false);
+                    setQuery('');
+                  }}
+                  className={`px-3 py-2 text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                    isSelected
+                      ? 'bg-blue-50 text-blue-900 font-bold'
+                      : 'hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <span className="truncate">{tp.nombre}</span>
+                  {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 ml-1" />}
+                </div>
+              );
+            })
+          ) : (
+            <div className="px-3 py-3 text-xs text-slate-400 text-center">
+              No se encontraron procesos que coincidan con "{query}"
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [activeSubTab, setActiveSubTab] = useState<'LINES' | 'PROCESS_TYPES' | 'ROUTES' | 'STATES' | 'SCANNERS' | 'USERS' | 'SYSTEM_CONFIG'>('ROUTES');
@@ -642,6 +762,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   };
 
   // Scanner handlers
+  const handleStartEditScanner = (s: any) => {
+    setEditingScannerId(s.id);
+    setEditingScannerCode(s.codigo_estacion);
+    setEditingScannerTipoId(s.tipo_proceso_id);
+  };
+
+  const handleCancelEditScanner = () => {
+    setEditingScannerId(null);
+    setEditingScannerCode('');
+    setEditingScannerTipoId('');
+  };
+
+  const handleSaveEditScanner = async (id: number) => {
+    if (!editingScannerCode.trim() || !editingScannerTipoId) {
+      showToast('Código de estación y proceso son obligatorios', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/catalogs/scanners/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigoEstacion: editingScannerCode.trim().toUpperCase(),
+          tipoProcesoId: Number(editingScannerTipoId),
+          activo: 1
+        })
+      });
+
+      if (res.ok) {
+        showToast('Dispositivo escáner actualizado correctamente', 'success');
+        handleCancelEditScanner();
+        await loadCatalogs();
+        onCatalogUpdated();
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al actualizar escáner', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error de conexión al actualizar escáner', 'error');
+    }
+  };
+
   const handleDeleteScanner = (id: number, code: string) => {
     askConfirmation({
       title: 'Eliminar Dispositivo Escáner',
@@ -1085,7 +1249,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   // 5. Register Physical Scanner
   const handleCreateScanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newScannerCode.trim() || !newScannerTipoId) return;
+    if (!newScannerCode.trim()) {
+      showToast('Ingresa el código de estación fija', 'error');
+      return;
+    }
+    if (!newScannerTipoId) {
+      showToast('Selecciona el tipo de proceso que atiende este escáner', 'error');
+      return;
+    }
     try {
       const res = await fetch('/api/catalogs/scanners', {
         method: 'POST',
@@ -1096,13 +1267,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         })
       });
       if (res.ok) {
+        showToast(`Escáner "${newScannerCode.trim().toUpperCase()}" registrado`, 'success');
         setNewScannerCode('');
         setNewScannerTipoId('');
         await loadCatalogs();
         onCatalogUpdated();
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Error al registrar escáner', 'error');
       }
     } catch (err) {
       console.error(err);
+      showToast('Error de conexión al registrar escáner', 'error');
     }
   };
 
@@ -2443,64 +2619,130 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 {catalogs.escaneres.map((s) => (
                   <div
                     key={s.id}
-                    className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 hover:border-slate-300 transition-all shadow-xs"
+                    className={`p-4 rounded-xl border transition-all shadow-xs space-y-3 ${
+                      editingScannerId === s.id
+                        ? 'bg-blue-50/50 border-blue-400 ring-2 ring-blue-100'
+                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-bold text-slate-900 mono flex items-center space-x-1.5">
-                          <Radio className="w-3.5 h-3.5 text-blue-600" />
-                          <span>{s.codigo_estacion}</span>
+                    {editingScannerId === s.id ? (
+                      <div className="space-y-3">
+                        <div className="text-xs font-bold text-blue-900 flex items-center justify-between pb-1 border-b border-blue-200">
+                          <span className="flex items-center space-x-1.5">
+                            <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Editar Dispositivo Escáner</span>
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">ID: {s.id}</span>
                         </div>
-                        <div className="text-xs text-slate-500 font-medium mt-0.5">
-                          Estación: <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-1.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          ACTIVO
-                        </span>
-                        <button
-                          onClick={() => handleDeleteScanner(s.id, s.codigo_estacion)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Eliminar escáner"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
 
-                    {/* Dedicated API Endpoint Box */}
-                    <div className="bg-slate-900 rounded-lg p-2.5 space-y-1.5 text-slate-100">
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
-                        <span>Ruta API del Dispositivo:</span>
-                        <span className="text-emerald-400 font-mono font-bold">POST</span>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-700">Código de Estación Fija</label>
+                          <input
+                            type="text"
+                            value={editingScannerCode}
+                            onChange={(e) => setEditingScannerCode(e.target.value)}
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold font-mono text-xs uppercase text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="ej. FABRICACION-01"
+                            autoFocus
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-700">Tipo de Proceso que Atiende</label>
+                          <SearchableProcessSelect
+                            tipoProcesos={catalogs.tipoProcesos}
+                            selectedId={editingScannerTipoId}
+                            onChange={(id) => setEditingScannerTipoId(id)}
+                            placeholder="Escribe para buscar proceso (ej. CORTE, ENSAMBLE)..."
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-end space-x-2 pt-2 border-t border-blue-200">
+                          <button
+                            type="button"
+                            onClick={handleCancelEditScanner}
+                            className="px-2.5 py-1 rounded text-xs text-slate-600 hover:bg-slate-200 border border-slate-300 transition-colors flex items-center space-x-1"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Cancelar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEditScanner(s.id)}
+                            className="px-3 py-1 rounded text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-colors flex items-center space-x-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Guardar Cambios</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between font-mono text-[11px] bg-slate-950/80 px-2 py-1 rounded border border-slate-800">
-                        <span className="text-cyan-300 truncate">/api/scan/{s.codigo_estacion}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyScannerUrl(s.codigo_estacion)}
-                          className="ml-2 px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center space-x-1 transition-colors flex-shrink-0"
-                          title="Copiar URL completa para el firmware"
-                        >
-                          {copiedStation === s.codigo_estacion ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-300" />
-                              <span className="text-emerald-300">¡Copiado!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>Copiar URL</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between pt-0.5">
-                        <span className="text-slate-500">Body:</span>
-                        <span className="text-slate-300 font-bold">{'{ "codigoQRUnico": "JOB..." }'}</span>
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-bold text-slate-900 mono flex items-center space-x-1.5">
+                              <Radio className="w-3.5 h-3.5 text-blue-600" />
+                              <span>{s.codigo_estacion}</span>
+                            </div>
+                            <div className="text-xs text-slate-500 font-medium mt-0.5">
+                              Estación: <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-1.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              ACTIVO
+                            </span>
+                            <button
+                              onClick={() => handleStartEditScanner(s)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Editar estación o código de escáner"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteScanner(s.id, s.codigo_estacion)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Eliminar escáner"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Dedicated API Endpoint Box */}
+                        <div className="bg-slate-900 rounded-lg p-2.5 space-y-1.5 text-slate-100">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
+                            <span>Ruta API del Dispositivo:</span>
+                            <span className="text-emerald-400 font-mono font-bold">POST</span>
+                          </div>
+                          <div className="flex items-center justify-between font-mono text-[11px] bg-slate-950/80 px-2 py-1 rounded border border-slate-800">
+                            <span className="text-cyan-300 truncate">/api/scan/{s.codigo_estacion}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyScannerUrl(s.codigo_estacion)}
+                              className="ml-2 px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center space-x-1 transition-colors flex-shrink-0"
+                              title="Copiar URL completa para el firmware"
+                            >
+                              {copiedStation === s.codigo_estacion ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-300" />
+                                  <span className="text-emerald-300">¡Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copiar URL</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between pt-0.5">
+                            <span className="text-slate-500">Body:</span>
+                            <span className="text-slate-300 font-bold">{'{ "codigoQRUnico": "JOB..." }'}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2532,19 +2774,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
                 <div className="space-y-1.5">
                   <label className="font-semibold text-slate-600">Tipo de Proceso que Atiende</label>
-                  <select
-                    value={newScannerTipoId}
-                    onChange={(e) => setNewScannerTipoId(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="">Selecciona estación asignada...</option>
-                    {catalogs.tipoProcesos.map((tp) => (
-                      <option key={tp.id} value={tp.id}>
-                        {tp.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableProcessSelect
+                    tipoProcesos={catalogs.tipoProcesos}
+                    selectedId={newScannerTipoId}
+                    onChange={(id) => setNewScannerTipoId(id)}
+                    placeholder="Escribe para buscar proceso (ej. CORTE, ENSAMBLE)..."
+                  />
                 </div>
 
                 <button

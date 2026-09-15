@@ -817,10 +817,15 @@ export class StateEngine {
 
       // Record audit event in evento_estados
       const fromName = currentStep ? currentStep.tipo_nombre : 'Desconocido';
+      const isSameStation = currentStep && targetProc.id === currentStep.proceso_id;
       const isMovingForward = currentStep && targetProc.orden > currentStep.orden;
-      const actionText = isMovingForward ? 'avanzado a' : 'regresado a';
-      const reasonText = observacion ? `Motivo: ${observacion.trim()}` : 'Ajuste operativo / Reproceso';
-      const eventObs = `Movimiento manual de estación: de [${fromName}] ${actionText} [${targetProc.tipo_nombre}]. ${reasonText}`.trim();
+      const actionText = isSameStation
+        ? 'reiniciado en'
+        : (isMovingForward ? 'avanzado a' : 'regresado a');
+      const reasonText = observacion ? `Motivo: ${observacion.trim()}` : (isSameStation ? 'Reinicio de proceso a ESPERANDO' : 'Ajuste operativo / Reproceso');
+      const eventObs = isSameStation
+        ? `Reinicio operativo en estación [${fromName}]: devuelto a estado ESPERANDO. ${reasonText}`.trim()
+        : `Movimiento manual de estación: de [${fromName}] ${actionText} [${targetProc.tipo_nombre}]. ${reasonText}`.trim();
 
       await client.query(`
         INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
