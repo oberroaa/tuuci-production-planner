@@ -34,7 +34,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const isAdmin = currentUser?.rol === 'ADMIN';
 
   // Check if current active line differs from default assigned line
-  const isTemporaryLine = isOperator && activeLine !== (currentUser?.linea_nombre || 'Mueble');
+  const isTemporaryLine = (isOperator || isSupervisor) && activeLine !== (currentUser?.linea_nombre || 'Mueble');
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-6">
@@ -106,30 +106,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <p className="text-[11px] text-slate-600 leading-relaxed">
                 {isOperator
                   ? 'Como Operador, tu línea por defecto la configuró el Administrador. Si necesitas apoyar temporalmente en otra línea durante este turno, puedes seleccionarla aquí o en la barra superior. Al reiniciar sesión volverás a tu línea predeterminada.'
-                  : 'Como Supervisor o Administrador, tienes visibilidad según el alcance de tu rol.'}
+                  : isSupervisor
+                  ? 'Como Supervisor, tu línea de trabajo es fija según tu rol y asignación de planta.'
+                  : 'Como Administrador, tienes visibilidad total y puedes cambiar libremente entre cualquier línea de producción.'}
               </p>
 
-              <div className="flex items-center space-x-3 pt-1">
-                <label className="text-xs font-semibold text-slate-700">Cambiar línea de sesión:</label>
-                <select
-                  value={activeLine}
-                  onChange={(e) => onSelectTemporaryLine(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {lines.map((l) => (
-                    <option key={l.id} value={l.nombre}>
-                      {l.nombre}
-                    </option>
-                  ))}
-                </select>
-
-                {isTemporaryLine && (
-                  <button
-                    onClick={() => onSelectTemporaryLine(currentUser?.linea_nombre || 'Mueble')}
-                    className="text-[11px] text-blue-600 font-bold hover:underline"
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center space-x-3">
+                  <label className="text-xs font-semibold text-slate-700">Cambiar línea de sesión:</label>
+                  <select
+                    value={activeLine}
+                    onChange={(e) => onSelectTemporaryLine(e.target.value)}
+                    disabled={isSupervisor}
+                    className={`border rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                      isSupervisor
+                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-white border-slate-300 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                    }`}
                   >
-                    Restablecer a por defecto
-                  </button>
+                    {lines.map((l) => (
+                      <option key={l.id} value={l.nombre}>
+                        {l.nombre}
+                      </option>
+                    ))}
+                  </select>
+
+                  {isTemporaryLine && (
+                    <button
+                      onClick={() => onSelectTemporaryLine(currentUser?.linea_nombre || 'Mueble')}
+                      className="text-[11px] text-blue-600 font-bold hover:underline"
+                    >
+                      Restablecer a por defecto
+                    </button>
+                  )}
+                </div>
+
+                {isSupervisor && (
+                  <p className="text-[11px] text-slate-500 italic">
+                    Tu línea de trabajo es fija según tu rol. Contacta al Administrador para cambiarla.
+                  </p>
                 )}
               </div>
             </div>

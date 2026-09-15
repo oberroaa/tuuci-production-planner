@@ -28,14 +28,9 @@ class StatementWrapper {
   }
 
   async run(...params) {
-    // If it's an insert without returning, add RETURNING id if applicable
     let querySql = this.sql;
-    const isInsert = /^\s*INSERT\s+INTO/i.test(querySql);
-    if (isInsert && !/RETURNING/i.test(querySql)) {
-      querySql += ' RETURNING id';
-    }
     const res = await pool.query(querySql, params);
-    const lastId = (res.rows && res.rows[0] && res.rows[0].id) ? res.rows[0].id : null;
+    const lastId = (res.rows && res.rows[0] && ('id' in res.rows[0])) ? res.rows[0].id : null;
     return {
       lastInsertRowid: lastId,
       rowCount: res.rowCount,
@@ -72,12 +67,9 @@ export const dbCompat = {
               },
               async run(...params) {
                 let s = pgSql;
-                if (/^\s*INSERT\s+INTO/i.test(s) && !/RETURNING/i.test(s)) {
-                  s += ' RETURNING id';
-                }
                 const res = await client.query(s, params);
                 return {
-                  lastInsertRowid: (res.rows && res.rows[0] && res.rows[0].id) || null,
+                  lastInsertRowid: (res.rows && res.rows[0] && ('id' in res.rows[0])) ? res.rows[0].id : null,
                   rowCount: res.rowCount,
                   changes: res.rowCount
                 };

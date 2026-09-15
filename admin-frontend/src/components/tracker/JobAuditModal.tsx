@@ -25,11 +25,13 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPieceFilter, setSelectedPieceFilter] = useState<string>('ALL');
 
   useEffect(() => {
     if (isOpen && jobId) {
       setLoading(true);
       setError(null);
+      setSelectedPieceFilter('ALL');
       fetch(`/api/jobs/${jobId}`)
         .then(async (res) => {
           if (!res.ok) {
@@ -49,6 +51,28 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
         });
     }
   }, [isOpen, jobId]);
+
+  // Sort pieces strictly by QR code (e.g. JOB...-01, JOB...-02, JOB...-03)
+  const sortedPieces = React.useMemo(() => {
+    if (!data?.pieces) return [];
+    return [...data.pieces].sort((a: any, b: any) =>
+      (a.codigo_qr_unico || '').localeCompare(b.codigo_qr_unico || '')
+    );
+  }, [data?.pieces]);
+
+  // Sort audit events strictly: piece QR code first, then timestamp/sequence (excluding internal INACTIVO)
+  const sortedAndFilteredEvents = React.useMemo(() => {
+    if (!data?.auditEvents) return [];
+    let list = data.auditEvents.filter((ev: any) => ev.estado_nombre !== 'INACTIVO');
+    if (selectedPieceFilter !== 'ALL') {
+      list = list.filter((ev: any) => ev.codigo_qr_unico === selectedPieceFilter);
+    }
+    return list.sort((a: any, b: any) => {
+      const qrCompare = (a.codigo_qr_unico || '').localeCompare(b.codigo_qr_unico || '');
+      if (qrCompare !== 0) return qrCompare;
+      return (a.id || 0) - (b.id || 0);
+    });
+  }, [data?.auditEvents, selectedPieceFilter]);
 
   if (!isOpen || !jobId) return null;
 
@@ -177,8 +201,42 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                   </div>
                 </div>
 
-                {/* Closure Details */}
-                {data.job.fecha_cierre && (
+                {/* Closure Details / Batch History */}
+                {data.batchCloses && data.batchCloses.length > 0 ? (
+                  <div className="mt-3 pt-3 border-t border-slate-200 text-xs space-y-2 bg-white p-3 rounded-lg border border-slate-200/60">
+                    <div className="flex items-center justify-between font-bold text-slate-800">
+                      <span className="flex items-center space-x-1.5">
+                        <History className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Historial de Entregas y Cierres de Lote ({data.batchCloses.length})</span>
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {data.batchCloses.map((close: any, cIdx: number) => (
+                        <div key={close.id || cIdx} className="py-1.5 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                              close.tipo_cierre === 'TOTAL'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-blue-100 text-blue-900 border border-blue-300'
+                            }`}>
+                              Cierre {close.tipo_cierre}
+                            </span>
+                            <span className="font-bold text-slate-800">
+                              {close.piezas_cerradas} pieza(s) entregada(s)
+                            </span>
+                            <span className="text-slate-400">• por {close.usuario_nombre || 'Supervisor'}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-slate-500 font-mono text-[10px]">
+                            <span>{new Date(close.created_at).toLocaleString()}</span>
+                            {close.notas && (
+                              <span className="italic text-slate-600 font-sans">({close.notas})</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : data.job.fecha_cierre ? (
                   <div className="mt-3 pt-3 border-t border-slate-200 text-xs space-y-1 bg-white p-3 rounded-lg border border-slate-200/60">
                     <div className="flex items-center justify-between text-slate-600">
                       <span>
@@ -195,21 +253,21 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Pieces Summary with Individual Umbrella Durations */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                  <span>Piezas del Job ({data.pieces.length})</span>
-                  {data.pieces.some((p: any) => p.cierre_excepcion === 1) && (
+                  <span>Piezas del Job ({sortedPieces.length})</span>
+                  {sortedPieces.some((p: any) => p.cierre_excepcion === 1) && (
                     <span className="text-rose-600 font-bold normal-case text-[11px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                      {data.pieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción
+                      {sortedPieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción
                     </span>
                   )}
                 </h3>
                 <div className="grid grid-cols-1 gap-2.5">
-                  {data.pieces.map((piece: any) => (
+                  {sortedPieces.map((piece: any) => (
                     <div
                       key={piece.id}
                       className={`p-3.5 rounded-xl border text-xs space-y-2 ${
@@ -227,16 +285,39 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                         </div>
 
                         <div className="flex items-center space-x-2">
-                          {/* Piece Duration Badge */}
-                          <span className="inline-flex items-center space-x-1.5 font-mono text-[11px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-800 px-2.5 py-1 rounded-md" title="Tiempo total de ciclo de esta pieza">
-                            <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Tiempo Pieza: {piece.duracion_texto || '—'}</span>
-                            {piece.es_finalizada ? (
-                              <span className="text-[9px] text-emerald-600 font-extrabold uppercase ml-1">✓ OK</span>
-                            ) : (
-                              <span className="text-[9px] text-blue-600 font-extrabold uppercase ml-1">En curso</span>
+                          {/* Piece Duration Badges: Total, Activo, Espera */}
+                          <div className="flex items-center space-x-1.5 font-mono text-[11px]">
+                            <span
+                              className="inline-flex items-center space-x-1 font-bold bg-indigo-50 border border-indigo-200 text-indigo-900 px-2.5 py-1 rounded-md"
+                              title={`Tiempo Total de Ciclo (inicio a fin/cierre): ${piece.tiempo_total_texto || piece.duracion_texto || '—'}`}
+                            >
+                              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Tiempo Total: {piece.tiempo_total_texto || piece.duracion_texto || '—'}</span>
+                              {piece.es_finalizada ? (
+                                <span className="text-[9px] text-emerald-600 font-extrabold uppercase ml-1">✓ OK</span>
+                              ) : (
+                                <span className="text-[9px] text-blue-600 font-extrabold uppercase ml-1">En curso</span>
+                              )}
+                            </span>
+
+                            {piece.tiempo_activo_texto && piece.tiempo_activo_texto !== '—' && (
+                              <span
+                                className="hidden sm:inline-flex items-center bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-1 rounded-md text-[10px] font-semibold"
+                                title="Suma del tiempo activo de producción en estaciones"
+                              >
+                                Activo: {piece.tiempo_activo_texto}
+                              </span>
                             )}
-                          </span>
+
+                            {piece.tiempo_espera_texto && piece.tiempo_espera_texto !== '—' && piece.tiempo_espera_ms > 0 && (
+                              <span
+                                className="hidden sm:inline-flex items-center bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded-md text-[10px]"
+                                title="Tiempo total en espera entre estaciones y hasta el cierre"
+                              >
+                                Espera: {piece.tiempo_espera_texto}
+                              </span>
+                            )}
+                          </div>
 
                           {piece.cierre_excepcion === 1 ? (
                             <span className="px-2 py-1 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider">
@@ -257,22 +338,35 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                           {piece.pasos.map((paso: any) => {
                             const isTerminado = paso.estado_nombre === 'TERMINADA';
                             const isEnProceso = paso.estado_nombre === 'EN PROCESO';
+                            const isOmitido = paso.estado_nombre === 'TERMINADA' && !paso.fecha_inicio && !paso.tiempo_activo_ms;
+                            
+                            const tooltip = isOmitido
+                              ? `${paso.proceso_nombre}: Completado sin escaneo previo (Paso Omitido / Manual)`
+                              : `${paso.proceso_nombre}: Total: ${paso.tiempo_total_texto || paso.duracion_texto || '—'} | Activo: ${paso.tiempo_activo_texto || '—'}${paso.tiempo_espera_texto ? ` | Espera previa: ${paso.tiempo_espera_texto}` : ''}`;
+
                             return (
                               <span
                                 key={paso.id}
-                                className={`px-2 py-0.5 rounded border font-mono flex items-center space-x-1 ${
-                                  isTerminado
+                                className={`px-2 py-0.5 rounded border font-mono flex items-center space-x-1.5 ${
+                                  isOmitido
+                                    ? 'bg-amber-50 border-amber-300 text-amber-900 font-medium'
+                                    : isTerminado
                                     ? 'bg-slate-50 border-slate-200 text-slate-700'
                                     : isEnProceso
                                     ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold'
                                     : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
                                 }`}
-                                title={`${paso.proceso_nombre}: ${isTerminado ? 'Terminado' : isEnProceso ? 'En proceso' : 'Pendiente'}`}
+                                title={tooltip}
                               >
                                 <span>{paso.proceso_nombre}:</span>
-                                <strong className={isEnProceso ? 'text-blue-700' : 'text-slate-800'}>
-                                  {paso.duracion_texto || '—'}
+                                <strong className={isEnProceso ? 'text-blue-700' : isOmitido ? 'text-amber-800' : 'text-slate-900 font-bold'}>
+                                  {isOmitido ? 'Omitido / Manual' : (paso.tiempo_total_texto || paso.duracion_texto || '—')}
                                 </strong>
+                                {!isOmitido && paso.tiempo_activo_texto && paso.tiempo_espera_texto && paso.tiempo_espera_ms > 0 && (
+                                  <span className="text-[9px] text-slate-400 font-normal">
+                                    (Act: {paso.tiempo_activo_texto})
+                                  </span>
+                                )}
                               </span>
                             );
                           })}
@@ -285,20 +379,52 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
 
               {/* Forensic Audit Events Trail as Table */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
                     <History className="w-4 h-4 text-slate-500" />
-                    <span>Bitácora de Eventos Registrados ({data.auditEvents?.length || 0})</span>
+                    <span>Bitácora de Eventos Registrados ({sortedAndFilteredEvents.length})</span>
                   </h3>
+
+                  {/* Filter / Grouping Pills (no-print) */}
+                  {sortedPieces.length > 1 && (
+                    <div className="flex items-center space-x-1 no-print">
+                      <span className="text-[10px] text-slate-400 font-semibold mr-1">Filtrar:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPieceFilter('ALL')}
+                        className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${
+                          selectedPieceFilter === 'ALL'
+                            ? 'bg-slate-900 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Todas
+                      </button>
+                      {sortedPieces.map((p: any) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setSelectedPieceFilter(p.codigo_qr_unico)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${
+                            selectedPieceFilter === p.codigo_qr_unico
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          {p.codigo_qr_unico}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs print:border-slate-300 print:shadow-none">
-                  <div className="overflow-x-auto max-h-80 overflow-y-auto print:max-h-none print:overflow-visible">
+                  <div className="overflow-x-auto max-h-96 overflow-y-auto print:max-h-none print:overflow-visible">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 print:bg-slate-200 print:text-black print:border-slate-400">
                         <tr>
                           <th className="py-2.5 px-3 whitespace-nowrap">Fecha y Hora</th>
-                          <th className="py-2.5 px-3 whitespace-nowrap">Job</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Job / Pieza</th>
                           <th className="py-2.5 px-3 whitespace-nowrap">Estación / Proceso</th>
                           <th className="py-2.5 px-3 whitespace-nowrap">Estado</th>
                           <th className="py-2.5 px-3 whitespace-nowrap">Usuario</th>
@@ -306,8 +432,8 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 print:divide-slate-200 bg-white">
-                        {data.auditEvents && data.auditEvents.length > 0 ? (
-                          data.auditEvents.map((ev: any, idx: number) => {
+                        {sortedAndFilteredEvents.length > 0 ? (
+                          sortedAndFilteredEvents.map((ev: any, idx: number) => {
                             const dateObj = new Date(ev.timestamp);
                             const formattedDate = dateObj.toLocaleDateString();
                             const formattedTime = dateObj.toLocaleTimeString();
@@ -319,7 +445,9 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                                   <div className="text-[10px] text-slate-400">{formattedTime}</div>
                                 </td>
                                 <td className="py-2 px-3 font-mono font-bold text-blue-700 whitespace-nowrap align-top">
-                                  {ev.codigo_qr_unico}
+                                  <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">
+                                    {ev.codigo_qr_unico}
+                                  </span>
                                 </td>
                                 <td className="py-2 px-3 font-semibold text-slate-800 whitespace-nowrap align-top">
                                   {ev.proceso_nombre}

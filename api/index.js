@@ -1071,7 +1071,7 @@ app.get('/api/jobs/:id', async (req, res) => {
         ) as estado_actual
       FROM piezas p
       WHERE p.job_id = ?
-      ORDER BY p.id ASC
+      ORDER BY p.codigo_qr_unico ASC, p.id ASC
     `).all(job.id);
 
     const allPieceProcesses = await db.prepare(`
@@ -1089,49 +1089,6 @@ app.get('/api/jobs/:id', async (req, res) => {
       ORDER BY pp.pieza_id ASC, pr.orden ASC
     `).all(job.id);
 
-    const enrichedPieces = pieces.map((p) => {
-      const pasos = allPieceProcesses
-        .filter((pp) => pp.pieza_id === p.id)
-        .map((step) => {
-          const stepStart = parseDateUtc(step.fecha_inicio);
-          const stepEnd = step.fecha_fin ? parseDateUtc(step.fecha_fin) : null;
-          let stepMs = null;
-          if (stepStart && stepEnd) {
-            stepMs = Math.max(stepEnd.getTime() - stepStart.getTime(), 0);
-          } else if (stepStart && step.estado_nombre === 'EN PROCESO') {
-            stepMs = Math.max(now.getTime() - stepStart.getTime(), 0);
-          }
-          return {
-            ...step,
-            duracion_ms: stepMs,
-            duracion_texto: formatDuration(stepMs)
-          };
-        });
-
-      const startedPasos = pasos.filter((pp) => pp.fecha_inicio);
-      const finishedPasos = pasos.filter((pp) => pp.fecha_fin);
-      const firstStart = startedPasos.length > 0 ? parseDateUtc(startedPasos[0].fecha_inicio) : parseDateUtc(p.created_at);
-      const isPieceFinished = p.cierre_excepcion === 1 || (pasos.length > 0 && pasos.every((pp) => pp.estado_nombre === 'TERMINADA'));
-      const lastFin = finishedPasos.length > 0 ? parseDateUtc(finishedPasos[finishedPasos.length - 1].fecha_fin) : null;
-
-      let pieceDurationMs = null;
-      if (firstStart) {
-        if (isPieceFinished && lastFin) {
-          pieceDurationMs = Math.max(lastFin.getTime() - firstStart.getTime(), 0);
-        } else {
-          pieceDurationMs = Math.max(now.getTime() - firstStart.getTime(), 0);
-        }
-      }
-
-      return {
-        ...p,
-        duracion_ms: pieceDurationMs,
-        duracion_texto: formatDuration(pieceDurationMs),
-        es_finalizada: isPieceFinished,
-        pasos
-      };
-    });
-
     const auditEvents = await db.prepare(`
       SELECT 
         ev.*,
@@ -1147,11 +1104,142 @@ app.get('/api/jobs/:id', async (req, res) => {
       JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
       JOIN piezas p ON pp.pieza_id = p.id
       WHERE p.job_id = ?
-      ORDER BY ev.id DESC
-      LIMIT 100
+        AND e.nombre != 'INACTIVO'
+      ORDER BY p.codigo_qr_unico ASC, ev.timestamp ASC, ev.id ASC
+      LIMIT 1000
     `).all(job.id);
 
-    res.json({ job, pieces: enrichedPieces, auditEvents });
+    // Group audit events by piece_id
+    const eventsByPiece = {};
+    for (const ev of auditEvents) {
+      if (!eventsByPiece[ev.codigo_qr_unico]) {
+        eventsByPiece[ev.codigo_qr_unico] = [];
+      }
+      eventsByPiece[ev.codigo_qr_unico].push(ev);
+    }
+
+    const enrichedPieces = pieces.map((p) => {
+      const pieceEvents = eventsByPiece[p.codigo_qr_unico] || [];
+      const piecePasos = allPieceProcesses.filter((pp) => pp.pieza_id === p.id);
+
+      let prevStepEndTime = null;
+
+      const pasos = piecePasos.map((step, idx) => {
+        const stepStart = parseDateUtc(step.fecha_inicio);
+        const stepEnd = step.fecha_fin ? parseDateUtc(step.fecha_fin) : null;
+        
+        let activoMs = null;
+        if (stepStart && stepEnd) {
+          activoMs = Math.max(stepEnd.getTime() - stepStart.getTime(), 0);
+        } else if (stepStart && step.estado_nombre === 'EN PROCESO') {
+          activoMs = Math.max(now.getTime() - stepStart.getTime(), 0);
+        }
+
+        // Wait time: elapsed time since previous step completed until this step started
+        let esperaMs = null;
+        if (prevStepEndTime && stepStart) {
+          esperaMs = Math.max(stepStart.getTime() - prevStepEndTime.getTime(), 0);
+        }
+
+        // Total time for this station = Espera (waiting for station) + Trabajo Activo
+        let totalEstacionMs = null;
+        if (activoMs != null || esperaMs != null) {
+          totalEstacionMs = (esperaMs || 0) + (activoMs || 0);
+        }
+
+        if (stepEnd) {
+          prevStepEndTime = stepEnd;
+        } else if (stepStart) {
+          prevStepEndTime = stepStart;
+        }
+
+        return {
+          ...step,
+          duracion_ms: totalEstacionMs != null ? totalEstacionMs : activoMs,
+          duracion_texto: formatDuration(totalEstacionMs != null ? totalEstacionMs : activoMs),
+          tiempo_activo_ms: activoMs,
+          tiempo_activo_texto: formatDuration(activoMs),
+          tiempo_espera_ms: esperaMs,
+          tiempo_espera_texto: esperaMs != null ? formatDuration(esperaMs) : null,
+          tiempo_total_ms: totalEstacionMs,
+          tiempo_total_texto: formatDuration(totalEstacionMs)
+        };
+      });
+
+      // Calculate total cycle time from piece start (first scan or first event or created_at) to last event / closure
+      let pieceFirstTimestamp = parseDateUtc(p.created_at);
+      if (pieceEvents.length > 0) {
+        const firstEv = parseDateUtc(pieceEvents[0].timestamp);
+        if (firstEv && (!pieceFirstTimestamp || firstEv < pieceFirstTimestamp)) {
+          pieceFirstTimestamp = firstEv;
+        }
+      }
+      const startedPasos = pasos.filter((pp) => pp.fecha_inicio);
+      if (startedPasos.length > 0) {
+        const firstStart = parseDateUtc(startedPasos[0].fecha_inicio);
+        if (firstStart && (!pieceFirstTimestamp || firstStart < pieceFirstTimestamp)) {
+          pieceFirstTimestamp = firstStart;
+        }
+      }
+
+      const isPieceFinished = p.cierre_excepcion === 1 || (pasos.length > 0 && pasos.every((pp) => pp.estado_nombre === 'TERMINADA'));
+
+      let pieceLastTimestamp = null;
+      if (isPieceFinished) {
+        // Last audit event or last step end
+        if (pieceEvents.length > 0) {
+          pieceLastTimestamp = parseDateUtc(pieceEvents[pieceEvents.length - 1].timestamp);
+        }
+        const finishedPasos = pasos.filter((pp) => pp.fecha_fin);
+        if (finishedPasos.length > 0) {
+          const lastFin = parseDateUtc(finishedPasos[finishedPasos.length - 1].fecha_fin);
+          if (lastFin && (!pieceLastTimestamp || lastFin > pieceLastTimestamp)) {
+            pieceLastTimestamp = lastFin;
+          }
+        }
+        if (jobEndDate && (!pieceLastTimestamp || jobEndDate > pieceLastTimestamp)) {
+          // If job was closed, piece cycle concluded at closure
+          pieceLastTimestamp = jobEndDate;
+        }
+      } else {
+        pieceLastTimestamp = now;
+      }
+
+      let pieceTotalDurationMs = null;
+      if (pieceFirstTimestamp && pieceLastTimestamp) {
+        pieceTotalDurationMs = Math.max(pieceLastTimestamp.getTime() - pieceFirstTimestamp.getTime(), 0);
+      }
+
+      // Sum of active work time across all stations
+      const pieceActivoMs = pasos.reduce((acc, step) => acc + (step.tiempo_activo_ms || 0), 0);
+      const pieceEsperaMs = pieceTotalDurationMs != null ? Math.max(pieceTotalDurationMs - pieceActivoMs, 0) : null;
+
+      return {
+        ...p,
+        duracion_ms: pieceTotalDurationMs,
+        duracion_texto: formatDuration(pieceTotalDurationMs),
+        tiempo_total_ms: pieceTotalDurationMs,
+        tiempo_total_texto: formatDuration(pieceTotalDurationMs),
+        tiempo_activo_ms: pieceActivoMs,
+        tiempo_activo_texto: formatDuration(pieceActivoMs),
+        tiempo_espera_ms: pieceEsperaMs,
+        tiempo_espera_texto: formatDuration(pieceEsperaMs),
+        es_finalizada: isPieceFinished,
+        pasos
+      };
+    });
+
+    const batchCloses = await db.prepare(`
+      SELECT 
+        cl.*,
+        u.nombre as usuario_nombre
+      FROM cierres_lote cl
+      LEFT JOIN usuarios u ON cl.usuario_id = u.id
+      WHERE cl.job_id = ?
+      ORDER BY cl.id ASC
+    `).all(job.id);
+
+    res.json({ job, pieces: enrichedPieces, auditEvents, batchCloses: batchCloses || [] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

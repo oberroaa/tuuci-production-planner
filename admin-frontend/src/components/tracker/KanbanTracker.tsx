@@ -34,6 +34,8 @@ interface KanbanTrackerProps {
   currentUser?: any;
   selectedRutaId?: 'ALL' | number;
   onSelectRutaId?: (rutaId: 'ALL' | number) => void;
+  selectedJobCode?: string;
+  onSelectJobCode?: (jobCode: string) => void;
   refreshTrigger?: number;
 }
 
@@ -45,6 +47,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   currentUser,
   selectedRutaId: controlledRutaId,
   onSelectRutaId,
+  selectedJobCode: controlledJobCode,
+  onSelectJobCode,
   refreshTrigger
 }) => {
   const [viewMode, setViewMode] = useState<'KANBAN' | 'JOBS'>('KANBAN');
@@ -71,10 +75,25 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   }, [onSelectRutaId]);
 
   // Job & Piece Filter State (Searchable & Dynamic)
-  const [selectedJobCode, setSelectedJobCode] = useState<string>('');
-  const [jobSearchQuery, setJobSearchQuery] = useState<string>('');
+  const [internalJobCode, setInternalJobCode] = useState<string>('');
+  const selectedJobCode = controlledJobCode !== undefined ? controlledJobCode : internalJobCode;
+  const setSelectedJobCode = useCallback((jCode: string) => {
+    if (onSelectJobCode) {
+      onSelectJobCode(jCode);
+    }
+    setInternalJobCode(jCode);
+  }, [onSelectJobCode]);
+
+  const [jobSearchQuery, setJobSearchQuery] = useState<string>(controlledJobCode || '');
   const [isJobDropdownOpen, setIsJobDropdownOpen] = useState<boolean>(false);
   const jobDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync jobSearchQuery if controlledJobCode changes externally (e.g. from Dashboard or line switch)
+  useEffect(() => {
+    if (controlledJobCode !== undefined) {
+      setJobSearchQuery(controlledJobCode || '');
+    }
+  }, [controlledJobCode]);
 
   const [selectedPieceCode, setSelectedPieceCode] = useState<string>('');
   const [selectedItemCode, setSelectedItemCode] = useState<string>('');
@@ -1584,39 +1603,99 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         </div>
       )}
 
-      {/* Quick KPI Strip */}
+      {/* Quick KPI Strip with interactive filter clicking */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => {
+            setJobFilter('ALL');
+            if (viewMode !== 'JOBS') setViewMode('JOBS');
+          }}
+          className={`p-3.5 rounded-xl border shadow-sm flex items-center justify-between text-left transition-all hover:scale-[1.01] ${
+            viewMode === 'JOBS' && jobFilter === 'ALL'
+              ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-slate-400'
+              : 'bg-white border-slate-200/80 hover:border-slate-300'
+          }`}
+        >
           <div>
-            <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Jobs</span>
-            <span className="text-xl font-extrabold text-slate-800 font-mono">{totalJobsCount}</span>
+            <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`}>
+              Total Jobs
+            </span>
+            <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'ALL' ? 'text-white' : 'text-slate-800'}`}>
+              {totalJobsCount}
+            </span>
           </div>
-          <Package className="w-6 h-6 text-slate-300" />
-        </div>
+          <Package className={`w-6 h-6 ${viewMode === 'JOBS' && jobFilter === 'ALL' ? 'text-slate-400' : 'text-slate-300'}`} />
+        </button>
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => {
+            setJobFilter('EN_PROCESO');
+            if (viewMode !== 'JOBS') setViewMode('JOBS');
+          }}
+          className={`p-3.5 rounded-xl border shadow-sm flex items-center justify-between text-left transition-all hover:scale-[1.01] ${
+            viewMode === 'JOBS' && jobFilter === 'EN_PROCESO'
+              ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-300'
+              : 'bg-white border-slate-200/80 hover:border-blue-300'
+          }`}
+        >
           <div>
-            <span className="text-[10px] font-bold uppercase text-blue-500 block">En Proceso</span>
-            <span className="text-xl font-extrabold text-blue-700 font-mono">{inProgressJobsCount}</span>
+            <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'EN_PROCESO' ? 'text-blue-100' : 'text-blue-500'}`}>
+              En Proceso
+            </span>
+            <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'EN_PROCESO' ? 'text-white' : 'text-blue-700'}`}>
+              {inProgressJobsCount}
+            </span>
           </div>
-          <Clock className="w-6 h-6 text-blue-400" />
-        </div>
+          <Clock className={`w-6 h-6 ${viewMode === 'JOBS' && jobFilter === 'EN_PROCESO' ? 'text-blue-200' : 'text-blue-400'}`} />
+        </button>
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => {
+            setJobFilter('COMPLETADO');
+            if (viewMode !== 'JOBS') setViewMode('JOBS');
+          }}
+          className={`p-3.5 rounded-xl border shadow-sm flex items-center justify-between text-left transition-all hover:scale-[1.01] ${
+            viewMode === 'JOBS' && jobFilter === 'COMPLETADO'
+              ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-300'
+              : 'bg-white border-slate-200/80 hover:border-emerald-300'
+          }`}
+        >
           <div>
-            <span className="text-[10px] font-bold uppercase text-emerald-600 block">Completados</span>
-            <span className="text-xl font-extrabold text-emerald-700 font-mono">{cleanCompletedJobsCount}</span>
+            <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO' ? 'text-emerald-100' : 'text-emerald-600'}`}>
+              Completados
+            </span>
+            <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO' ? 'text-white' : 'text-emerald-700'}`}>
+              {cleanCompletedJobsCount}
+            </span>
           </div>
-          <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-        </div>
+          <CheckCircle2 className={`w-6 h-6 ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO' ? 'text-emerald-200' : 'text-emerald-400'}`} />
+        </button>
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => {
+            setJobFilter('COMPLETADO_CON_INCIDENCIAS');
+            if (viewMode !== 'JOBS') setViewMode('JOBS');
+          }}
+          className={`p-3.5 rounded-xl border shadow-sm flex items-center justify-between text-left transition-all hover:scale-[1.01] ${
+            viewMode === 'JOBS' && jobFilter === 'COMPLETADO_CON_INCIDENCIAS'
+              ? 'bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300'
+              : 'bg-white border-slate-200/80 hover:border-amber-300'
+          }`}
+        >
           <div>
-            <span className="text-[10px] font-bold uppercase text-amber-600 block">Con Incidencias</span>
-            <span className="text-xl font-extrabold text-amber-700 font-mono">{exceptionJobsCount}</span>
+            <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO_CON_INCIDENCIAS' ? 'text-amber-100' : 'text-amber-600'}`}>
+              Con Incidencias
+            </span>
+            <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO_CON_INCIDENCIAS' ? 'text-white' : 'text-amber-700'}`}>
+              {exceptionJobsCount}
+            </span>
           </div>
-          <ShieldAlert className="w-6 h-6 text-amber-500" />
-        </div>
+          <ShieldAlert className={`w-6 h-6 ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO_CON_INCIDENCIAS' ? 'text-amber-200' : 'text-amber-500'}`} />
+        </button>
       </div>
 
       {/* VIEW 1: DYNAMIC KANBAN BOARD */}
@@ -1775,9 +1854,27 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               </div>
             </div>
 
-            <div className="text-xs text-slate-400">
-              Mostrando {filteredJobs.length} de {jobs.length} jobs
-              {selectedJobCode && ` (Filtrado por: ${selectedJobCode})`}
+            <div className="flex items-center space-x-2 text-xs">
+              <span className="text-slate-500">
+                Mostrando <strong>{filteredJobs.length}</strong> de {jobs.length} jobs
+              </span>
+              {selectedJobCode && (
+                <span className="inline-flex items-center space-x-1 bg-blue-50 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200 font-mono font-bold">
+                  <span>Job: {selectedJobCode}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedJobCode('');
+                      setJobSearchQuery('');
+                      setSelectedPieceCode('');
+                    }}
+                    className="hover:text-rose-600 ml-0.5 p-0.5"
+                    title="Quitar filtro de Job"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
             </div>
           </div>
 

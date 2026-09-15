@@ -182,6 +182,11 @@ export function App() {
               setSelectedRutaId(rId);
               fetchSummary(rId, dashboardJobCode);
             }}
+            selectedJobCode={dashboardJobCode}
+            onSelectJobCode={(jCode) => {
+              setDashboardJobCode(jCode);
+              fetchSummary(selectedRutaId, jCode);
+            }}
           />
         </div>
 

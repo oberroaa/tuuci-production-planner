@@ -77,7 +77,7 @@ body {
 @media print {
   @page {
     size: letter portrait;
-    margin: 15mm 12mm 15mm 12mm;
+    margin: 10mm 10mm 12mm 10mm;
   }
 
   html, body {
@@ -91,6 +91,20 @@ body {
 
   body * {
     visibility: hidden;
+  }
+
+  /* Reset fixed positioning and flex alignment for modal parents during print */
+  .fixed.inset-0,
+  .backdrop-blur-sm,
+  [class*="backdrop"] {
+    position: static !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    width: 100% !important;
+    background: transparent !important;
+    overflow: visible !important;
   }
 
   #printable-qr-tickets, #printable-qr-tickets * {
