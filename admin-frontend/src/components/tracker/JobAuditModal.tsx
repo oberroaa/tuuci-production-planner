@@ -53,8 +53,8 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
   if (!isOpen || !jobId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn print:p-0 print:bg-white print:static print:block print:h-auto print:overflow-visible">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:max-w-none print:w-full print:max-h-none print:overflow-visible print:static print:block print:rounded-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn print:m-0 print:p-0 print:bg-white print:static print:block print:h-auto print:overflow-visible print:inset-auto">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden print:m-0 print:p-0 print:border-none print:shadow-none print:max-w-none print:w-full print:max-h-none print:overflow-visible print:static print:block print:rounded-none">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
           <div className="flex items-center space-x-3">
@@ -128,6 +128,11 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                       <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
                         <ShieldAlert className="w-4 h-4 text-amber-600" />
                         <span>COMPLETADO CON INCIDENCIAS</span>
+                      </span>
+                    ) : data.job.estado_cierre === 'PARCIAL' ? (
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                        <Clock className="w-4 h-4 text-blue-600" />
+                        <span>CIERRE PARCIAL (EN CURSO)</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">

@@ -1442,12 +1442,13 @@ app.get('/api/jobs/:id/audit-lote', async (req, res) => {
 app.post('/api/jobs/:id/close-final-batch', async (req, res) => {
   try {
     const { id } = req.params;
-    const { procesoId, usuarioId, notasCierre } = req.body;
+    const { procesoId, usuarioId, notasCierre, tipoCierre } = req.body;
     const result = await StateEngine.closeFinalBatchWithReconciliation({
       jobId: parseInt(id, 10),
       procesoId: procesoId ? parseInt(procesoId, 10) : null,
       usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
-      notasCierre
+      notasCierre,
+      tipoCierre
     });
     notifyDashboardUpdate();
     res.json({ success: true, result });

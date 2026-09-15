@@ -504,8 +504,9 @@ export class StateEngine {
     const piezasRes = await query('SELECT id, codigo_qr_unico, cierre_excepcion FROM piezas WHERE job_id = $1 ORDER BY id ASC', [jobId]);
     const piezas = piezasRes.rows;
 
-    const normalPieces = [];
-    const laggingPieces = [];
+    const normalPieces = []; // Piezas en la estación final que aún no han sido formalmente cerradas (o están listas)
+    const alreadyCompletedPieces = []; // Piezas que ya fueron terminadas en la estación final en un cierre previo
+    const laggingPieces = []; // Piezas pendientes en estaciones anteriores
 
     for (const pieza of piezas) {
       const stepsRes = await query(`
@@ -521,7 +522,14 @@ export class StateEngine {
 
       const finalStep = steps.find((s) => s.proceso_id === finalProceso.id);
 
-      if (finalStep && ['ESPERANDO', 'EN PROCESO', 'TERMINADA'].includes(finalStep.estado_nombre)) {
+      if (finalStep && finalStep.estado_nombre === 'TERMINADA') {
+        alreadyCompletedPieces.push({
+          piezaId: pieza.id,
+          codigoQRUnico: pieza.codigo_qr_unico,
+          estadoFinal: 'TERMINADA',
+          cierreExcepcion: pieza.cierre_excepcion
+        });
+      } else if (finalStep && ['ESPERANDO', 'EN PROCESO'].includes(finalStep.estado_nombre)) {
         normalPieces.push({
           piezaId: pieza.id,
           codigoQRUnico: pieza.codigo_qr_unico,
@@ -570,6 +578,11 @@ export class StateEngine {
       es_proceso_cierre: finalProceso.es_proceso_cierre
     };
 
+    // Es un cierre limpio si no hay piezas rezagadas en estaciones anteriores
+    const isClean = laggingPieces.length === 0;
+    // Es cierre total si tras cerrar normalPieces se habrán completado todas las piezas del lote
+    const willBeTotal = laggingPieces.length === 0;
+
     return {
       jobId: job.id,
       jobCode: job.job_code,
@@ -592,23 +605,30 @@ export class StateEngine {
       finalProceso: finalProcInfo,
       procesoFinal: finalProcInfo,
       totalPieces: piezas.length,
-      isClean: laggingPieces.length === 0,
+      isClean,
+      willBeTotal,
       normalCount: normalPieces.length,
       laggingCount: laggingPieces.length,
+      alreadyCompletedCount: alreadyCompletedPieces.length,
       normalPieces,
-      laggingPieces
+      laggingPieces,
+      alreadyCompletedPieces
     };
   }
 
   /**
    * Closes the final batch process for a Job, reconciling any uncompleted/lagging pieces.
    */
-  static async closeFinalBatchWithReconciliation({ jobId, procesoId, usuarioId = null, notasCierre = '' }) {
+  static async closeFinalBatchWithReconciliation({ jobId, procesoId, usuarioId = null, notasCierre = '', tipoCierre = null }) {
     const audit = await StateEngine.auditJobLoteStatus({ jobId });
 
     if (audit.estadoCierre === 'COMPLETADO' || audit.estadoCierre === 'COMPLETADO_CON_INCIDENCIAS') {
-      throw new Error('El Job ya se encuentra cerrado');
+      throw new Error('El Job ya se encuentra cerrado completamente.');
     }
+
+    // Determinar si es PARCIAL o TOTAL si no viene explícito
+    // Si hay piezas rezagadas y no se pidió explícitamente forzar TOTAL, es PARCIAL.
+    const isPartial = tipoCierre === 'PARCIAL' || (!tipoCierre && audit.laggingPieces.length > 0);
 
     const targetProcesoId = procesoId || audit.finalProceso.id;
     const stateTerminadaRes = await query("SELECT id FROM estados WHERE nombre = 'TERMINADA'");
@@ -619,61 +639,96 @@ export class StateEngine {
     try {
       await client.query('BEGIN');
 
-      // 1. Process normal pieces in the final process
+      // 1. Procesar piezas que están en la estación final listas para ser terminadas
+      let closedPiecesCount = 0;
       for (const p of audit.normalPieces) {
         const ppRes = await client.query(
           'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
           [p.piezaId, targetProcesoId]
         );
         const pp = ppRes.rows[0];
-        if (pp && pp.estado_id !== stateTerminada.id) {
-          await client.query(`
-            UPDATE pieza_procesos
-            SET estado_id = $1, fecha_fin = COALESCE(fecha_fin, $2)
-            WHERE id = $3
-          `, [stateTerminada.id, now, pp.id]);
+        if (pp) {
+          if (pp.estado_id !== stateTerminada.id) {
+            await client.query(`
+              UPDATE pieza_procesos
+              SET estado_id = $1, fecha_fin = COALESCE(fecha_fin, $2)
+              WHERE id = $3
+            `, [stateTerminada.id, now, pp.id]);
 
-          await client.query(`
-            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
-            VALUES ($1, $2, $3, $4, $5)
-          `, [pp.id, pp.estado_id, stateTerminada.id, usuarioId, 'Cierre de Lote']);
+            await client.query(`
+              INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+              VALUES ($1, $2, $3, $4, $5)
+            `, [pp.id, pp.estado_id, stateTerminada.id, usuarioId, isPartial ? 'Cierre Parcial de Lote' : 'Cierre Total de Lote']);
+          }
+          closedPiecesCount++;
         }
       }
 
-      // 2. Process lagging pieces
-      for (const p of audit.laggingPieces) {
-        await client.query('UPDATE piezas SET cierre_excepcion = 1 WHERE id = $1', [p.piezaId]);
+      let finalJobStatus = 'EN_PROCESO';
 
-        const missingStepsStr = p.pasosFaltantes.map((s) => s.tipoNombre).join(', ');
-        const lastStepStr = p.ultimoPaso ? `${p.ultimoPaso.tipoNombre} (${p.ultimoPaso.estadoNombre})` : 'Ninguno';
-        const obsText = `Cierre forzado en Lote Final: Se omitieron pasos [${missingStepsStr}]. Última estación real: ${lastStepStr}. ${notasCierre ? 'Nota: ' + notasCierre.trim() : ''}`.trim();
+      if (isPartial) {
+        // CIERRE PARCIAL:
+        // Las piezas rezagadas (audit.laggingPieces) NO SE TOCAN. Permanecen activas en su estación actual.
+        finalJobStatus = 'PARCIAL';
 
-        const ppFinalRes = await client.query(
-          'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
-          [p.piezaId, targetProcesoId]
-        );
-        const ppFinal = ppFinalRes.rows[0];
-        if (ppFinal) {
-          await client.query(`
-            UPDATE pieza_procesos
-            SET estado_id = $1, fecha_inicio = COALESCE(fecha_inicio, $2), fecha_fin = $3
-            WHERE id = $4
-          `, [stateTerminada.id, now, now, ppFinal.id]);
+        await client.query(`
+          UPDATE jobs
+          SET estado_cierre = $1, cerrado_por_usuario_id = $2, notas_cierre = $3
+          WHERE id = $4
+        `, [finalJobStatus, usuarioId, notasCierre ? notasCierre.trim() : null, jobId]);
 
-          await client.query(`
-            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
-            VALUES ($1, $2, $3, $4, $5)
-          `, [ppFinal.id, ppFinal.estado_id, stateTerminada.id, usuarioId, obsText]);
+        // Registrar auditoría en cierres_lote
+        await client.query(`
+          INSERT INTO cierres_lote (job_id, tipo_cierre, piezas_cerradas, usuario_id, notas, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [jobId, 'PARCIAL', closedPiecesCount, usuarioId, notasCierre ? notasCierre.trim() : null, now]);
+
+      } else {
+        // CIERRE TOTAL (o forzado con incidencias):
+        if (audit.laggingPieces.length > 0) {
+          // Forzado con incidencias si se cerró total a pesar de haber piezas rezagadas
+          for (const p of audit.laggingPieces) {
+            await client.query('UPDATE piezas SET cierre_excepcion = 1 WHERE id = $1', [p.piezaId]);
+
+            const missingStepsStr = p.pasosFaltantes.map((s) => s.tipoNombre).join(', ');
+            const lastStepStr = p.ultimoPaso ? `${p.ultimoPaso.tipoNombre} (${p.ultimoPaso.estadoNombre})` : 'Ninguno';
+            const obsText = `Cierre forzado en Lote Final: Se omitieron pasos [${missingStepsStr}]. Última estación real: ${lastStepStr}. ${notasCierre ? 'Nota: ' + notasCierre.trim() : ''}`.trim();
+
+            const ppFinalRes = await client.query(
+              'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
+              [p.piezaId, targetProcesoId]
+            );
+            const ppFinal = ppFinalRes.rows[0];
+            if (ppFinal) {
+              await client.query(`
+                UPDATE pieza_procesos
+                SET estado_id = $1, fecha_inicio = COALESCE(fecha_inicio, $2), fecha_fin = $3
+                WHERE id = $4
+              `, [stateTerminada.id, now, now, ppFinal.id]);
+
+              await client.query(`
+                INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+                VALUES ($1, $2, $3, $4, $5)
+              `, [ppFinal.id, ppFinal.estado_id, stateTerminada.id, usuarioId, obsText]);
+            }
+          }
+          finalJobStatus = 'COMPLETADO_CON_INCIDENCIAS';
+        } else {
+          finalJobStatus = 'COMPLETADO';
         }
-      }
 
-      // 3. Update Job status
-      const finalJobStatus = audit.laggingPieces.length > 0 ? 'COMPLETADO_CON_INCIDENCIAS' : 'COMPLETADO';
-      await client.query(`
-        UPDATE jobs
-        SET estado_cierre = $1, fecha_cierre = $2, cerrado_por_usuario_id = $3, notas_cierre = $4
-        WHERE id = $5
-      `, [finalJobStatus, now, usuarioId, notasCierre ? notasCierre.trim() : null, jobId]);
+        await client.query(`
+          UPDATE jobs
+          SET estado_cierre = $1, fecha_cierre = $2, cerrado_por_usuario_id = $3, notas_cierre = $4
+          WHERE id = $5
+        `, [finalJobStatus, now, usuarioId, notasCierre ? notasCierre.trim() : null, jobId]);
+
+        // Registrar auditoría en cierres_lote
+        await client.query(`
+          INSERT INTO cierres_lote (job_id, tipo_cierre, piezas_cerradas, usuario_id, notas, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [jobId, 'TOTAL', closedPiecesCount, usuarioId, notasCierre ? notasCierre.trim() : null, now]);
+      }
 
       await client.query('COMMIT');
 
@@ -681,6 +736,8 @@ export class StateEngine {
         success: true,
         jobId,
         jobCode: audit.jobCode,
+        isPartial,
+        tipoCierre: isPartial ? 'PARCIAL' : 'TOTAL',
         estadoCierre: finalJobStatus,
         estado_cierre: finalJobStatus,
         job: {
@@ -691,6 +748,7 @@ export class StateEngine {
         totalPieces: audit.totalPieces,
         normalCount: audit.normalCount,
         laggingCount: audit.laggingCount,
+        closedPiecesCount,
         laggingPieces: audit.laggingPieces
       };
     } catch (err) {

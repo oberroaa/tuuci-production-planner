@@ -74,12 +74,19 @@ body {
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Print stylesheet for Thermal & Zebra Label printing, and Job Audit PDF */
 @media print {
+  @page {
+    size: letter portrait;
+    margin: 15mm 12mm 15mm 12mm;
+  }
+
   html, body {
     height: auto !important;
+    min-height: 100% !important;
     overflow: visible !important;
     background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   body * {
@@ -103,15 +110,13 @@ body {
     visibility: visible;
   }
   #printable-job-audit {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
     margin: 0 !important;
-    padding: 12px 16px !important;
+    padding: 0 !important;
     background: white !important;
     color: #000000 !important;
     display: block !important;
@@ -136,6 +141,12 @@ body {
   #printable-job-audit td {
     border: 1px solid #cbd5e1 !important;
     color: #0f172a !important;
+    padding: 6px 8px !important;
+  }
+
+  #printable-job-audit .border {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .thermal-ticket {

@@ -639,12 +639,12 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                   <div className="absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden text-xs divide-y divide-slate-100 max-h-56 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
                     <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
                       <span>Lotes Activos para Cierre</span>
-                      <span className="font-mono text-blue-600">{availableJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').length} disponibles</span>
+                      <span className="font-mono text-blue-600">{availableJobs.filter((j) => j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL').length} disponibles</span>
                     </div>
 
                     {availableJobs
                       .filter((j) => {
-                        if (!manualJobInput.trim()) return j.estado_cierre === 'EN_PROCESO';
+                        if (!manualJobInput.trim()) return j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL';
                         const q = manualJobInput.toLowerCase().trim();
                         return (
                           j.job_code.toLowerCase().includes(q) ||

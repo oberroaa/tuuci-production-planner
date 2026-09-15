@@ -59,7 +59,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
 
   if (!isOpen || !jobId) return null;
 
-  const handleConfirmClose = async () => {
+  const handleConfirmClose = async (tipo: 'PARCIAL' | 'TOTAL') => {
     if (!auditData) return;
 
     setSubmitting(true);
@@ -72,7 +72,8 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
         body: JSON.stringify({
           procesoId: auditData.procesoFinal?.id,
           usuarioId: currentUser?.id || 1,
-          notasCierre: notasCierre.trim() || undefined
+          notasCierre: notasCierre.trim() || undefined,
+          tipoCierre: tipo
         })
       });
 
@@ -145,13 +146,15 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                   <span className="text-slate-400 block text-[10px] truncate">{auditData.job.ruta_nombre}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Total Piezas</span>
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Piezas Totales</span>
                   <span className="font-bold text-slate-800 text-sm">{auditData.totalPieces} uds</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Estación Final</span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                    {auditData.procesoFinal?.tipo_nombre || 'PACKING'}
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Estado Actual</span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                    auditData.job.estado_cierre === 'PARCIAL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {auditData.job.estado_cierre === 'PARCIAL' ? 'PARCIAL (EN CURSO)' : auditData.job.estado_cierre}
                   </span>
                 </div>
               </div>
@@ -162,37 +165,56 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                 <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
                   <div className="flex items-center space-x-2 text-emerald-800">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                    <span className="font-bold text-sm">Flujo Completo y Limpio (100% de piezas listas)</span>
+                    <span className="font-bold text-sm">
+                      {auditData.alreadyCompletedCount > 0
+                        ? `Último Lote Listo: Cerrar Totalmente la Orden (${auditData.normalCount} pzs restantes)`
+                        : `Flujo Completo y Limpio (100% de piezas listas)`}
+                    </span>
                   </div>
                   <p className="text-xs text-emerald-700 pl-7">
-                    Todas las <strong>{auditData.totalPieces}</strong> piezas de la orden completaron exitosamente
-                    cada una de las estaciones intermedias de la ruta. El job se cerrará con estatus{' '}
-                    <strong className="underline">COMPLETADO</strong>.
+                    {auditData.alreadyCompletedCount > 0 ? (
+                      <>
+                        Se completaron las <strong>{auditData.normalCount}</strong> pieza(s) finales que faltaban de la orden (sumadas a las {auditData.alreadyCompletedCount} ya entregadas). El job quedará cerrado formalmente con estatus{' '}
+                        <strong className="underline">COMPLETADO</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Todas las <strong>{auditData.totalPieces}</strong> piezas de la orden completaron exitosamente
+                        cada una de las estaciones intermedias de la ruta. El job se cerrará con estatus{' '}
+                        <strong className="underline">COMPLETADO</strong>.
+                      </>
+                    )}
                   </p>
                 </div>
               ) : (
                 /* 2. RECONCILIATION CASE (LAGGING PIECES) */
                 <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-                    <div className="flex items-center space-x-2 text-amber-900">
-                      <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-2">
+                    <div className="flex items-center space-x-2 text-blue-950">
+                      <Layers className="w-5 h-5 text-blue-600 flex-shrink-0" />
                       <span className="font-bold text-sm">
-                        Reconciliación Requerida: {auditData.laggingCount} pieza(s) con estaciones inconclusas
+                        Cierre Parcial Disponible: {auditData.normalCount} pieza(s) listas en Estación Final
                       </span>
                     </div>
-                    <p className="text-xs text-amber-800">
-                      El job ha llegado a la estación final ({auditData.procesoFinal?.tipo_nombre}), pero se detectó que{' '}
-                      <strong>{auditData.laggingCount} de {auditData.totalPieces} piezas</strong> se quedaron en estaciones anteriores y no
-                      fueron escaneadas en todo el flujo.
+                    <p className="text-xs text-blue-800">
+                      Hay <strong>{auditData.normalCount} pieza(s) listas</strong> en la estación final que puedes cerrar hoy. Se detectó que{' '}
+                      <strong>{auditData.laggingCount} pieza(s)</strong> continúan en procesos anteriores.
                     </p>
+                    <div className="p-2.5 bg-white/80 rounded-lg border border-blue-100 text-[11px] text-blue-900 flex items-start space-x-2">
+                      <Clock className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Importante para turnos siguientes:</strong> Al hacer <em>Cierre Parcial</em>, las {auditData.laggingCount} pieza(s) rezagadas 
+                        <strong> NO se cancelan</strong>, sino que permanecen activas en sus respectivas estaciones para que los operarios continúen su trabajo normalmente.
+                      </span>
+                    </div>
                   </div>
 
                   {/* Table of Lagging Pieces */}
                   <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                     <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between text-xs font-bold text-slate-700">
-                      <span>Piezas Rezagadas / Inconclusas</span>
+                      <span>Piezas Pendientes en Estaciones Anteriores (Seguirán Activas)</span>
                       <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full text-[10px]">
-                        {auditData.laggingCount} incidencia(s)
+                        {auditData.laggingCount} en proceso
                       </span>
                     </div>
                     <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
@@ -201,22 +223,22 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                           <div>
                             <span className="font-mono font-bold text-blue-700">{p.codigoQRUnico}</span>
                             <div className="text-[11px] text-slate-500 mt-0.5">
-                              Último paso registrado:{' '}
+                              Estación actual:{' '}
                               <span className="font-semibold text-slate-700">
-                                {p.ultimoPaso?.tipo_nombre || 'Inicio'} ({p.ultimoPaso?.estado || 'INACTIVO'})
+                                {p.ultimoPaso?.tipo_nombre || 'Inicio'} ({p.ultimoPaso?.estado || 'ESPERANDO'})
                               </span>
                             </div>
                           </div>
 
                           <div className="text-right">
-                            <span className="text-[10px] uppercase font-bold text-rose-600 block">
-                              Pasos Omitidos:
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                              Pasos pendientes:
                             </span>
                             <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
                               {p.pasosFaltantes.map((f: any, idx: number) => (
                                 <span
                                   key={idx}
-                                  className="px-1.5 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 rounded text-[10px] font-medium"
+                                  className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 rounded text-[10px] font-medium"
                                 >
                                   {f.tipo_nombre}
                                 </span>
@@ -229,11 +251,22 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                   </div>
 
                   {/* Normal Pieces Note */}
-                  <div className="text-xs text-slate-500 flex items-center space-x-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>
-                      <strong>{auditData.normalCount}</strong> pieza(s) completaron el flujo normal y se marcarán como terminadas.
-                    </span>
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-slate-600 flex items-center space-x-1.5 bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>
+                        <strong>{auditData.normalCount}</strong> pieza(s) listas en estación final para cerrar en este turno.
+                      </span>
+                    </div>
+
+                    {auditData.alreadyCompletedCount > 0 && (
+                      <div className="text-xs text-slate-500 flex items-center space-x-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <CheckCircle2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <span>
+                          <strong>{auditData.alreadyCompletedCount}</strong> pieza(s) fueron entregadas en un cierre parcial anterior.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -252,7 +285,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                 <textarea
                   value={notasCierre}
                   onChange={(e) => setNotasCierre(e.target.value)}
-                  placeholder="Observaciones o notas opcionales sobre el cierre del lote (ej. motivo por piezas faltantes, calidad, despacho)..."
+                  placeholder="Observaciones sobre el cierre del lote (ej. despacho parcial de 2 piezas, motivo, turno)..."
                   rows={3}
                   className="w-full text-xs p-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 />
@@ -269,7 +302,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -280,33 +313,62 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
           </button>
 
           {auditData && (
-            <button
-              type="button"
-              onClick={handleConfirmClose}
-              disabled={submitting}
-              className={`px-5 py-2 rounded-lg text-xs font-bold text-white shadow-sm flex items-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                auditData.isClean
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
-                  : 'bg-amber-600 hover:bg-amber-700'
-              }`}
-            >
-              {submitting ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Procesando cierre...</span>
-                </>
-              ) : auditData.isClean ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Cerrar Job Completo (Limpio)</span>
-                </>
+            <div className="flex items-center space-x-2">
+              {auditData.isClean ? (
+                <button
+                  type="button"
+                  onClick={() => handleConfirmClose('TOTAL')}
+                  disabled={submitting}
+                  className="px-5 py-2 rounded-lg text-xs font-bold text-white shadow-sm flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Procesando cierre...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Cerrar Job Completo (Lote Completo)</span>
+                    </>
+                  )}
+                </button>
               ) : (
                 <>
-                  <ShieldAlert className="w-4 h-4" />
-                  <span>Confirmar Cierre con Incidencias</span>
+                  {/* Opción 1 (Recomendada): Cierre Parcial */}
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmClose('PARCIAL')}
+                    disabled={submitting || auditData.normalCount === 0}
+                    className="px-5 py-2 rounded-lg text-xs font-bold text-white shadow-sm flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Cierra las piezas listas y mantiene activas las piezas rezagadas para el siguiente turno"
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Procesando cierre parcial...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Layers className="w-4 h-4" />
+                        <span>Cierre Parcial ({auditData.normalCount} piezas)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Opción 2: Cierre Forzado con Incidencias si se desea descartar lo rezagado */}
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmClose('TOTAL')}
+                    disabled={submitting}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors disabled:opacity-50"
+                    title="Cierra todo el Job forzadamente cancelando las piezas rezagadas"
+                  >
+                    Cierre Total con Incidencias
+                  </button>
                 </>
               )}
-            </button>
+            </div>
           )}
         </div>
       </div>

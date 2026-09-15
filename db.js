@@ -89,7 +89,7 @@ export async function initDb() {
         cantidad_piezas INTEGER NOT NULL,
         creado_por_usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
         imagen_etiqueta_url TEXT,
-        estado_cierre TEXT NOT NULL DEFAULT 'EN_PROCESO' CHECK(estado_cierre IN ('EN_PROCESO', 'COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS')),
+        estado_cierre TEXT NOT NULL DEFAULT 'EN_PROCESO' CHECK(estado_cierre IN ('EN_PROCESO', 'PARCIAL', 'COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS')),
         fecha_cierre TIMESTAMPTZ,
         cerrado_por_usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
         notas_cierre TEXT,
@@ -97,6 +97,16 @@ export async function initDb() {
       );
 
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS item_code TEXT;
+
+      -- Migración de constraint para soportar estado 'PARCIAL'
+      DO $$
+      BEGIN
+        ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_estado_cierre_check;
+        ALTER TABLE jobs ADD CONSTRAINT jobs_estado_cierre_check 
+          CHECK(estado_cierre IN ('EN_PROCESO', 'PARCIAL', 'COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS'));
+      EXCEPTION
+        WHEN OTHERS THEN NULL;
+      END $$;
 
       CREATE TABLE IF NOT EXISTS piezas (
         id SERIAL PRIMARY KEY,
@@ -134,6 +144,16 @@ export async function initDb() {
         usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
         observacion TEXT,
         timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS cierres_lote (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        tipo_cierre TEXT NOT NULL CHECK(tipo_cierre IN ('PARCIAL', 'TOTAL')),
+        piezas_cerradas INTEGER NOT NULL,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        notas TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS configuraciones (

@@ -310,7 +310,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
   // KPIs strictly scoped to routeJobs
   const totalJobsCount = routeJobs.length;
-  const inProgressJobsCount = routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').length;
+  const inProgressJobsCount = routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL').length;
   const cleanCompletedJobsCount = routeJobs.filter((j) => j.estado_cierre === 'COMPLETADO').length;
   const exceptionJobsCount = routeJobs.filter((j) => j.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS').length;
 
@@ -332,7 +332,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           (j.linea_nombre && j.linea_nombre.toLowerCase().includes(q))
         );
       })
-    : routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').slice(0, 8);
+    : routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL').slice(0, 8);
 
   // Group matching items (P/N / item_code) that have one or more jobs
   const matchingItems = React.useMemo(() => {
@@ -744,7 +744,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     </div>
 
                     {/* Quick action: only if this column is the designated batch closure process */}
-                    {isClosureColumn && group.job_estado_cierre === 'EN_PROCESO' && (
+                    {isClosureColumn && (group.job_estado_cierre === 'EN_PROCESO' || group.job_estado_cierre === 'PARCIAL') && (
                       <div className="mt-1">
                         <button
                           onClick={() => setClosingJobId(group.job_id)}
@@ -817,7 +817,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           </button>
                         )}
 
-                        {isClosureColumn && item.job_estado_cierre === 'EN_PROCESO' && (
+                        {isClosureColumn && (item.job_estado_cierre === 'EN_PROCESO' || item.job_estado_cierre === 'PARCIAL') && (
                           <button
                             type="button"
                             onClick={() => setClosingJobId(item.job_id)}
@@ -1257,6 +1257,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                                   className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
                                     j.estado_cierre === 'EN_PROCESO'
                                       ? 'bg-blue-100 text-blue-800'
+                                      : j.estado_cierre === 'PARCIAL'
+                                      ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
                                       : j.estado_cierre === 'COMPLETADO'
                                       ? 'bg-emerald-100 text-emerald-800'
                                       : 'bg-amber-100 text-amber-800'
@@ -1541,8 +1543,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   <span>Tiempo Job: {currentSelectedJob.duracion_texto || '—'}</span>
                 </span>
                 <span>•</span>
-                <span className="text-[11px] font-bold uppercase text-blue-800">
-                  {currentSelectedJob.estado_cierre}
+                <span className={`text-[11px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                  currentSelectedJob.estado_cierre === 'PARCIAL'
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                    : currentSelectedJob.estado_cierre === 'COMPLETADO'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {currentSelectedJob.estado_cierre === 'PARCIAL' ? 'PARCIAL (EN CURSO)' : currentSelectedJob.estado_cierre}
                 </span>
               </div>
             </div>
@@ -1563,7 +1571,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               <History className="w-3.5 h-3.5 text-slate-400" />
               <span>Auditoría</span>
             </button>
-            {currentSelectedJob.estado_cierre === 'EN_PROCESO' && (
+            {(currentSelectedJob.estado_cierre === 'EN_PROCESO' || currentSelectedJob.estado_cierre === 'PARCIAL') && (
               <button
                 onClick={() => setClosingJobId(currentSelectedJob.id)}
                 className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-xs transition-colors flex items-center space-x-1"
@@ -1861,8 +1869,13 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
                             <span>CON INCIDENCIAS ({j.piezas_con_excepcion})</span>
                           </span>
+                        ) : j.estado_cierre === 'PARCIAL' ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
+                            <Layers className="w-3.5 h-3.5 text-blue-600" />
+                            <span>PARCIAL (EN CURSO)</span>
+                          </span>
                         ) : (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                             <Clock className="w-3.5 h-3.5 text-blue-600" />
                             <span>EN PROCESO</span>
                           </span>
@@ -1882,8 +1895,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           <span>Imprimir QR</span>
                         </button>
 
-                        {/* If in process, show "Cerrar Lote Final" */}
-                        {j.estado_cierre === 'EN_PROCESO' && (
+                        {/* If in process or partial, show "Cerrar Lote Final" */}
+                        {(j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL') && (
                           <button
                             onClick={() => setClosingJobId(j.id)}
                             className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-sm inline-flex items-center space-x-1"
