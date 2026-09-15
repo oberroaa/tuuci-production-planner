@@ -19,7 +19,8 @@ import {
   Search,
   RotateCcw,
   Printer,
-  Barcode
+  Barcode,
+  GitMerge
 } from 'lucide-react';
 import { BatchCloseModal } from './BatchCloseModal';
 import { JobAuditModal } from './JobAuditModal';
@@ -121,7 +122,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const [reassigningPiece, setReassigningPiece] = useState<any | null>(null);
   const [printingJob, setPrintingJob] = useState<any | null>(null);
   const [loadingPrintJob, setLoadingPrintJob] = useState<boolean>(false);
-  const [jobFilter, setJobFilter] = useState<'ALL' | 'EN_PROCESO' | 'COMPLETADO' | 'COMPLETADO_CON_INCIDENCIAS'>('ALL');
+  const [jobFilter, setJobFilter] = useState<'ALL' | 'EN_PROCESO' | 'PARCIAL' | 'COMPLETADO' | 'COMPLETADO_CON_INCIDENCIAS'>('ALL');
 
   // Trigger thermal ticket print modal for a job from tracker
   const handleOpenPrintJob = async (jobItem: any) => {
@@ -329,7 +330,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
   // KPIs strictly scoped to routeJobs
   const totalJobsCount = routeJobs.length;
-  const inProgressJobsCount = routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL').length;
+  const inProgressJobsCount = routeJobs.filter((j) => j.estado_cierre === 'EN_PROCESO').length;
+  const partialJobsCount = routeJobs.filter((j) => j.estado_cierre === 'PARCIAL').length;
   const cleanCompletedJobsCount = routeJobs.filter((j) => j.estado_cierre === 'COMPLETADO').length;
   const exceptionJobsCount = routeJobs.filter((j) => j.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS').length;
 
@@ -1654,6 +1656,29 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         <button
           type="button"
           onClick={() => {
+            setJobFilter('PARCIAL');
+            if (viewMode !== 'JOBS') setViewMode('JOBS');
+          }}
+          className={`p-3.5 rounded-xl border shadow-sm flex items-center justify-between text-left transition-all hover:scale-[1.01] ${
+            viewMode === 'JOBS' && jobFilter === 'PARCIAL'
+              ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-300'
+              : 'bg-white border-slate-200/80 hover:border-indigo-300'
+          }`}
+        >
+          <div>
+            <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'PARCIAL' ? 'text-indigo-100' : 'text-indigo-500'}`}>
+              Parcial
+            </span>
+            <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'PARCIAL' ? 'text-white' : 'text-indigo-700'}`}>
+              {partialJobsCount}
+            </span>
+          </div>
+          <GitMerge className={`w-6 h-6 ${viewMode === 'JOBS' && jobFilter === 'PARCIAL' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
             setJobFilter('COMPLETADO');
             if (viewMode !== 'JOBS') setViewMode('JOBS');
           }}
@@ -1832,7 +1857,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               <Filter className="w-4 h-4 text-slate-400" />
               <span className="text-xs font-bold text-slate-700 uppercase">Filtrar por Estado:</span>
               <div className="flex items-center space-x-1">
-                {(['ALL', 'EN_PROCESO', 'COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS'] as const).map((st) => (
+                {(['ALL', 'EN_PROCESO', 'PARCIAL', 'COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS'] as const).map((st) => (
                   <button
                     key={st}
                     onClick={() => setJobFilter(st)}
@@ -1846,6 +1871,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       ? 'Todos'
                       : st === 'EN_PROCESO'
                       ? 'En Proceso'
+                      : st === 'PARCIAL'
+                      ? 'Parcial'
                       : st === 'COMPLETADO'
                       ? 'Completados'
                       : 'Con Incidencias'}
