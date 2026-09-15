@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Printer, CheckCircle, RefreshCw, Layers, Scissors, QrCode, AlertTriangle, Search, Check, AlertCircle, ExternalLink, X } from 'lucide-react';
+import { Camera, Printer, CheckCircle, RefreshCw, Layers, Scissors, AlertTriangle, Search, Check, AlertCircle, ExternalLink, X, Barcode } from 'lucide-react';
+import { Barcode128 } from '../common/Barcode128';
 
 interface CuttingStationProps {
   activeLine: string;
@@ -491,7 +492,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                   <div className="flex items-center space-x-2">
-                    <QrCode className="w-5 h-5 text-blue-600" />
+                    <Barcode className="w-5 h-5 text-blue-600" />
                     <div>
                       <div className="text-xs font-extrabold text-slate-800 mono">
                         {activeJob?.jobCode || printedLabels[0]?.split('-')[0]}
@@ -508,7 +509,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 <div className="p-3 bg-white border border-dashed border-slate-300 rounded-lg flex items-center justify-between shadow-sm">
                   <div className="flex items-center space-x-3 min-w-0">
                     <div className="w-12 h-12 bg-slate-100 border border-slate-200 rounded flex items-center justify-center text-slate-800 flex-shrink-0">
-                      <QrCode className="w-8 h-8" />
+                      <Barcode className="w-8 h-8 text-slate-800" />
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 mono truncate">
@@ -526,7 +527,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                     </div>
                   </div>
                   <div className="text-right text-[10px] text-slate-400 flex-shrink-0 pl-2">
-                    <div>Zebra / Térmica</div>
+                    <div>Código 128 / Zebra</div>
                     <div className="text-emerald-600 font-bold">✓ Generadas</div>
                   </div>
                 </div>
@@ -931,7 +932,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
-                    <span>Reimpresión de Etiquetas QR</span>
+                    <span>Impresión de Etiquetas (Código de Barras)</span>
                     <span className="font-mono text-blue-600 text-sm font-extrabold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       {reprintModalJob.job_code || reprintModalJob.jobCode}
                     </span>
@@ -955,41 +956,39 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
 
             {/* Printable container for window.print() and on-screen preview */}
             <div className="overflow-y-auto flex-1 pr-1 space-y-3" id="printable-qr-tickets">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between no-print">
                 <span>
-                  💡 Si la impresora Zebra o de tickets falló, verifica el papel y presiona{' '}
-                  <strong>&quot;Mandar a Imprimir&quot;</strong>.
+                  💡 Etiquetas con <strong>Código de Barras Code 128</strong> para escaneo con pistola láser/CCD e impresoras térmicas Zebra.
                 </span>
                 <span className="text-[11px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-300">
-                  Formato: 2x1" Térmica
+                  Formato: 2x1" / Code 128
                 </span>
               </div>
 
-              {/* Grid of thermal tickets */}
+              {/* Grid of thermal barcode tickets */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                {(reprintModalJob.piecesList || []).map((qrCode: string, idx: number) => (
+                {(reprintModalJob.piecesList || []).map((pieceCode: string, idx: number) => (
                   <div
                     key={idx}
-                    className="p-3 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 hover:bg-blue-50/40 transition-colors flex items-center space-x-3 text-left"
+                    className="thermal-ticket p-3 border-2 border-slate-300 rounded-xl bg-white flex flex-col items-center justify-between text-center space-y-2 shadow-2xs hover:border-blue-400 transition-colors"
                   >
-                    <div className="w-12 h-12 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-800 flex-shrink-0 shadow-2xs">
-                      <QrCode className="w-8 h-8 text-slate-800" />
+                    <div className="w-full flex items-center justify-between border-b border-slate-200 pb-1 text-[10px]">
+                      <span className="font-extrabold text-slate-900 tracking-wider">TUUCI</span>
+                      <span className="font-mono font-bold text-slate-600">
+                        PIEZA #{idx + 1} de {reprintModalJob.piecesList.length}
+                      </span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold text-slate-400">
-                          PIEZA #{idx + 1} de {reprintModalJob.piecesList.length}
-                        </span>
-                        <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-slate-200/70 text-slate-700">
-                          TUUCI
-                        </span>
-                      </div>
-                      <div className="text-xs font-mono font-extrabold text-blue-900 truncate mt-0.5">
-                        {qrCode}
-                      </div>
-                      <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                        {reprintModalJob.modelo || 'Lote de Producción'}
-                      </div>
+
+                    {/* Industrial Code 128 Linear Barcode readable by standard laser scanner guns */}
+                    <div className="py-1 flex justify-center w-full overflow-hidden bg-white">
+                      <Barcode128 value={pieceCode} height={42} barWidth={1.7} showText={true} />
+                    </div>
+
+                    <div className="w-full text-[10px] text-slate-600 truncate border-t border-slate-100 pt-1 flex items-center justify-between">
+                      <span className="truncate font-medium">{reprintModalJob.modelo || 'Lote de Producción'}</span>
+                      <span className="font-mono font-bold text-slate-700 ml-1 flex-shrink-0">
+                        {reprintModalJob.job_code || reprintModalJob.jobCode}
+                      </span>
                     </div>
                   </div>
                 ))}

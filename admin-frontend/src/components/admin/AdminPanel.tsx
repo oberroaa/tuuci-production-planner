@@ -898,13 +898,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   };
 
   const handleSetProcessAsClosure = async (processId: number) => {
-    // Optimistic local update: mark this process as closure and LOTE, clear closure on other steps in route
+    // Optimistic local update: mark this process as closure, clear closure on other steps in route (keep current modo_trabajo)
     setCatalogs((prev) => ({
       ...prev,
       procesos: prev.procesos.map((p) => {
         if (p.ruta_id === selectedRutaId) {
           if (p.id === processId) {
-            return { ...p, es_proceso_cierre: 1, modo_trabajo: 'LOTE' };
+            return { ...p, es_proceso_cierre: 1 };
           } else {
             return { ...p, es_proceso_cierre: 0 };
           }
@@ -915,7 +915,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
     if (editingProcessId === processId) {
       setEditingProcessEsCierre(true);
-      setEditingProcessModo('LOTE');
     }
 
     try {
@@ -924,7 +923,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
       });
       const data = await res.json();
       if (res.ok) {
-        showToast('Estación designada como Cierre de Lote en Modo LOTE', 'success');
+        showToast('Estación designada como Cierre de Ruta', 'success');
         await loadCatalogs();
         onCatalogUpdated();
       } else {
@@ -989,12 +988,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   };
 
   const handleToggleProcessModo = async (procesoId: number) => {
-    const targetProc = catalogs.procesos.find((p) => p.id === procesoId);
-    if (targetProc && targetProc.es_proceso_cierre === 1 && targetProc.modo_trabajo === 'LOTE') {
-      showToast('La estación de cierre de lote debe operar obligatoriamente en Modo LOTE.', 'warning');
-      return;
-    }
-
     // Optimistic update
     setCatalogs((prev) => ({
       ...prev,
@@ -1429,23 +1422,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             <button
                               type="button"
                               onClick={() => handleToggleProcessModo(p.id)}
-                              disabled={p.es_proceso_cierre === 1}
-                              className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all shadow-xs border ${
-                                p.es_proceso_cierre === 1
-                                  ? 'bg-purple-100 text-purple-900 border-purple-300 cursor-not-allowed opacity-90'
-                                  : p.modo_trabajo === 'LOTE'
-                                  ? 'bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100 hover:border-purple-400 cursor-pointer'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer'
+                              className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all shadow-xs border cursor-pointer ${
+                                p.modo_trabajo === 'LOTE'
+                                  ? 'bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100 hover:border-purple-400'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
                               }`}
                               title={
-                                p.es_proceso_cierre === 1
-                                  ? 'Modo LOTE obligatorio (Estación de Cierre de Lote)'
-                                  : p.modo_trabajo === 'LOTE'
-                                  ? 'Modo LOTE (Job Completo) - Haz clic para cambiar a INDIVIDUAL'
-                                  : 'Modo INDIVIDUAL (Pieza por pieza) - Haz clic para cambiar a LOTE'
+                                p.modo_trabajo === 'LOTE'
+                                  ? 'Modo LOTE (Job Completo) - Haz clic para cambiar a EA (Por pieza)'
+                                  : 'Modo EA (Por pieza) - Haz clic para cambiar a LOTE'
                               }
                             >
-                              <span>{p.modo_trabajo}</span>
+                              <span>{p.modo_trabajo === 'LOTE' ? 'LOTE' : 'EA'}</span>
                             </button>
                           </td>
                           {/* Tiempo de Demora (Editable inline) */}
@@ -1643,23 +1631,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   <div className="space-y-1.5">
                     <label className="font-semibold text-slate-600">Modo de Trabajo</label>
                     <select
-                      value={editingProcessEsCierre ? 'LOTE' : editingProcessModo}
-                      disabled={editingProcessEsCierre}
+                      value={editingProcessModo}
                       onChange={(e) => setEditingProcessModo(e.target.value as 'LOTE' | 'INDIVIDUAL')}
-                      className={`w-full border rounded-lg p-2.5 font-medium focus:outline-none focus:ring-1 ${
-                        editingProcessEsCierre
-                          ? 'bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed'
-                          : 'bg-slate-50 border-slate-300 text-slate-800 focus:ring-amber-500'
-                      }`}
+                      className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg p-2.5 font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
                     >
-                      <option value="INDIVIDUAL">INDIVIDUAL (Pieza por pieza con escáner)</option>
+                      <option value="INDIVIDUAL">EA (Pieza por pieza con escáner)</option>
                       <option value="LOTE">LOTE (Todas las piezas del Job a la vez, ej. Corte)</option>
                     </select>
-                    {editingProcessEsCierre && (
-                      <p className="text-[11px] text-purple-700 font-medium">
-                        * Fijado en Modo LOTE obligatoriamente por ser estación de cierre.
-                      </p>
-                    )}
                   </div>
 
                   {/* Delay time in seconds */}
@@ -1688,17 +1666,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       <input
                         type="checkbox"
                         checked={editingProcessEsCierre}
-                        onChange={(e) => {
-                          const isChecked = e.target.checked;
-                          setEditingProcessEsCierre(isChecked);
-                          if (isChecked) setEditingProcessModo('LOTE');
-                        }}
+                        onChange={(e) => setEditingProcessEsCierre(e.target.checked)}
                         className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mt-0.5"
                       />
                       <div>
                         <span className="font-bold text-slate-800">Estación de Cierre de Lote</span>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Al cerrar esta estación, el sistema aplica la lógica de reconciliación de piezas faltantes y cierra la orden completa en modo LOTE.
+                          Al cerrar esta estación, el sistema aplica la lógica de reconciliación de piezas y cierre de la orden (puede operar en modo EA o LOTE).
                         </p>
                       </div>
                     </label>
@@ -1772,23 +1746,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   <div className="space-y-1.5">
                     <label className="font-semibold text-slate-600">Modo de Trabajo</label>
                     <select
-                      value={newStepEsCierre ? 'LOTE' : newStepModo}
-                      disabled={newStepEsCierre}
+                      value={newStepModo}
                       onChange={(e) => setNewStepModo(e.target.value as 'LOTE' | 'INDIVIDUAL')}
-                      className={`w-full border rounded-lg p-2.5 font-medium focus:outline-none focus:ring-1 ${
-                        newStepEsCierre
-                          ? 'bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed'
-                          : 'bg-slate-50 border-slate-300 text-slate-800 focus:ring-blue-500'
-                      }`}
+                      className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg p-2.5 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="INDIVIDUAL">INDIVIDUAL (Pieza por pieza con escáner)</option>
+                      <option value="INDIVIDUAL">EA (Pieza por pieza con escáner)</option>
                       <option value="LOTE">LOTE (Todas las piezas del Job a la vez, ej. Corte)</option>
                     </select>
-                    {newStepEsCierre && (
-                      <p className="text-[11px] text-purple-700 font-medium">
-                        * Fijado en Modo LOTE obligatoriamente por ser estación de cierre.
-                      </p>
-                    )}
                   </div>
 
                   {/* Delay time in seconds */}
@@ -1817,17 +1781,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       <input
                         type="checkbox"
                         checked={newStepEsCierre}
-                        onChange={(e) => {
-                          const isChecked = e.target.checked;
-                          setNewStepEsCierre(isChecked);
-                          if (isChecked) setNewStepModo('LOTE');
-                        }}
+                        onChange={(e) => setNewStepEsCierre(e.target.checked)}
                         className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mt-0.5"
                       />
                       <div>
-                        <span className="font-bold text-slate-800">Marcar como Estación de Cierre de Lote</span>
+                        <span className="font-bold text-slate-800">Marcar como Estación de Cierre</span>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Al cerrar este paso, se ejecutará el cierre completo del lote en modo LOTE y la reconciliación forense.
+                          Al alcanzar este paso, se habilitará el cierre de la orden y la reconciliación forense (puede operar en modo EA o LOTE).
                         </p>
                       </div>
                     </label>

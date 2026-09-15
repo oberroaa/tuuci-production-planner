@@ -707,7 +707,7 @@ export class StateEngine {
    */
   static async reassignPieceProcess({ piezaId, targetProcesoId, usuarioId = null, observacion = '' }) {
     const piezaRes = await query(`
-      SELECT p.id, p.job_id, p.codigo_qr_unico, j.job_code, j.ruta_id
+      SELECT p.id, p.job_id, p.codigo_qr_unico, j.job_code, j.ruta_id, j.estado_cierre
       FROM piezas p
       JOIN jobs j ON p.job_id = j.id
       WHERE p.id = $1
@@ -732,8 +732,10 @@ export class StateEngine {
 
     const stateEsperandoRes = await query("SELECT id FROM estados WHERE nombre = 'ESPERANDO'");
     const stateInactivoRes = await query("SELECT id FROM estados WHERE nombre = 'INACTIVO'");
+    const stateTerminadaRes = await query("SELECT id FROM estados WHERE nombre = 'TERMINADA'");
     const stateEsperando = stateEsperandoRes.rows[0];
     const stateInactivo = stateInactivoRes.rows[0];
+    const stateTerminada = stateTerminadaRes.rows[0];
 
     const client = await pool.connect();
     try {
@@ -742,7 +744,7 @@ export class StateEngine {
 
       // Find current active/last step for this piece
       const currentActiveStepRes = await client.query(`
-        SELECT pp.id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, pr.orden, tp.nombre as tipo_nombre
+        SELECT pp.id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, pr.orden, pr.es_proceso_cierre, tp.nombre as tipo_nombre
         FROM pieza_procesos pp
         JOIN procesos pr ON pp.proceso_id = pr.id
         JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
@@ -753,7 +755,33 @@ export class StateEngine {
 
       const currentStep = currentActiveStepRes.rows[0];
 
-      // Reset subsequent steps after target process to INACTIVO
+      // Prevent moving if piece is in closure station and TERMINADA, or if the Job is already completed
+      const maxOrdenRes = await client.query('SELECT MAX(orden) as max_orden FROM procesos WHERE ruta_id = $1', [pieza.ruta_id]);
+      const maxOrden = maxOrdenRes.rows[0]?.max_orden;
+      const isClosureStep = currentStep && (currentStep.es_proceso_cierre === 1 || currentStep.orden === maxOrden);
+
+      if (
+        (isClosureStep && currentStep.estado_nombre === 'TERMINADA') ||
+        pieza.estado_cierre === 'COMPLETADO' ||
+        pieza.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS'
+      ) {
+        throw new Error('No se puede mover una pieza que ya ha finalizado en la estación de cierre o cuyo Job ya fue completado.');
+      }
+
+      // 1. Previous steps before target process (orden < targetProc.orden):
+      // Must be set to TERMINADA with fecha_fin recorded, so the piece does not remain active behind in earlier stations!
+      await client.query(`
+        UPDATE pieza_procesos
+        SET estado_id = $1, fecha_fin = COALESCE(fecha_fin, $2)
+        WHERE pieza_id = $3
+          AND proceso_id IN (
+            SELECT id FROM procesos WHERE ruta_id = $4 AND orden < $5
+          )
+          AND estado_id != $1
+      `, [stateTerminada.id, now, pieza.id, pieza.ruta_id, targetProc.orden]);
+
+      // 2. Subsequent steps after target process (orden > targetProc.orden):
+      // Reset to INACTIVO with fecha_fin = NULL
       await client.query(`
         UPDATE pieza_procesos
         SET estado_id = $1, fecha_fin = NULL
@@ -763,7 +791,8 @@ export class StateEngine {
           )
       `, [stateInactivo.id, pieza.id, pieza.ruta_id, targetProc.orden]);
 
-      // Set target process to ESPERANDO
+      // 3. Target process:
+      // Set to ESPERANDO with fecha_inicio = now, fecha_fin = NULL
       const targetPPRes = await client.query(`
         SELECT id, estado_id, fecha_inicio FROM pieza_procesos
         WHERE pieza_id = $1 AND proceso_id = $2
@@ -788,8 +817,10 @@ export class StateEngine {
 
       // Record audit event in evento_estados
       const fromName = currentStep ? currentStep.tipo_nombre : 'Desconocido';
+      const isMovingForward = currentStep && targetProc.orden > currentStep.orden;
+      const actionText = isMovingForward ? 'avanzado a' : 'regresado a';
       const reasonText = observacion ? `Motivo: ${observacion.trim()}` : 'Ajuste operativo / Reproceso';
-      const eventObs = `Movimiento manual de estación: de [${fromName}] regresado a [${targetProc.tipo_nombre}]. ${reasonText}`.trim();
+      const eventObs = `Movimiento manual de estación: de [${fromName}] ${actionText} [${targetProc.tipo_nombre}]. ${reasonText}`.trim();
 
       await client.query(`
         INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
@@ -800,10 +831,13 @@ export class StateEngine {
 
       return {
         success: true,
+        piezaId: pieza.id,
         pieceQr: pieza.codigo_qr_unico,
         jobCode: pieza.job_code,
         targetProcess: targetProc.tipo_nombre,
-        targetOrden: targetProc.orden
+        targetOrden: targetProc.orden,
+        nuevoEstado: 'ESPERANDO',
+        fechaInicio: now
       };
     } catch (err) {
       await client.query('ROLLBACK');

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles, Barcode } from 'lucide-react';
 
 interface ScannerSimulatorProps {
   onScanSuccess: () => void;
@@ -16,9 +16,15 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   const [scanning, setScanning] = useState(false);
   const [cooldown, setCooldown] = useState<number>(0);
   const [configCooldownSecs, setConfigCooldownSecs] = useState<number>(5);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus barcode input on load so physical barcode scanner gun is ready instantly
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   // Load configured cooldown duration from server
-  React.useEffect(() => {
+  useEffect(() => {
     fetch('/api/config')
       .then((r) => r.json())
       .then((data) => {
@@ -30,7 +36,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   }, []);
 
   // Timer countdown for cooldown
-  React.useEffect(() => {
+  useEffect(() => {
     if (cooldown <= 0) return;
     const interval = setInterval(() => {
       setCooldown((prev) => Math.max(0, prev - 1));
@@ -104,6 +110,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     } finally {
       setScanning(false);
       setPieceQr('');
+      setTimeout(() => inputRef.current?.focus(), 60);
     }
   };
 
@@ -120,6 +127,13 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             Detección inteligente de posición por código de pieza • 1er Escaneo: <strong className="text-amber-600">EN PROCESO</strong> • 2do Escaneo: <strong className="text-emerald-700">TERMINADA</strong> &amp; pasa siguiente a <strong className="text-blue-600">ESPERANDO</strong>
           </p>
         </div>
+
+        <div className="flex items-center space-x-2">
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span>EN LÍNEA (WEBSOCKET)</span>
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -128,7 +142,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           {/* Top Sensor Bezel */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="flex items-center space-x-2">
-              <Scan className="w-5 h-5 text-blue-400" />
+              <Barcode className="w-5 h-5 text-blue-400" />
               <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">TUUCI SCANNER WIRELESS</span>
             </div>
             <div className="flex items-center space-x-1.5">
@@ -179,7 +193,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             </div>
           </div>
 
-          {/* Scan Barcode Input */}
+          {/* Scan Barcode Input (Compatible with USB / Bluetooth Handheld Laser Barcode Scanners) */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -188,13 +202,20 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             className="space-y-3 pt-2"
           >
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Escanear Código QR de la Pieza
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Escanear Código de Barras
+                </label>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800">
+                  Listo para Pistola Láser
+                </span>
+              </div>
               <div className="flex space-x-2">
                 <input
+                  ref={inputRef}
+                  autoFocus
                   type="text"
-                  placeholder="ej. JOB0279087-01"
+                  placeholder="Apunta la pistola láser al código impreso o escribe ej. JOB0279087-01"
                   value={pieceQr}
                   disabled={cooldown > 0}
                   onChange={(e) => setPieceQr(e.target.value)}
@@ -262,7 +283,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           ) : (
             <div className="py-16 text-center text-slate-400 space-y-2">
               <Scan className="w-8 h-8 mx-auto stroke-1 opacity-50" />
-              <p className="text-xs font-medium">Usa el gatillo para disparar un evento de escaneo.</p>
+              <p className="text-xs font-medium">Apunta y dispara la pistola lectora o usa el gatillo para simular.</p>
             </div>
           )}
         </div>

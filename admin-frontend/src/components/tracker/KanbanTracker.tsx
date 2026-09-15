@@ -18,11 +18,13 @@ import {
   Target,
   Search,
   RotateCcw,
-  Printer
+  Printer,
+  Barcode
 } from 'lucide-react';
 import { BatchCloseModal } from './BatchCloseModal';
 import { JobAuditModal } from './JobAuditModal';
 import { ReassignPieceModal } from './ReassignPieceModal';
+import { Barcode128 } from '../common/Barcode128';
 
 interface KanbanTrackerProps {
   activeLine: string;
@@ -78,6 +80,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const [selectedItemCode, setSelectedItemCode] = useState<string>('');
   const [selectedJobPieces, setSelectedJobPieces] = useState<any[]>([]);
   const [loadingJobPieces, setLoadingJobPieces] = useState(false);
+
+  // Filter toggle: Mostrar piezas terminadas (por defecto false)
+  const [showTerminadas, setShowTerminadas] = useState<boolean>(false);
+
+  // Temporary column display mode overrides (per column ID: 'LOTE' | 'INDIVIDUAL')
+  // Resets on reload/F5 to respect default database route configuration
+  const [columnViewOverrides, setColumnViewOverrides] = useState<Record<number, 'LOTE' | 'INDIVIDUAL'>>({});
+
+  const handleToggleColumnMode = (colId: number, defaultMode: string) => {
+    setColumnViewOverrides((prev) => {
+      const current = prev[colId] || defaultMode;
+      const nextMode = current === 'LOTE' ? 'INDIVIDUAL' : 'LOTE';
+      return { ...prev, [colId]: nextMode };
+    });
+  };
 
   // Modals state
   const [closingJobId, setClosingJobId] = useState<number | null>(null);
@@ -432,6 +449,11 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
   // Filter items in Kanban based on Item, Job, Piece, and direct text search query
   const visibleItems = kanbanData.items.filter((item) => {
+    // 0. Filter completed pieces: by default (false), hide cards with estado 'TERMINADA'
+    if (!showTerminadas && (item.estado_nombre || '').toUpperCase() === 'TERMINADA') {
+      return false;
+    }
+
     // 1. Direct explicit piece selection
     if (selectedPieceCode && item.codigo_qr_unico !== selectedPieceCode) {
       return false;
@@ -491,11 +513,12 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const renderColumn = (col: any, idx: number, allCols: any[], itemsList: any[]) => {
     const columnItems = itemsList.filter((item) => item.proceso_id === col.id);
     const isClosureColumn = col.es_proceso_cierre === 1 || (allCols.every((p) => p.es_proceso_cierre !== 1) && idx === allCols.length - 1);
-    const isLoteColumn = col.modo_trabajo === 'LOTE';
+    const effectiveMode = columnViewOverrides[col.id] || col.modo_trabajo;
+    const isLoteColumn = effectiveMode === 'LOTE';
 
     // Group items by job if the column operates in LOTE mode
     const groupedLoteItems = isLoteColumn
-      ? Object.values(
+      ? (Object.values(
           columnItems.reduce((acc: any, item: any) => {
             const key = item.job_id || item.codigo_job;
             if (!acc[key]) {
@@ -514,7 +537,38 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             acc[key].items.push(item);
             return acc;
           }, {})
-        )
+        ) as any[]).map((group: any) => {
+          const hasEnProceso = group.items.some((it: any) => it.estado_nombre === 'EN PROCESO');
+          const hasEsperando = group.items.some((it: any) => it.estado_nombre === 'ESPERANDO');
+          const allTerminada = group.items.length > 0 && group.items.every((it: any) => it.estado_nombre === 'TERMINADA');
+          const allInactiva = group.items.length > 0 && group.items.every((it: any) => it.estado_nombre === 'INACTIVA');
+
+          let groupEstado = group.estado_nombre;
+          let groupTiempo = group.tiempo_estacion_texto;
+
+          if (hasEnProceso) {
+            groupEstado = 'EN PROCESO';
+            const activeItem = group.items.find((it: any) => it.estado_nombre === 'EN PROCESO');
+            groupTiempo = activeItem?.tiempo_estacion_texto || groupTiempo;
+          } else if (hasEsperando) {
+            groupEstado = 'ESPERANDO';
+            const waitingItem = group.items.find((it: any) => it.estado_nombre === 'ESPERANDO');
+            groupTiempo = waitingItem?.tiempo_estacion_texto || groupTiempo;
+          } else if (allTerminada) {
+            groupEstado = 'TERMINADA';
+            const finishedItem = group.items.find((it: any) => it.tiempo_estacion_texto && it.tiempo_estacion_texto !== '—');
+            groupTiempo = finishedItem?.tiempo_estacion_texto || '—';
+          } else if (allInactiva) {
+            groupEstado = 'INACTIVA';
+            groupTiempo = '—';
+          }
+
+          return {
+            ...group,
+            estado_nombre: groupEstado,
+            tiempo_estacion_texto: groupTiempo
+          };
+        })
       : [];
 
     return (
@@ -544,25 +598,29 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 CIERRE
               </span>
             )}
-            <span
-              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+            <button
+              type="button"
+              onClick={() => handleToggleColumnMode(col.id, col.modo_trabajo)}
+              title={`Modo actual: ${isLoteColumn ? 'LOTE' : 'EA (Pieza por pieza)'}. Clic para cambiar vista a ${isLoteColumn ? 'EA' : 'LOTE'}`}
+              className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase transition-all flex items-center space-x-1 cursor-pointer select-none hover:opacity-85 active:scale-95 border ${
                 isLoteColumn
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'bg-emerald-100 text-emerald-700'
+                  ? 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200'
+                  : 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200'
               }`}
             >
-              {col.modo_trabajo}
-            </span>
+              <span>{isLoteColumn ? 'LOTE' : 'EA'}</span>
+              <span className="text-[8px] opacity-70">⇄</span>
+            </button>
           </div>
         </div>
 
         {/* Column Sub-badge with Count */}
         <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 bg-white">
-          <span>{isLoteColumn ? 'Jobs activos:' : 'Piezas activas:'}</span>
+          <span>{isLoteColumn ? 'Jobs activos:' : 'Piezas (EA):'}</span>
           <span className="font-bold text-slate-800 font-mono">
             {isLoteColumn
-              ? `${groupedLoteItems.length} jobs (${columnItems.length} piezas)`
-              : columnItems.length}
+              ? `${groupedLoteItems.length} jobs (${columnItems.length} EA)`
+              : `${columnItems.length} EA`}
           </span>
         </div>
 
@@ -631,6 +689,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase ${
                           group.estado_nombre === 'EN PROCESO'
                             ? 'bg-amber-100 text-amber-800'
+                            : group.estado_nombre === 'TERMINADA'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
@@ -653,7 +713,11 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
                     <div
                       className={`w-full h-1 rounded-full ${
-                        group.estado_nombre === 'EN PROCESO' ? 'bg-purple-500' : 'bg-slate-300'
+                        group.estado_nombre === 'EN PROCESO'
+                          ? 'bg-purple-500'
+                          : group.estado_nombre === 'TERMINADA'
+                          ? 'bg-emerald-400'
+                          : 'bg-slate-300'
                       }`}
                     ></div>
                   </div>
@@ -668,6 +732,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             columnItems.length > 0 ? (
               columnItems.map((item) => {
                 const isTargetPiece = selectedPieceCode && item.codigo_qr_unico === selectedPieceCode;
+                const isClosure = isClosureColumn || col.es_proceso_cierre === 1;
+                const isTerminadaInClosure = isClosure && item.estado_nombre === 'TERMINADA';
+                const isJobClosed = item.job_estado_cierre === 'COMPLETADO' || item.job_estado_cierre === 'COMPLETADO_CON_INCIDENCIAS';
+                const canMovePiece = !isTerminadaInClosure && !isJobClosed && item.cierre_excepcion !== 1;
 
                 return (
                   <div
@@ -692,15 +760,17 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       </div>
 
                       <div className="flex items-center space-x-1 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setReassigningPiece(item)}
-                          className="py-0.5 px-2 rounded-md bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 text-[10px] font-bold transition-colors flex items-center space-x-1 border border-slate-200 shadow-2xs"
-                          title="Mover o regresar pieza a otro proceso (reproceso o corrección)"
-                        >
-                          <RotateCcw className="w-3 h-3 text-amber-600" />
-                          <span>Mover</span>
-                        </button>
+                        {canMovePiece && (
+                          <button
+                            type="button"
+                            onClick={() => setReassigningPiece({ ...item, es_proceso_cierre: col.es_proceso_cierre || (isClosureColumn ? 1 : 0) })}
+                            className="py-0.5 px-2 rounded-md bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 text-[10px] font-bold transition-colors flex items-center space-x-1 border border-slate-200 shadow-2xs"
+                            title="Mover o regresar pieza a otro proceso (reproceso o corrección)"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-600" />
+                            <span>Mover</span>
+                          </button>
+                        )}
 
                         {isClosureColumn && item.job_estado_cierre === 'EN_PROCESO' && (
                           <button
@@ -1270,6 +1340,24 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               <span>Limpiar Filtro</span>
             </button>
           )}
+
+          {/* Checkbox: Mostrar piezas terminadas (por defecto false) */}
+          <label className="inline-flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-300 shadow-2xs hover:bg-slate-50 transition-colors select-none">
+            <input
+              type="checkbox"
+              checked={showTerminadas}
+              onChange={(e) => setShowTerminadas(e.target.checked)}
+              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 transition cursor-pointer"
+            />
+            <span className="flex items-center space-x-1.5">
+              <span>Mostrar piezas terminadas</span>
+              {showTerminadas && (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
+                  ACTIVO
+                </span>
+              )}
+            </span>
+          </label>
         </div>
 
         {/* Active Filter Summary Tag */}
@@ -1829,7 +1917,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
-                    <span>Impresión de Etiquetas QR</span>
+                    <span>Impresión de Etiquetas (Código de Barras)</span>
                     <span className="font-mono text-blue-600 text-sm font-extrabold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       {printingJob.job_code || printingJob.codigo_job || printingJob.jobCode}
                     </span>
@@ -1853,40 +1941,39 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
             {/* Printable ticket section for Zebra / window.print() */}
             <div className="overflow-y-auto flex-1 pr-1 space-y-3" id="printable-qr-tickets">
-              <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+              <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between no-print">
                 <span>
-                  🖨️ Etiquetas generadas para este Job. Puedes mandar a imprimir directamente a tu impresora térmica Zebra.
+                  🖨️ Etiquetas con <strong>Código de Barras Code 128</strong> para pistola lectora láser/CCD e impresoras Zebra térmicas.
                 </span>
                 <span className="text-[11px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-blue-300">
-                  Zebra 2x1"
+                  Formato: 2x1" / Code 128
                 </span>
               </div>
 
               {/* Individual Piece Tickets Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                {(printingJob.piecesList || []).map((qrCode: string, idx: number) => (
+                {(printingJob.piecesList || []).map((pieceCode: string, idx: number) => (
                   <div
                     key={idx}
-                    className="p-3 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 hover:bg-blue-50/40 transition-colors flex items-center space-x-3 text-left"
+                    className="thermal-ticket p-3 border-2 border-slate-300 rounded-xl bg-white flex flex-col items-center justify-between text-center space-y-2 shadow-2xs hover:border-blue-400 transition-colors"
                   >
-                    <div className="w-12 h-12 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-800 flex-shrink-0 shadow-2xs">
-                      <QrCode className="w-8 h-8 text-slate-800" />
+                    <div className="w-full flex items-center justify-between border-b border-slate-200 pb-1 text-[10px]">
+                      <span className="font-extrabold text-slate-900 tracking-wider">TUUCI</span>
+                      <span className="font-mono font-bold text-slate-600">
+                        PIEZA #{idx + 1} de {printingJob.piecesList.length}
+                      </span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold text-slate-400">
-                          PIEZA #{idx + 1} de {printingJob.piecesList.length}
-                        </span>
-                        <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-slate-200/70 text-slate-700">
-                          TUUCI
-                        </span>
-                      </div>
-                      <div className="text-xs font-mono font-extrabold text-blue-900 truncate mt-0.5">
-                        {qrCode}
-                      </div>
-                      <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                        {printingJob.modelo || 'Lote de Producción'}
-                      </div>
+
+                    {/* Industrial Code 128 Linear Barcode */}
+                    <div className="py-1 flex justify-center w-full overflow-hidden bg-white">
+                      <Barcode128 value={pieceCode} height={42} barWidth={1.7} showText={true} />
+                    </div>
+
+                    <div className="w-full text-[10px] text-slate-600 truncate border-t border-slate-100 pt-1 flex items-center justify-between">
+                      <span className="truncate font-medium">{printingJob.modelo || 'Lote de Producción'}</span>
+                      <span className="font-mono font-bold text-slate-700 ml-1 flex-shrink-0">
+                        {printingJob.job_code || printingJob.codigo_job || printingJob.jobCode}
+                      </span>
                     </div>
                   </div>
                 ))}

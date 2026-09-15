@@ -16,6 +16,31 @@ if (env) {
 // Ensure DB tables & catalogs exist
 await initDb();
 
+// One-time reconciliation cleanup:
+// If a piece has multiple active (ESPERANDO / EN PROCESO) steps because it was moved forward earlier,
+// mark previous steps before its highest active step as TERMINADA so it doesn't appear duplicated.
+try {
+  await db.prepare(`
+    UPDATE pieza_procesos
+    SET estado_id = (SELECT id FROM estados WHERE nombre = 'TERMINADA'),
+        fecha_fin = COALESCE(fecha_fin, NOW())
+    WHERE id IN (
+      SELECT pp_prev.id
+      FROM pieza_procesos pp_prev
+      JOIN procesos pr_prev ON pp_prev.proceso_id = pr_prev.id
+      JOIN pieza_procesos pp_act ON pp_prev.pieza_id = pp_act.pieza_id
+      JOIN procesos pr_act ON pp_act.proceso_id = pr_act.id
+      JOIN estados e_act ON pp_act.estado_id = e_act.id
+      JOIN estados e_prev ON pp_prev.estado_id = e_prev.id
+      WHERE e_act.nombre IN ('EN PROCESO', 'ESPERANDO')
+        AND e_prev.nombre IN ('EN PROCESO', 'ESPERANDO')
+        AND pr_prev.orden < pr_act.orden
+    )
+  `).run();
+} catch (cleanupErr) {
+  console.warn('Reconciliation cleanup note:', cleanupErr.message);
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -267,7 +292,7 @@ app.post('/api/catalogs/procesos', async (req, res) => {
     const conflicting = existingSteps.filter((p) => p.orden >= targetOrder);
 
     let insertedId;
-    const finalModo = esCierre === 1 ? 'LOTE' : modoTrabajo;
+    const finalModo = modoTrabajo || 'INDIVIDUAL';
     const tx = db.transaction(async (txDb) => {
       if (esCierre === 1) {
         await txDb.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(targetRutaId);
@@ -322,7 +347,7 @@ app.delete('/api/catalogs/procesos/:id', async (req, res) => {
 
       if ((current.es_proceso_cierre === 1 || current.es_proceso_cierre === true) && remaining.length > 0) {
         const lastStep = remaining[remaining.length - 1];
-        await txDb.prepare("UPDATE procesos SET es_proceso_cierre = 1, modo_trabajo = 'LOTE' WHERE id = ?").run(lastStep.id);
+        await txDb.prepare("UPDATE procesos SET es_proceso_cierre = 1 WHERE id = ?").run(lastStep.id);
       }
     });
     await tx();
@@ -345,10 +370,7 @@ app.put('/api/catalogs/procesos/:id', async (req, res) => {
     const orden = req.body.orden !== undefined ? parseInt(req.body.orden, 10) : current.orden;
     const esCierre = req.body.esProcesoCierre !== undefined ? (req.body.esProcesoCierre ? 1 : 0) : current.es_proceso_cierre;
     const tiempoDemoraSegundos = req.body.tiempoDemoraSegundos !== undefined ? Math.max(0, parseInt(req.body.tiempoDemoraSegundos, 10) || 0) : (current.tiempo_demora_segundos || 0);
-    let modoTrabajo = req.body.modoTrabajo !== undefined ? req.body.modoTrabajo : current.modo_trabajo;
-    if (esCierre === 1) {
-      modoTrabajo = 'LOTE';
-    }
+    const modoTrabajo = req.body.modoTrabajo !== undefined ? req.body.modoTrabajo : current.modo_trabajo;
 
     const tx = db.transaction(async (txDb) => {
       if (esCierre === 1) {
@@ -403,12 +425,12 @@ app.post('/api/catalogs/procesos/:id/set-cierre', async (req, res) => {
 
     const tx = db.transaction(async (txDb) => {
       await txDb.prepare('UPDATE procesos SET es_proceso_cierre = 0 WHERE ruta_id = ?').run(current.ruta_id);
-      await txDb.prepare("UPDATE procesos SET es_proceso_cierre = 1, modo_trabajo = 'LOTE' WHERE id = ?").run(id);
+      await txDb.prepare("UPDATE procesos SET es_proceso_cierre = 1 WHERE id = ?").run(id);
     });
     await tx();
 
     notifyDashboardUpdate();
-    res.json({ success: true, id: current.id, rutaId: current.ruta_id, modoTrabajo: 'LOTE' });
+    res.json({ success: true, id: current.id, rutaId: current.ruta_id, modoTrabajo: current.modo_trabajo });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -441,9 +463,6 @@ app.patch('/api/catalogs/procesos/:id/toggle-mode', async (req, res) => {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
     if (!current) return res.status(404).json({ error: 'Paso de proceso no encontrado' });
-    if ((current.es_proceso_cierre === 1 || current.es_proceso_cierre === true) && current.modo_trabajo === 'LOTE') {
-      return res.status(400).json({ error: 'La estación designada como Cierre de Lote debe operar obligatoriamente en modo LOTE.' });
-    }
     const newMode = current.modo_trabajo === 'LOTE' ? 'INDIVIDUAL' : 'LOTE';
     await db.prepare('UPDATE procesos SET modo_trabajo = ? WHERE id = ?').run(newMode, id);
     notifyDashboardUpdate();
@@ -1229,6 +1248,7 @@ app.get('/api/kanban', async (req, res) => {
             pp.id as pieza_proceso_id,
             pp.proceso_id,
             COALESCE(pp.fecha_inicio, p.created_at, j.created_at) as fecha_inicio,
+            pp.fecha_fin,
             p.id as pieza_id,
             p.codigo_qr_unico,
             p.cierre_excepcion,
@@ -1262,6 +1282,7 @@ app.get('/api/kanban', async (req, res) => {
             pp.id as pieza_proceso_id,
             pp.proceso_id,
             COALESCE(pp.fecha_inicio, p.created_at, j.created_at) as fecha_inicio,
+            pp.fecha_fin,
             p.id as pieza_id,
             p.codigo_qr_unico,
             p.cierre_excepcion,
@@ -1297,6 +1318,7 @@ app.get('/api/kanban', async (req, res) => {
             pp.id as pieza_proceso_id,
             pp.proceso_id,
             COALESCE(pp.fecha_inicio, p.created_at, j.created_at) as fecha_inicio,
+            pp.fecha_fin,
             p.id as pieza_id,
             p.codigo_qr_unico,
             p.cierre_excepcion,
@@ -1330,6 +1352,7 @@ app.get('/api/kanban', async (req, res) => {
             pp.id as pieza_proceso_id,
             pp.proceso_id,
             COALESCE(pp.fecha_inicio, p.created_at, j.created_at) as fecha_inicio,
+            pp.fecha_fin,
             p.id as pieza_id,
             p.codigo_qr_unico,
             p.cierre_excepcion,
@@ -1364,8 +1387,25 @@ app.get('/api/kanban', async (req, res) => {
     const now = new Date();
 
     const items = rawItems.map((item) => {
-      const itemStart = parseDateUtc(item.fecha_inicio);
-      const tiempoEstacionMs = itemStart ? Math.max(now.getTime() - itemStart.getTime(), 0) : null;
+      let tiempoEstacionMs = null;
+
+      if (item.estado_nombre === 'EN PROCESO' || item.estado_nombre === 'ESPERANDO') {
+        const itemStart = parseDateUtc(item.fecha_inicio);
+        tiempoEstacionMs = itemStart ? Math.max(now.getTime() - itemStart.getTime(), 0) : null;
+      } else if (item.estado_nombre === 'TERMINADA') {
+        const itemStart = parseDateUtc(item.fecha_inicio);
+        const itemEnd = item.fecha_fin ? parseDateUtc(item.fecha_fin) : null;
+        if (itemStart && itemEnd) {
+          tiempoEstacionMs = Math.max(itemEnd.getTime() - itemStart.getTime(), 0);
+        } else {
+          // Si no hay fecha_fin registrada, congelar para no correr contra now()
+          tiempoEstacionMs = null;
+        }
+      } else {
+        // INACTIVA u otro estado: no corre tiempo
+        tiempoEstacionMs = null;
+      }
+
       return {
         ...item,
         tiempo_estacion_ms: tiempoEstacionMs,

@@ -76,9 +76,16 @@ body {
 
 /* Print stylesheet for Thermal & Zebra Label printing, and Job Audit PDF */
 @media print {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
   body * {
     visibility: hidden;
   }
+
   #printable-qr-tickets, #printable-qr-tickets * {
     visibility: visible;
   }
@@ -96,13 +103,48 @@ body {
     visibility: visible;
   }
   #printable-job-audit {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 20px;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 12px 16px !important;
     background: white !important;
+    color: #000000 !important;
+    display: block !important;
+  }
+
+  #printable-job-audit table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  #printable-job-audit thead {
+    display: table-header-group !important;
+  }
+
+  #printable-job-audit tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #printable-job-audit th,
+  #printable-job-audit td {
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  .thermal-ticket {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    border: 1.5px solid #333333 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin-bottom: 8px !important;
   }
   .no-print {
     display: none !important;
