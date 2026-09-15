@@ -89,7 +89,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Temporary Line Selection for Operator */}
+            {/* Line Selection Status */}
             <div className="p-4 rounded-lg bg-blue-50/70 border border-blue-200 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
@@ -98,37 +98,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 {isTemporaryLine && (
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
-                    LÍNEA TEMPORAL ACTIVA
+                    LÍNEA DIFERENTE A ASIGNADA
                   </span>
                 )}
               </div>
 
               <p className="text-[11px] text-slate-600 leading-relaxed">
-                {isOperator
-                  ? 'Como Operador, tu línea por defecto la configuró el Administrador. Si necesitas apoyar temporalmente en otra línea durante este turno, puedes seleccionarla aquí o en la barra superior. Al reiniciar sesión volverás a tu línea predeterminada.'
-                  : isSupervisor
-                  ? 'Como Supervisor, tu línea de trabajo es fija según tu rol y asignación de planta.'
-                  : 'Como Administrador, tienes visibilidad total y puedes cambiar libremente entre cualquier línea de producción.'}
+                {isAdmin
+                  ? 'Como Administrador, tienes visibilidad total y puedes cambiar libremente entre cualquier línea de producción.'
+                  : 'Tu línea de trabajo es fija según tu rol y asignación configurada por el Administrador. Solo trabajarás y visualizarás los datos de tu línea asignada.'}
               </p>
 
               <div className="space-y-2 pt-1">
                 <div className="flex items-center space-x-3">
-                  <label className="text-xs font-semibold text-slate-700">Cambiar línea de sesión:</label>
+                  <label className="text-xs font-semibold text-slate-700">Línea de trabajo:</label>
                   <select
                     value={activeLine}
                     onChange={(e) => onSelectTemporaryLine(e.target.value)}
-                    disabled={isSupervisor}
-                    className={`border rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
-                      isSupervisor
-                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-white border-slate-300 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500'
-                    }`}
+                    disabled={!isAdmin}
+                    className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-100"
                   >
-                    {lines.map((l) => (
-                      <option key={l.id} value={l.nombre}>
-                        {l.nombre}
+                    {!isAdmin ? (
+                      <option value={currentUser?.linea_nombre || activeLine}>
+                        {currentUser?.linea_nombre || activeLine}
                       </option>
-                    ))}
+                    ) : (
+                      lines.map((l) => (
+                        <option key={l.id} value={l.nombre}>
+                          {l.nombre}
+                        </option>
+                      ))
+                    )}
                   </select>
 
                   {isTemporaryLine && (
@@ -141,9 +141,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   )}
                 </div>
 
-                {isSupervisor && (
+                {!isAdmin && (
                   <p className="text-[11px] text-slate-500 italic">
-                    Tu línea de trabajo es fija según tu rol. Contacta al Administrador para cambiarla.
+                    Tu línea de trabajo es fija. Contacta al Administrador si necesitas ser reasignado a otra línea.
                   </p>
                 )}
               </div>

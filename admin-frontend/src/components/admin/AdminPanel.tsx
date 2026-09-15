@@ -238,6 +238,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   // Scanner form
   const [newScannerCode, setNewScannerCode] = useState('');
   const [newScannerTipoId, setNewScannerTipoId] = useState<number | ''>('');
+  const [newScannerLineaId, setNewScannerLineaId] = useState<number | ''>('');
   const [copiedStation, setCopiedStation] = useState<string | null>(null);
 
   const handleCopyScannerUrl = (code: string) => {
@@ -266,6 +267,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [editingScannerId, setEditingScannerId] = useState<number | null>(null);
   const [editingScannerCode, setEditingScannerCode] = useState<string>('');
   const [editingScannerTipoId, setEditingScannerTipoId] = useState<number | ''>('');
+  const [editingScannerLineaId, setEditingScannerLineaId] = useState<number | ''>('');
 
   const [editingProcessId, setEditingProcessId] = useState<number | null>(null);
   const [editingProcessTipoId, setEditingProcessTipoId] = useState<number | ''>('');
@@ -766,12 +768,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     setEditingScannerId(s.id);
     setEditingScannerCode(s.codigo_estacion);
     setEditingScannerTipoId(s.tipo_proceso_id);
+    setEditingScannerLineaId(s.linea_id || '');
   };
 
   const handleCancelEditScanner = () => {
     setEditingScannerId(null);
     setEditingScannerCode('');
     setEditingScannerTipoId('');
+    setEditingScannerLineaId('');
   };
 
   const handleSaveEditScanner = async (id: number) => {
@@ -787,6 +791,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         body: JSON.stringify({
           codigoEstacion: editingScannerCode.trim().toUpperCase(),
           tipoProcesoId: Number(editingScannerTipoId),
+          lineaId: editingScannerLineaId ? Number(editingScannerLineaId) : null,
           activo: 1
         })
       });
@@ -1263,13 +1268,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           codigoEstacion: newScannerCode.trim(),
-          tipoProcesoId: newScannerTipoId
+          tipoProcesoId: newScannerTipoId,
+          lineaId: newScannerLineaId ? Number(newScannerLineaId) : null
         })
       });
       if (res.ok) {
         showToast(`Escáner "${newScannerCode.trim().toUpperCase()}" registrado`, 'success');
         setNewScannerCode('');
         setNewScannerTipoId('');
+        setNewScannerLineaId('');
         await loadCatalogs();
         onCatalogUpdated();
       } else {
@@ -2657,6 +2664,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           />
                         </div>
 
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-700">Línea de Producción Asignada</label>
+                          <select
+                            value={editingScannerLineaId}
+                            onChange={(e) => setEditingScannerLineaId(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todas las Líneas (Global / Sin restricción)</option>
+                            {catalogs.lineas.map((l) => (
+                              <option key={l.id} value={l.id}>
+                                {l.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div className="flex items-center justify-end space-x-2 pt-2 border-t border-blue-200">
                           <button
                             type="button"
@@ -2684,8 +2707,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               <Radio className="w-3.5 h-3.5 text-blue-600" />
                               <span>{s.codigo_estacion}</span>
                             </div>
-                            <div className="text-xs text-slate-500 font-medium mt-0.5">
-                              Estación: <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong>
+                            <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center flex-wrap gap-1.5">
+                              <span>Estación: <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong></span>
+                              <span className="text-slate-300">•</span>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
+                                {s.linea_nombre || 'Todas las Líneas'}
+                              </span>
                             </div>
                           </div>
                           <div className="flex items-center space-x-1.5">
@@ -2780,6 +2807,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     onChange={(id) => setNewScannerTipoId(id)}
                     placeholder="Escribe para buscar proceso (ej. CORTE, ENSAMBLE)..."
                   />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-slate-600">Línea de Producción Asignada</label>
+                  <select
+                    value={newScannerLineaId}
+                    onChange={(e) => setNewScannerLineaId(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Todas las Líneas (Global / Sin restricción)</option>
+                    {catalogs.lineas.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-slate-400">
+                    Los supervisores y operadores solo verán los escáneres de su línea asignada.
+                  </span>
                 </div>
 
                 <button

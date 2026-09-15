@@ -3,17 +3,21 @@ import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles, Barcode } from '
 
 interface ScannerSimulatorProps {
   onScanSuccess: () => void;
+  currentUser?: any;
+  activeLine?: string;
 }
 
 interface ScannerDevice {
   id: number;
   codigo_estacion: string;
   tipo_proceso_id: number;
+  linea_id?: number | null;
+  linea_nombre?: string | null;
   activo: number;
   tipo_nombre: string;
 }
 
-export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess }) => {
+export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess, currentUser, activeLine }) => {
   const [pieceQr, setPieceQr] = useState<string>('');
   const [devices, setDevices] = useState<ScannerDevice[]>([]);
   const [selectedStationCode, setSelectedStationCode] = useState<string>('AUTO');
@@ -48,7 +52,20 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
       .then((r) => r.json())
       .then((data) => {
         if (data?.escaneres) {
-          const active = data.escaneres.filter((s: ScannerDevice) => s.activo === 1);
+          let active = data.escaneres.filter((s: ScannerDevice) => s.activo === 1);
+          
+          // Role & Line-based filtering:
+          // Non-admin users (SUPERVISOR and OPERADOR) only see scanners for their line or global ones
+          const userRole = currentUser?.rol;
+          const userLine = currentUser?.linea_nombre || activeLine;
+
+          if (userRole && userRole !== 'ADMIN' && userLine) {
+            active = active.filter((s: ScannerDevice) => {
+              if (!s.linea_id) return true; // Global scanner available to all
+              return s.linea_nombre === userLine;
+            });
+          }
+
           setDevices(active);
           if (active.length > 0) {
             // Default to first active scanner
@@ -69,7 +86,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         }
       })
       .catch(console.error);
-  }, []);
+  }, [currentUser, activeLine]);
 
   // Timer countdown for cooldown
   useEffect(() => {
@@ -240,7 +257,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
                 <optgroup label="Dispositivos Físicos Registrados">
                   {devices.map((dev) => (
                     <option key={dev.id} value={dev.codigo_estacion}>
-                      {dev.codigo_estacion} — Estación: {dev.tipo_nombre}
+                      {dev.codigo_estacion} — {dev.tipo_nombre} {dev.linea_nombre ? `(${dev.linea_nombre})` : '(Todas las Líneas)'}
                     </option>
                   ))}
                 </optgroup>

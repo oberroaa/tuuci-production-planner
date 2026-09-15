@@ -47,29 +47,43 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Line Switcher */}
         <div className="relative">
-          <select
-            value={activeLine}
-            onChange={(e) => setActiveLine(e.target.value)}
-            aria-label="Select production line"
-            className="appearance-none bg-[#1d2127] text-white text-xs font-medium px-3.5 py-1.5 pr-8 rounded-md border border-[#2f353e] hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-          >
-            <option value="TODAS">🌐 Ver Todo (Todas las Líneas)</option>
-            {lines.length > 0 ? (
-              lines.map((l) => (
-                <option key={l.id} value={l.nombre}>
-                  {l.nombre}
-                </option>
-              ))
-            ) : (
-              <>
-                <option value="Clásica">Clásica</option>
-                <option value="Cantiléver">Cantiléver</option>
-                <option value="Cabaña">Cabaña</option>
-                <option value="Mueble">Mueble</option>
-                <option value="Otro">Otro</option>
-              </>
-            )}
-          </select>
+          {(() => {
+            const isFixedLine = currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'OPERADOR';
+            return (
+              <select
+                value={activeLine}
+                onChange={(e) => setActiveLine(e.target.value)}
+                disabled={isFixedLine}
+                aria-label="Select production line"
+                className="appearance-none bg-[#1d2127] text-white text-xs font-medium px-3.5 py-1.5 pr-8 rounded-md border border-[#2f353e] hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isFixedLine ? (
+                  <option value={currentUser?.linea_nombre || activeLine}>
+                    {currentUser?.linea_nombre || activeLine}
+                  </option>
+                ) : (
+                  <>
+                    <option value="TODAS">🌐 Ver Todo (Todas las Líneas)</option>
+                    {lines.length > 0 ? (
+                      lines.map((l) => (
+                        <option key={l.id} value={l.nombre}>
+                          {l.nombre}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Clásica">Clásica</option>
+                        <option value="Cantiléver">Cantiléver</option>
+                        <option value="Cabaña">Cabaña</option>
+                        <option value="Mueble">Mueble</option>
+                        <option value="Otro">Otro</option>
+                      </>
+                    )}
+                  </>
+                )}
+              </select>
+            );
+          })()}
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
@@ -149,7 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="font-semibold text-slate-200">{currentUser?.nombre || 'Otoniel Berroa'}</div>
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
               {currentUser?.rol || 'ADMIN'}
-              {currentUser?.rol === 'OPERADOR' && activeLine !== (currentUser?.linea_nombre || 'Mueble') && (
+              {(currentUser?.rol === 'OPERADOR' || currentUser?.rol === 'SUPERVISOR') && activeLine !== (currentUser?.linea_nombre || 'Mueble') && (
                 <span className="ml-1 text-amber-400 font-normal lowercase">(temp)</span>
               )}
             </div>

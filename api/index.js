@@ -72,9 +72,10 @@ app.get('/api/catalogs', async (req, res) => {
     const tipoProcesos = await db.prepare('SELECT * FROM tipo_procesos').all();
     const estados = await db.prepare('SELECT * FROM estados ORDER BY orden ASC').all();
     const escaneres = await db.prepare(`
-      SELECT s.*, tp.nombre as tipo_proceso_nombre
+      SELECT s.*, tp.nombre as tipo_proceso_nombre, l.nombre as linea_nombre
       FROM escaneres s
       JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
+      LEFT JOIN lineas l ON s.linea_id = l.id
     `).all();
     const procesos = await db.prepare(`
       SELECT p.*, l.nombre as linea_nombre, tp.nombre as tipo_nombre, r.nombre as ruta_nombre
@@ -572,12 +573,13 @@ app.post('/api/catalogs/estados/reorder', async (req, res) => {
 // 2g. Register / Edit / Delete physical scanner
 app.post('/api/catalogs/scanners', async (req, res) => {
   try {
-    const { codigoEstacion, tipoProcesoId } = req.body;
+    const { codigoEstacion, tipoProcesoId, lineaId } = req.body;
     if (!codigoEstacion || !tipoProcesoId) return res.status(400).json({ error: 'Código de estación y proceso son requeridos' });
+    const targetLineaId = lineaId ? parseInt(lineaId, 10) : null;
     const result = await db.prepare(`
-      INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, activo)
-      VALUES (?, ?, 1)
-    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId);
+      INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo)
+      VALUES (?, ?, ?, 1)
+    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId);
     notifyDashboardUpdate();
     res.status(201).json({ id: result.lastInsertRowid, success: true });
   } catch (err) {
@@ -588,12 +590,13 @@ app.post('/api/catalogs/scanners', async (req, res) => {
 app.put('/api/catalogs/scanners/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { codigoEstacion, tipoProcesoId, activo } = req.body;
+    const { codigoEstacion, tipoProcesoId, lineaId, activo } = req.body;
+    const targetLineaId = lineaId !== undefined && lineaId !== '' && lineaId !== null ? parseInt(lineaId, 10) : null;
     await db.prepare(`
       UPDATE escaneres
-      SET codigo_estacion = ?, tipo_proceso_id = ?, activo = ?
+      SET codigo_estacion = ?, tipo_proceso_id = ?, linea_id = ?, activo = ?
       WHERE id = ?
-    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, activo ? 1 : 0, id);
+    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId, activo ? 1 : 0, id);
     notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {

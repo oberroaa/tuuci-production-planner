@@ -120,8 +120,11 @@ export async function initDb() {
         id SERIAL PRIMARY KEY,
         codigo_estacion TEXT UNIQUE NOT NULL,
         tipo_proceso_id INTEGER NOT NULL REFERENCES tipo_procesos(id) ON DELETE RESTRICT,
+        linea_id INTEGER REFERENCES lineas(id) ON DELETE SET NULL,
         activo INTEGER NOT NULL DEFAULT 1
       );
+
+      ALTER TABLE escaneres ADD COLUMN IF NOT EXISTS linea_id INTEGER REFERENCES lineas(id) ON DELETE SET NULL;
 
       CREATE TABLE IF NOT EXISTS pieza_procesos (
         id SERIAL PRIMARY KEY,
@@ -295,9 +298,11 @@ async function seedDefaultCatalogs(client) {
 
   for (const s of scanners) {
     const tipoId = await getTipoId(s.tipo);
+    const muebleLine = await client.query("SELECT id FROM lineas WHERE nombre = 'Mueble'");
+    const lineaId = muebleLine.rows.length > 0 ? muebleLine.rows[0].id : null;
     await client.query(
-      'INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, activo) VALUES ($1, $2, 1) ON CONFLICT (codigo_estacion) DO NOTHING',
-      [s.code, tipoId]
+      'INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo) VALUES ($1, $2, $3, 1) ON CONFLICT (codigo_estacion) DO NOTHING',
+      [s.code, tipoId, lineaId]
     );
   }
 

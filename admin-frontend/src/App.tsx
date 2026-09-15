@@ -204,6 +204,8 @@ export function App() {
 
         <div style={{ display: activeTab === 'SCANNER' ? 'block' : 'none' }}>
           <ScannerSimulator
+            currentUser={currentUser}
+            activeLine={activeLine}
             onScanSuccess={() => {
               fetchSummary();
               triggerGlobalRefresh();
