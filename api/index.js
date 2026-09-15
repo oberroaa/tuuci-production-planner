@@ -747,13 +747,15 @@ app.put('/api/config', async (req, res) => {
 // Cooldown / Debounce map to prevent accidental double scans within configured seconds
 const scanCooldownMap = new Map();
 
-app.post('/api/scan', async (req, res) => {
+// Accepts POST /api/scan and POST /api/scan/:codigoEstacion (dedicated endpoint per device)
+app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
   try {
-    const { codigoEstacion, codigoQRUnico } = req.body;
-    const cleanQR = (codigoQRUnico || '').trim();
+    const codigoEstacion = req.params.codigoEstacion || req.body?.codigoEstacion || req.query?.estacion || null;
+    let rawQR = req.body?.codigoQRUnico || req.body?.code || req.body?.qr || (typeof req.body === 'string' ? req.body : '');
+    const cleanQR = (rawQR || '').trim();
 
     if (!cleanQR) {
-      return res.json({ success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' });
+      return res.json({ success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR (codigoQRUnico)' });
     }
 
     const cooldownMs = (cachedConfigs.scanner_cooldown_segundos || 5) * 1000;

@@ -5,11 +5,21 @@ interface ScannerSimulatorProps {
   onScanSuccess: () => void;
 }
 
+interface ScannerDevice {
+  id: number;
+  codigo_estacion: string;
+  tipo_proceso_id: number;
+  activo: number;
+  tipo_nombre: string;
+}
+
 export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess }) => {
   const [pieceQr, setPieceQr] = useState<string>('');
+  const [devices, setDevices] = useState<ScannerDevice[]>([]);
+  const [selectedStationCode, setSelectedStationCode] = useState<string>('AUTO');
   const [oledDisplay, setOledDisplay] = useState<{ line1: string; line2: string; tone: 'green' | 'red' | 'idle' }>({
     line1: 'LISTO PARA ESCANEAR',
-    line2: 'AUTO-DETECCIÓN ACTIVA',
+    line2: 'SELECCIONE DISPOSITIVO',
     tone: 'idle'
   });
   const [history, setHistory] = useState<any[]>([]);
@@ -23,13 +33,39 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     inputRef.current?.focus();
   }, []);
 
-  // Load configured cooldown duration from server
+  // Load configured cooldown duration and registered physical scanners from server
   useEffect(() => {
     fetch('/api/config')
       .then((r) => r.json())
       .then((data) => {
         if (data?.values?.scanner_cooldown_segundos !== undefined) {
           setConfigCooldownSecs(data.values.scanner_cooldown_segundos);
+        }
+      })
+      .catch(console.error);
+
+    fetch('/api/catalogs')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.escaneres) {
+          const active = data.escaneres.filter((s: ScannerDevice) => s.activo === 1);
+          setDevices(active);
+          if (active.length > 0) {
+            // Default to first active scanner
+            setSelectedStationCode(active[0].codigo_estacion);
+            setOledDisplay({
+              line1: 'LISTO PARA ESCANEAR',
+              line2: `ESTACIÓN: ${active[0].codigo_estacion} [${active[0].tipo_nombre}]`,
+              tone: 'idle'
+            });
+          } else {
+            setSelectedStationCode('AUTO');
+            setOledDisplay({
+              line1: 'LISTO PARA ESCANEAR',
+              line2: 'AUTO-DETECCIÓN ACTIVA',
+              tone: 'idle'
+            });
+          }
         }
       })
       .catch(console.error);
@@ -44,6 +80,25 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     return () => clearInterval(interval);
   }, [cooldown]);
 
+  const handleStationChange = (code: string) => {
+    setSelectedStationCode(code);
+    const found = devices.find((d) => d.codigo_estacion === code);
+    if (found) {
+      setOledDisplay({
+        line1: 'LISTO PARA ESCANEAR',
+        line2: `ESTACIÓN: ${found.codigo_estacion} [${found.tipo_nombre}]`,
+        tone: 'idle'
+      });
+    } else {
+      setOledDisplay({
+        line1: 'LISTO PARA ESCANEAR',
+        line2: 'AUTO-DETECCIÓN ACTIVA',
+        tone: 'idle'
+      });
+    }
+    setTimeout(() => inputRef.current?.focus(), 60);
+  };
+
   const handleExecuteScan = async (codeToScan?: string) => {
     const code = (codeToScan || pieceQr).trim();
     if (!code) return;
@@ -51,7 +106,11 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     setScanning(true);
 
     try {
-      const res = await fetch('/api/scan', {
+      const endpoint = selectedStationCode && selectedStationCode !== 'AUTO'
+        ? `/api/scan/${encodeURIComponent(selectedStationCode)}`
+        : '/api/scan';
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -60,18 +119,19 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
       });
 
       const data = await res.json();
+      const currentDev = devices.find((d) => d.codigo_estacion === selectedStationCode);
 
       if (data.success) {
         setCooldown(configCooldownSecs);
         setOledDisplay({
           line1: data.oled_message,
-          line2: `${data.pieceCode} [${data.station}]`,
+          line2: `${data.pieceCode} [${data.station || selectedStationCode}]`,
           tone: 'green'
         });
         setHistory((prev) => [
           {
             time: new Date().toLocaleTimeString(),
-            station: data.station || 'AUTO',
+            station: selectedStationCode !== 'AUTO' ? `${selectedStationCode} (${data.station})` : (data.station || 'AUTO'),
             code,
             action: data.action === 'OPEN' ? 'EN PROCESO' : 'TERMINADA',
             nextStation: data.nextStation,
@@ -92,7 +152,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         setHistory((prev) => [
           {
             time: new Date().toLocaleTimeString(),
-            station: 'AUTO',
+            station: selectedStationCode !== 'AUTO' ? `${selectedStationCode} (${currentDev?.tipo_nombre || ''})` : 'AUTO',
             code,
             action: 'RECHAZADO',
             success: false,
@@ -114,6 +174,8 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     }
   };
 
+  const selectedDevice = devices.find((d) => d.codigo_estacion === selectedStationCode);
+
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-6">
       {/* Header */}
@@ -121,10 +183,10 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
             <Radio className="w-5 h-5 text-emerald-600" />
-            <span>Fase 2: Terminal Inalámbrico de Escaneo Wi-Fi (Auto-Detección de Estación)</span>
+            <span>Fase 2: Terminal Inalámbrico de Escaneo Wi-Fi</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Detección inteligente de posición por código de pieza • 1er Escaneo: <strong className="text-amber-600">EN PROCESO</strong> • 2do Escaneo: <strong className="text-emerald-700">TERMINADA</strong> &amp; pasa siguiente a <strong className="text-blue-600">ESPERANDO</strong>
+            Simulador de Estación Física de Piso • 1er Escaneo: <strong className="text-amber-600">EN PROCESO</strong> • 2do Escaneo: <strong className="text-emerald-700">TERMINADA</strong> &amp; pasa siguiente a <strong className="text-blue-600">ESPERANDO</strong>
           </p>
         </div>
 
@@ -138,7 +200,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* Physical Handheld Scanner Representation */}
-        <div className="bg-[#1a1d22] rounded-3xl p-8 border-4 border-[#2b313a] shadow-2xl space-y-6 text-white max-w-md mx-auto w-full">
+        <div className="bg-[#1a1d22] rounded-3xl p-8 border-4 border-[#2b313a] shadow-2xl space-y-5 text-white max-w-md mx-auto w-full">
           {/* Top Sensor Bezel */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="flex items-center space-x-2">
@@ -151,15 +213,53 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             </div>
           </div>
 
-          {/* Auto-Detection Indicator Badge */}
-          <div className="flex items-center justify-between px-3.5 py-2 bg-[#12151a] border border-[#2d333e] rounded-xl text-xs">
-            <div className="flex items-center space-x-2 text-slate-300">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-[11px]">Detección de Posición Automática</span>
+          {/* Scanner Device Selector & Hardware Station Association */}
+          <div className="space-y-2 bg-[#12151a] border border-[#2d333e] rounded-xl p-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+                <Radio className="w-3.5 h-3.5 text-blue-400" />
+                <span>Dispositivo Escáner Asignado</span>
+              </label>
+              {selectedStationCode !== 'AUTO' ? (
+                <span className="px-2 py-0.5 bg-blue-950 border border-blue-600/40 text-blue-400 font-mono text-[10px] rounded uppercase font-bold">
+                  ESTACIÓN FIJA
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-600/40 text-emerald-400 font-mono text-[10px] rounded uppercase font-bold">
+                  AUTO-DETECCIÓN
+                </span>
+              )}
             </div>
-            <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-600/40 text-emerald-400 font-mono text-[10px] rounded uppercase font-bold">
-              GPS RUTA ACTIVO
-            </span>
+
+            <select
+              value={selectedStationCode}
+              onChange={(e) => handleStationChange(e.target.value)}
+              className="w-full bg-[#181c24] border border-[#3b4352] rounded-lg px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              {devices.length > 0 ? (
+                <optgroup label="Dispositivos Físicos Registrados">
+                  {devices.map((dev) => (
+                    <option key={dev.id} value={dev.codigo_estacion}>
+                      {dev.codigo_estacion} — Estación: {dev.tipo_nombre}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : (
+                <option value="AUTO" disabled>Cargando dispositivos...</option>
+              )}
+              <optgroup label="Modos Especiales">
+                <option value="AUTO">⚡ Modo Auto-Detección (Global / Automático)</option>
+              </optgroup>
+            </select>
+
+            {selectedDevice && (
+              <div className="flex items-center justify-between text-[11px] pt-1 text-slate-400 font-mono border-t border-slate-800/80">
+                <span>Tipo de Proceso que atiende:</span>
+                <span className="font-bold text-emerald-400 uppercase">
+                  {selectedDevice.tipo_nombre}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 2-LINE OLED HARDWARE DISPLAY */}

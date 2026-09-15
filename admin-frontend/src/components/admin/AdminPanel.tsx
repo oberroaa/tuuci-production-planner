@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw } from 'lucide-react';
+import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy } from 'lucide-react';
 
 interface AdminPanelProps {
   onCatalogUpdated: () => void;
@@ -118,6 +118,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   // Scanner form
   const [newScannerCode, setNewScannerCode] = useState('');
   const [newScannerTipoId, setNewScannerTipoId] = useState<number | ''>('');
+  const [copiedStation, setCopiedStation] = useState<string | null>(null);
+
+  const handleCopyScannerUrl = (code: string) => {
+    const host = window.location.hostname || 'localhost';
+    const url = `http://${host}:3001/api/scan/${code}`;
+    navigator.clipboard.writeText(url);
+    setCopiedStation(code);
+    setTimeout(() => setCopiedStation(null), 2500);
+  };
 
   // User form states
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -2383,83 +2392,170 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
       {/* 5. SECTION: PHYSICAL SCANNERS */}
       {activeSubTab === 'SCANNERS' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-              Dispositivos Escáner Físicos Registrados
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {catalogs.escaneres.map((s) => (
-                <div
-                  key={s.id}
-                  className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between"
-                >
-                  <div className="space-y-1">
-                    <div className="text-sm font-bold text-slate-900 mono">{s.codigo_estacion}</div>
-                    <div className="text-xs text-slate-500 font-medium">
-                      Estación: <strong className="text-slate-700">{s.tipo_proceso_nombre}</strong>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      ACTIVO
-                    </span>
-                    <button
-                      onClick={() => handleDeleteScanner(s.id, s.codigo_estacion)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Eliminar escáner"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+        <div className="space-y-6">
+          {/* Guía Explicativa de Arquitectura de Hardware */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm space-y-3">
+            <div className="flex items-center space-x-2 text-blue-900 font-bold text-sm">
+              <Radio className="w-4 h-4 text-blue-600" />
+              <span>Configuración de Escáneres Físicos en Planta (Ruta API por Dispositivo)</span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              En planta, el operador únicamente apunta la pistola lectora al código de la pieza (ej. <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono font-bold text-blue-900">JOB0279087-01</code>). Para que el servidor reconozca automáticamente la estación sin que el operador tenga que elegir nada, <strong>a cada aparato físico se le graba su propia Ruta API fija</strong>:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs">
+              <div className="bg-white/90 border border-blue-200 p-3 rounded-lg space-y-1.5 shadow-xs">
+                <div className="font-bold text-blue-900 flex items-center space-x-1 font-sans">
+                  <span>1. Endpoint dedicado por estación (en firmware/Wi-Fi):</span>
                 </div>
-              ))}
+                <div className="text-blue-950 bg-blue-100/70 px-2.5 py-1.5 rounded font-bold">
+                  POST http://&lt;IP_SERVIDOR&gt;:3001/api/scan/<span className="text-indigo-600">{'{CODIGO_ESTACION}'}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-sans">
+                  Ejemplo para Fabricación: <code className="text-blue-700 font-bold">/api/scan/FABRICACION-01</code>
+                </div>
+              </div>
+              <div className="bg-white/90 border border-blue-200 p-3 rounded-lg space-y-1.5 shadow-xs">
+                <div className="font-bold text-emerald-900 flex items-center space-x-1 font-sans">
+                  <span>2. Payload enviado por el gatillo al disparar:</span>
+                </div>
+                <div className="text-emerald-950 bg-emerald-100/70 px-2.5 py-1.5 rounded font-bold truncate">
+                  {'{ "codigoQRUnico": "JOB0279087-01" }'}
+                </div>
+                <div className="text-[11px] text-slate-500 font-sans">
+                  El servidor valida si a esa pieza le correspondía entrar o salir de esa estación.
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
-              <Plus className="w-4 h-4 text-blue-600" />
-              <span>Registrar Nuevo Escáner</span>
-            </h3>
-            <form onSubmit={handleCreateScanner} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Código de Estación Fija</label>
-                <input
-                  type="text"
-                  placeholder="ej. FABRICACION-02"
-                  value={newScannerCode}
-                  onChange={(e) => setNewScannerCode(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase mono"
-                  required
-                />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                  Dispositivos Escáner Físicos Registrados
+                </h3>
+                <span className="text-xs text-slate-400 font-mono">
+                  {catalogs.escaneres.length} dispositivo(s)
+                </span>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Tipo de Proceso que Atiende</label>
-                <select
-                  value={newScannerTipoId}
-                  onChange={(e) => setNewScannerTipoId(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  required
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {catalogs.escaneres.map((s) => (
+                  <div
+                    key={s.id}
+                    className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 hover:border-slate-300 transition-all shadow-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-slate-900 mono flex items-center space-x-1.5">
+                          <Radio className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{s.codigo_estacion}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 font-medium mt-0.5">
+                          Estación: <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          ACTIVO
+                        </span>
+                        <button
+                          onClick={() => handleDeleteScanner(s.id, s.codigo_estacion)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Eliminar escáner"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dedicated API Endpoint Box */}
+                    <div className="bg-slate-900 rounded-lg p-2.5 space-y-1.5 text-slate-100">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
+                        <span>Ruta API del Dispositivo:</span>
+                        <span className="text-emerald-400 font-mono font-bold">POST</span>
+                      </div>
+                      <div className="flex items-center justify-between font-mono text-[11px] bg-slate-950/80 px-2 py-1 rounded border border-slate-800">
+                        <span className="text-cyan-300 truncate">/api/scan/{s.codigo_estacion}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyScannerUrl(s.codigo_estacion)}
+                          className="ml-2 px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center space-x-1 transition-colors flex-shrink-0"
+                          title="Copiar URL completa para el firmware"
+                        >
+                          {copiedStation === s.codigo_estacion ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-300" />
+                              <span className="text-emerald-300">¡Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copiar URL</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between pt-0.5">
+                        <span className="text-slate-500">Body:</span>
+                        <span className="text-slate-300 font-bold">{'{ "codigoQRUnico": "JOB..." }'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
+                <Plus className="w-4 h-4 text-blue-600" />
+                <span>Registrar Nuevo Escáner</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Al registrarlo, se generará su ruta API única automáticamente para configurar el aparato físico.
+              </p>
+              <form onSubmit={handleCreateScanner} className="space-y-4 text-xs">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-slate-600">Código de Estación Fija</label>
+                  <input
+                    type="text"
+                    placeholder="ej. FABRICACION-02"
+                    value={newScannerCode}
+                    onChange={(e) => setNewScannerCode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase mono"
+                    required
+                  />
+                  <span className="text-[10px] text-slate-400">
+                    Se usará en la URL: <code>/api/scan/{newScannerCode || 'NOMBRE'}</code>
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-slate-600">Tipo de Proceso que Atiende</label>
+                  <select
+                    value={newScannerTipoId}
+                    onChange={(e) => setNewScannerTipoId(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Selecciona estación asignada...</option>
+                    {catalogs.tipoProcesos.map((tp) => (
+                      <option key={tp.id} value={tp.id}>
+                        {tp.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                 >
-                  <option value="">Selecciona estación asignada...</option>
-                  {catalogs.tipoProcesos.map((tp) => (
-                    <option key={tp.id} value={tp.id}>
-                      {tp.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Registrar Dispositivo</span>
-              </button>
-            </form>
+                  <Plus className="w-4 h-4" />
+                  <span>Registrar Dispositivo</span>
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

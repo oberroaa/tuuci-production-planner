@@ -509,6 +509,56 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
     return true;
   });
 
+  // Helper to format duration milliseconds into compact human-readable string
+  const formatDurationFromMs = (ms: number): string => {
+    if (ms == null || isNaN(ms) || ms <= 0) return '—';
+    const totalSeconds = Math.floor(ms / 1000);
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    if (minutes < 60) {
+      const s = totalSeconds % 60;
+      return s > 0 ? `${minutes}m ${s}s` : `${minutes}m`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMins = minutes % 60;
+    if (hours < 24) {
+      return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+  };
+
+  // Helper to compute the total aggregated duration (sumatoria) for batch/lote items
+  const computeLoteSumDuration = (items: any[]): string => {
+    let totalMs = 0;
+    let hasValidTime = false;
+
+    for (const it of items) {
+      if (typeof it.tiempo_estacion_ms === 'number' && it.tiempo_estacion_ms > 0) {
+        totalMs += it.tiempo_estacion_ms;
+        hasValidTime = true;
+      } else if (it.tiempo_estacion_texto && it.tiempo_estacion_texto !== '—') {
+        const text = String(it.tiempo_estacion_texto).trim();
+        let sec = 0;
+        const d = text.match(/(\d+)\s*d/);
+        const h = text.match(/(\d+)\s*h/);
+        const m = text.match(/(\d+)\s*m/);
+        const s = text.match(/(\d+)\s*s/);
+        if (d) sec += parseInt(d[1], 10) * 86400;
+        if (h) sec += parseInt(h[1], 10) * 3600;
+        if (m) sec += parseInt(m[1], 10) * 60;
+        if (s) sec += parseInt(s[1], 10);
+        if (sec > 0) {
+          totalMs += sec * 1000;
+          hasValidTime = true;
+        }
+      }
+    }
+
+    return hasValidTime ? formatDurationFromMs(totalMs) : '—';
+  };
+
   // Render an individual station/process Kanban column
   const renderColumn = (col: any, idx: number, allCols: any[], itemsList: any[]) => {
     const columnItems = itemsList.filter((item) => item.proceso_id === col.id);
@@ -544,24 +594,19 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           const allInactiva = group.items.length > 0 && group.items.every((it: any) => it.estado_nombre === 'INACTIVA');
 
           let groupEstado = group.estado_nombre;
-          let groupTiempo = group.tiempo_estacion_texto;
 
           if (hasEnProceso) {
             groupEstado = 'EN PROCESO';
-            const activeItem = group.items.find((it: any) => it.estado_nombre === 'EN PROCESO');
-            groupTiempo = activeItem?.tiempo_estacion_texto || groupTiempo;
           } else if (hasEsperando) {
             groupEstado = 'ESPERANDO';
-            const waitingItem = group.items.find((it: any) => it.estado_nombre === 'ESPERANDO');
-            groupTiempo = waitingItem?.tiempo_estacion_texto || groupTiempo;
           } else if (allTerminada) {
             groupEstado = 'TERMINADA';
-            const finishedItem = group.items.find((it: any) => it.tiempo_estacion_texto && it.tiempo_estacion_texto !== '—');
-            groupTiempo = finishedItem?.tiempo_estacion_texto || '—';
           } else if (allInactiva) {
             groupEstado = 'INACTIVA';
-            groupTiempo = '—';
           }
+
+          // Sumatoria de tiempos de todas las piezas del lote en esta estación
+          const groupTiempo = computeLoteSumDuration(group.items);
 
           return {
             ...group,
