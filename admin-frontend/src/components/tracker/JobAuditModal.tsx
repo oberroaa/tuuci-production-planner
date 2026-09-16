@@ -160,24 +160,24 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
  </Styles>
  <Worksheet ss:Name="Auditoría Job">
   <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="90"/>
+   <Column ss:Width="90"/>
    <Column ss:Width="140"/>
-   <Column ss:Width="160"/>
    <Column ss:Width="130"/>
    <Column ss:Width="100"/>
-   <Column ss:Width="100"/>
-   <Column ss:Width="100"/>
-   <Column ss:Width="280"/>
+   <Column ss:Width="130"/>
+   <Column ss:Width="300"/>
 
    <Row ss:Height="26">
-    <Cell ss:MergeAcross="5" ss:StyleID="Title"><Data ss:Type="String">TUUCI • Reporte Forense de Auditoría y Trazabilidad</Data></Cell>
+    <Cell ss:MergeAcross="6" ss:StyleID="Title"><Data ss:Type="String">TUUCI • Reporte Forense de Auditoría y Trazabilidad</Data></Cell>
    </Row>
    <Row ss:Height="18">
-    <Cell ss:MergeAcross="5" ss:StyleID="Subtitle"><Data ss:Type="String">Fecha de Emisión: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</Data></Cell>
+    <Cell ss:MergeAcross="6" ss:StyleID="Subtitle"><Data ss:Type="String">Fecha de Emisión: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</Data></Cell>
    </Row>
    <Row ss:Height="10"/>
 
    <Row ss:Height="22">
-    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">INFORMACIÓN GENERAL DEL JOB</Data></Cell>
+    <Cell ss:MergeAcross="6" ss:StyleID="SectionHeader"><Data ss:Type="String">INFORMACIÓN GENERAL DEL JOB</Data></Cell>
    </Row>
    <Row>
     <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Código Job:</Data></Cell>
@@ -186,6 +186,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
     <Cell ss:StyleID="${job.estado_cierre === 'COMPLETADO' ? 'TagOk' : 'TagWarning'}"><Data ss:Type="String">${job.estado_cierre}</Data></Cell>
     <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Piezas Totales:</Data></Cell>
     <Cell ss:StyleID="CellCenter"><Data ss:Type="Number">${job.cantidad_piezas || 0}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"/>
    </Row>
    <Row>
     <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Modelo:</Data></Cell>
@@ -194,11 +195,12 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
     <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${job.linea_nombre} - ${job.ruta_nombre || 'Principal'}</Data></Cell>
     <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Tiempo Total Job:</Data></Cell>
     <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${job.duracion_texto || '—'}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"/>
    </Row>
    <Row ss:Height="16"/>
 
    <Row ss:Height="22">
-    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">RECONCILIACIÓN DE PIEZAS DEL JOB (${pieces.length})</Data></Cell>
+    <Cell ss:MergeAcross="6" ss:StyleID="SectionHeader"><Data ss:Type="String">RECONCILIACIÓN DE PIEZAS DEL JOB (${pieces.length})</Data></Cell>
    </Row>
    <Row ss:Height="22">
     <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Código Pieza</Data></Cell>
@@ -224,26 +226,37 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
    <Row ss:Height="16"/>
 
    <Row ss:Height="22">
-    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">BITÁCORA DETALLADA DE EVENTOS (${events.length})</Data></Cell>
+    <Cell ss:MergeAcross="6" ss:StyleID="SectionHeader"><Data ss:Type="String">BITÁCORA DETALLADA DE EVENTOS (${events.length})</Data></Cell>
    </Row>
    <Row ss:Height="22">
-    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Fecha y Hora</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Fecha</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Hora</Data></Cell>
     <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Código Pieza</Data></Cell>
     <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Estación / Proceso</Data></Cell>
     <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Estado</Data></Cell>
     <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Operador / Usuario</Data></Cell>
-    <Cell ss:MergeAcross="1" ss:StyleID="TableHeader"><Data ss:Type="String">Observaciones y Notas</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Observaciones y Notas</Data></Cell>
    </Row>
    ${events.map((ev: any) => {
-     const fecha = ev.creado_en ? new Date(ev.creado_en).toLocaleString() : '—';
+     const rawTime = ev.timestamp || ev.creado_en || ev.created_at;
+     let fechaStr = '—';
+     let horaStr = '—';
+     if (rawTime) {
+       const dateObj = new Date(rawTime);
+       if (!isNaN(dateObj.getTime())) {
+         fechaStr = dateObj.toLocaleDateString();
+         horaStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+       }
+     }
      const obs = (ev.observacion || 'Sin observaciones').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
      return `<Row>
-      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${fecha}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${fechaStr}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${horaStr}</Data></Cell>
       <Cell ss:StyleID="CellCode"><Data ss:Type="String">${ev.codigo_qr_unico || '—'}</Data></Cell>
       <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${ev.estacion_codigo || ev.proceso_nombre || '—'}</Data></Cell>
       <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${ev.estado_nombre || '—'}</Data></Cell>
       <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${ev.usuario_nombre || 'Sistema / Escáner'}</Data></Cell>
-      <Cell ss:MergeAcross="1" ss:StyleID="CellNormal"><Data ss:Type="String">${obs}</Data></Cell>
+      <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${obs}</Data></Cell>
      </Row>`;
    }).join('\n')}
   </Table>
@@ -341,250 +354,253 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
             </div>
           ) : (
             <>
-              {/* Job Header Card */}
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Código Job</span>
-                    <span className="font-mono font-extrabold text-lg text-slate-900">
-                      {data.job.job_code}
-                    </span>
-                  </div>
-
-                  <div>
-                    {data.job.estado_cierre === 'COMPLETADO' ? (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>COMPLETADO LIMPIO</span>
-                      </span>
-                    ) : data.job.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS' ? (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                        <ShieldAlert className="w-4 h-4 text-amber-600" />
-                        <span>COMPLETADO CON INCIDENCIAS</span>
-                      </span>
-                    ) : data.job.estado_cierre === 'PARCIAL' ? (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-900 border border-blue-300">
-                        <Clock className="w-4 h-4 text-blue-600" />
-                        <span>CIERRE PARCIAL (EN CURSO)</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
-                        <Clock className="w-4 h-4 text-blue-600" />
-                        <span>EN PROCESO</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Modelo</span>
-                    <span className="font-medium text-slate-800">{data.job.modelo}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Línea & Ruta</span>
-                    <span className="font-medium text-slate-800">{data.job.linea_nombre}</span>
-                    <span className="text-slate-400 block text-[10px]">{data.job.ruta_nombre || 'Principal'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Piezas Totales</span>
-                    <span className="font-bold text-slate-800">{data.job.cantidad_piezas} unidades</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Creado el</span>
-                    <span className="font-medium text-slate-600">
-                      {new Date(data.job.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="bg-indigo-50/80 border border-indigo-200/70 p-2 rounded-lg">
-                    <span className="text-indigo-600 flex items-center space-x-1 text-[10px] font-bold uppercase">
-                      <Clock className="w-3 h-3 text-indigo-500" />
-                      <span>Tiempo Job</span>
-                    </span>
-                    <span className="font-mono font-extrabold text-xs text-indigo-900 block">
-                      {data.job.duracion_texto || '—'}
-                    </span>
-                    <span className="text-[9px] text-indigo-500 block">
-                      {data.job.es_en_curso ? 'En curso' : 'Finalizado'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Closure Details / Batch History */}
-                {data.batchCloses && data.batchCloses.length > 0 ? (
-                  <div className="mt-3 pt-3 border-t border-slate-200 text-xs space-y-2 bg-white p-3 rounded-lg border border-slate-200/60">
-                    <div className="flex items-center justify-between font-bold text-slate-800">
-                      <span className="flex items-center space-x-1.5">
-                        <History className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Historial de Entregas y Cierres de Lote ({data.batchCloses.length})</span>
+              {/* PAGE 1 CONTENT WRAPPER: Header, Job Summary, Batch Closes, and Pieces Reconciliation */}
+              <div className="print-page-1 space-y-3 print:space-y-2">
+                {/* Job Header Card */}
+                <div className="bg-slate-50 rounded-xl p-4 print:p-2.5 border border-slate-200/80 space-y-3 print:space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 print:pb-1.5">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Código Job</span>
+                      <span className="font-mono font-extrabold text-lg print:text-base text-slate-900">
+                        {data.job.job_code}
                       </span>
                     </div>
-                    <div className="divide-y divide-slate-100">
-                      {data.batchCloses.map((close: any, cIdx: number) => (
-                        <div key={close.id || cIdx} className="py-1.5 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-1 text-[11px]">
-                          <div className="flex items-center space-x-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${close.tipo_cierre === 'TOTAL'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-blue-100 text-blue-900 border border-blue-300'
-                              }`}>
-                              Cierre {close.tipo_cierre}
-                            </span>
-                            <span className="font-bold text-slate-800">
-                              {close.piezas_cerradas} pieza(s) entregada(s)
-                            </span>
-                            <span className="text-slate-400">• por {close.usuario_nombre || 'Supervisor'}</span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-slate-500 font-mono text-[10px]">
-                            <span>{new Date(close.created_at).toLocaleString()}</span>
-                            {close.notas && (
-                              <span className="italic text-slate-600 font-sans">({close.notas})</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+
+                    <div>
+                      {data.job.estado_cierre === 'COMPLETADO' ? (
+                        <span className="inline-flex items-center space-x-1.5 px-3 py-1 print:px-2 print:py-0.5 rounded-full text-xs print:text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <CheckCircle2 className="w-4 h-4 print:w-3 print:h-3 text-emerald-600" />
+                          <span>COMPLETADO LIMPIO</span>
+                        </span>
+                      ) : data.job.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS' ? (
+                        <span className="inline-flex items-center space-x-1.5 px-3 py-1 print:px-2 print:py-0.5 rounded-full text-xs print:text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          <ShieldAlert className="w-4 h-4 print:w-3 print:h-3 text-amber-600" />
+                          <span>COMPLETADO CON INCIDENCIAS</span>
+                        </span>
+                      ) : data.job.estado_cierre === 'PARCIAL' ? (
+                        <span className="inline-flex items-center space-x-1.5 px-3 py-1 print:px-2 print:py-0.5 rounded-full text-xs print:text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                          <Clock className="w-4 h-4 print:w-3 print:h-3 text-blue-600" />
+                          <span>CIERRE PARCIAL (EN CURSO)</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1.5 px-3 py-1 print:px-2 print:py-0.5 rounded-full text-xs print:text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                          <Clock className="w-4 h-4 print:w-3 print:h-3 text-blue-600" />
+                          <span>EN PROCESO</span>
+                        </span>
+                      )}
                     </div>
                   </div>
-                ) : data.job.fecha_cierre ? (
-                  <div className="mt-3 pt-3 border-t border-slate-200 text-xs space-y-1 bg-white p-3 rounded-lg border border-slate-200/60">
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span>
-                        <strong>Cerrado por:</strong> {data.job.cerrado_por_nombre || 'Supervisor'}
-                      </span>
-                      <span>
-                        <strong>Fecha Cierre:</strong> {new Date(data.job.fecha_cierre).toLocaleString()}
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 print:gap-2 text-xs print:text-[10px]">
+                    <div>
+                      <span className="text-slate-400 block text-[10px] print:text-[9px] font-bold uppercase">Modelo</span>
+                      <span className="font-medium text-slate-800">{data.job.modelo}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] print:text-[9px] font-bold uppercase">Línea & Ruta</span>
+                      <span className="font-medium text-slate-800">{data.job.linea_nombre}</span>
+                      <span className="text-slate-400 block text-[10px] print:text-[9px]">{data.job.ruta_nombre || 'Principal'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] print:text-[9px] font-bold uppercase">Piezas Totales</span>
+                      <span className="font-bold text-slate-800">{data.job.cantidad_piezas} unidades</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] print:text-[9px] font-bold uppercase">Creado el</span>
+                      <span className="font-medium text-slate-600">
+                        {new Date(data.job.created_at).toLocaleDateString()}
                       </span>
                     </div>
-                    {data.job.notas_cierre && (
-                      <div className="mt-1 pt-1 text-slate-700">
-                        <strong className="text-slate-500">Notas / Justificación:</strong>{' '}
-                        <span className="italic">{data.job.notas_cierre}</span>
+                    <div className="bg-indigo-50/80 border border-indigo-200/70 p-2 print:p-1 rounded-lg">
+                      <span className="text-indigo-600 flex items-center space-x-1 text-[10px] print:text-[9px] font-bold uppercase">
+                        <Clock className="w-3 h-3 text-indigo-500" />
+                        <span>Tiempo Job</span>
+                      </span>
+                      <span className="font-mono font-extrabold text-xs print:text-[11px] text-indigo-900 block">
+                        {data.job.duracion_texto || '—'}
+                      </span>
+                      <span className="text-[9px] text-indigo-500 block">
+                        {data.job.es_en_curso ? 'En curso' : 'Finalizado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Closure Details / Batch History */}
+                  {data.batchCloses && data.batchCloses.length > 0 ? (
+                    <div className="mt-3 print:mt-1.5 pt-3 print:pt-1.5 border-t border-slate-200 text-xs print:text-[10px] space-y-1 bg-white p-3 print:p-1.5 rounded-lg border border-slate-200/60">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span className="flex items-center space-x-1.5">
+                          <History className="w-3.5 h-3.5 print:w-3 print:h-3 text-indigo-600" />
+                          <span>Historial de Entregas y Cierres de Lote ({data.batchCloses.length})</span>
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Pieces Summary with Individual Umbrella Durations */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                  <span>Piezas del Job ({sortedPieces.length})</span>
-                  {sortedPieces.some((p: any) => p.cierre_excepcion === 1) && (
-                    <span className="text-rose-600 font-bold normal-case text-[11px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                      {sortedPieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción
-                    </span>
-                  )}
-                </h3>
-                <div className="grid grid-cols-1 gap-2.5">
-                  {sortedPieces.map((piece: any) => (
-                    <div
-                      key={piece.id}
-                      className={`p-3.5 rounded-xl border text-xs space-y-2 ${piece.cierre_excepcion === 1
-                        ? 'bg-rose-50/60 border-rose-200'
-                        : 'bg-white border-slate-200 shadow-xs'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <span className="font-mono font-bold text-sm text-slate-900">{piece.codigo_qr_unico}</span>
-                          <span className="text-[11px] text-slate-500 font-medium">
-                            {piece.estacion_actual ? `${piece.estacion_actual} • ${piece.estado_actual}` : 'Proceso Completado'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          {/* Piece Duration Badges: Total, Activo, Espera */}
-                          <div className="flex items-center space-x-1.5 font-mono text-[11px]">
-                            <span
-                              className="inline-flex items-center space-x-1 font-bold bg-indigo-50 border border-indigo-200 text-indigo-900 px-2.5 py-1 rounded-md"
-                              title={`Tiempo Total de Ciclo (inicio a fin/cierre): ${piece.tiempo_total_texto || piece.duracion_texto || '—'}`}
-                            >
-                              <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Tiempo Total: {piece.tiempo_total_texto || piece.duracion_texto || '—'}</span>
-                              {piece.es_finalizada ? (
-                                <span className="text-[9px] text-emerald-600 font-extrabold uppercase ml-1">✓ OK</span>
-                              ) : (
-                                <span className="text-[9px] text-blue-600 font-extrabold uppercase ml-1">En curso</span>
+                      <div className="divide-y divide-slate-100">
+                        {data.batchCloses.map((close: any, cIdx: number) => (
+                          <div key={close.id || cIdx} className="py-1 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-1 text-[11px] print:text-[9px]">
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] print:text-[8px] font-extrabold uppercase ${close.tipo_cierre === 'TOTAL'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-blue-100 text-blue-900 border border-blue-300'
+                                }`}>
+                                Cierre {close.tipo_cierre}
+                              </span>
+                              <span className="font-bold text-slate-800">
+                                {close.piezas_cerradas} pieza(s) entregada(s)
+                              </span>
+                              <span className="text-slate-400">• por {close.usuario_nombre || 'Supervisor'}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-slate-500 font-mono text-[10px] print:text-[8px]">
+                              <span>{new Date(close.created_at).toLocaleString()}</span>
+                              {close.notas && (
+                                <span className="italic text-slate-600 font-sans">({close.notas})</span>
                               )}
-                            </span>
-
-                            {piece.tiempo_activo_texto && piece.tiempo_activo_texto !== '—' && (
-                              <span
-                                className="hidden sm:inline-flex items-center bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-1 rounded-md text-[10px] font-semibold"
-                                title="Suma del tiempo activo de producción en estaciones"
-                              >
-                                Activo: {piece.tiempo_activo_texto}
-                              </span>
-                            )}
-
-                            {piece.tiempo_espera_texto && piece.tiempo_espera_texto !== '—' && piece.tiempo_espera_ms > 0 && (
-                              <span
-                                className="hidden sm:inline-flex items-center bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded-md text-[10px]"
-                                title="Tiempo total en espera entre estaciones y hasta el cierre"
-                              >
-                                Espera: {piece.tiempo_espera_texto}
-                              </span>
-                            )}
+                            </div>
                           </div>
-
-                          {piece.cierre_excepcion === 1 ? (
-                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider">
-                              Excepción
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                              Normal
-                            </span>
-                          )}
-                        </div>
+                        ))}
                       </div>
-
-                      {/* Station-by-station Time Progression */}
-                      {piece.pasos && piece.pasos.length > 0 && (
-                        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-[10px]">
-                          <span className="text-slate-400 font-semibold uppercase text-[9px] mr-1">Tiempos por Estación:</span>
-                          {piece.pasos.map((paso: any) => {
-                            const isTerminado = paso.estado_nombre === 'TERMINADA';
-                            const isEnProceso = paso.estado_nombre === 'EN PROCESO';
-                            const isOmitido = paso.estado_nombre === 'TERMINADA' && !paso.fecha_inicio && !paso.tiempo_activo_ms;
-
-                            const tooltip = isOmitido
-                              ? `${paso.proceso_nombre}: Completado sin escaneo previo (Paso Omitido / Manual)`
-                              : `${paso.proceso_nombre}: Total: ${paso.tiempo_total_texto || paso.duracion_texto || '—'} | Activo: ${paso.tiempo_activo_texto || '—'}${paso.tiempo_espera_texto ? ` | Espera previa: ${paso.tiempo_espera_texto}` : ''}`;
-
-                            return (
-                              <span
-                                key={paso.id}
-                                className={`px-2 py-0.5 rounded border font-mono flex items-center space-x-1.5 ${isOmitido
-                                  ? 'bg-amber-50 border-amber-300 text-amber-900 font-medium'
-                                  : isTerminado
-                                    ? 'bg-slate-50 border-slate-200 text-slate-700'
-                                    : isEnProceso
-                                      ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold'
-                                      : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
-                                  }`}
-                                title={tooltip}
-                              >
-                                <span>{paso.proceso_nombre}:</span>
-                                <strong className={isEnProceso ? 'text-blue-700' : isOmitido ? 'text-amber-800' : 'text-slate-900 font-bold'}>
-                                  {isOmitido ? 'Omitido / Manual' : (paso.tiempo_total_texto || paso.duracion_texto || '—')}
-                                </strong>
-                                {!isOmitido && paso.tiempo_activo_texto && paso.tiempo_espera_texto && paso.tiempo_espera_ms > 0 && (
-                                  <span className="text-[9px] text-slate-400 font-normal">
-                                    (Act: {paso.tiempo_activo_texto})
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })}
+                    </div>
+                  ) : data.job.fecha_cierre ? (
+                    <div className="mt-3 print:mt-1.5 pt-3 print:pt-1.5 border-t border-slate-200 text-xs print:text-[10px] space-y-1 bg-white p-3 print:p-1.5 rounded-lg border border-slate-200/60">
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span>
+                          <strong>Cerrado por:</strong> {data.job.cerrado_por_nombre || 'Supervisor'}
+                        </span>
+                        <span>
+                          <strong>Fecha Cierre:</strong> {new Date(data.job.fecha_cierre).toLocaleString()}
+                        </span>
+                      </div>
+                      {data.job.notas_cierre && (
+                        <div className="mt-1 pt-1 text-slate-700">
+                          <strong className="text-slate-500">Notas / Justificación:</strong>{' '}
+                          <span className="italic">{data.job.notas_cierre}</span>
                         </div>
                       )}
                     </div>
-                  ))}
+                  ) : null}
+                </div>
+
+                {/* Pieces Summary with Individual Umbrella Durations */}
+                <div className="space-y-1.5 print:space-y-1">
+                  <h3 className="text-xs print:text-[10px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Piezas del Job ({sortedPieces.length})</span>
+                    {sortedPieces.some((p: any) => p.cierre_excepcion === 1) && (
+                      <span className="text-rose-600 font-bold normal-case text-[11px] print:text-[9px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                        {sortedPieces.filter((p: any) => p.cierre_excepcion === 1).length} pieza(s) con excepción
+                      </span>
+                    )}
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2 print:gap-1.5">
+                    {sortedPieces.map((piece: any) => (
+                      <div
+                        key={piece.id}
+                        className={`p-3 print:p-1.5 rounded-xl border text-xs print:text-[10px] space-y-1.5 print:space-y-1 ${piece.cierre_excepcion === 1
+                          ? 'bg-rose-50/60 border-rose-200'
+                          : 'bg-white border-slate-200 shadow-xs'
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <span className="font-mono font-bold text-sm print:text-xs text-slate-900">{piece.codigo_qr_unico}</span>
+                            <span className="text-[11px] print:text-[9px] text-slate-500 font-medium">
+                              {piece.estacion_actual ? `${piece.estacion_actual} • ${piece.estado_actual}` : 'Proceso Completado'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-1.5">
+                            {/* Piece Duration Badges: Total, Activo, Espera */}
+                            <div className="flex items-center space-x-1.5 font-mono text-[11px] print:text-[9px]">
+                              <span
+                                className="inline-flex items-center space-x-1 font-bold bg-indigo-50 border border-indigo-200 text-indigo-900 px-2 py-0.5 rounded-md"
+                                title={`Tiempo Total de Ciclo (inicio a fin/cierre): ${piece.tiempo_total_texto || piece.duracion_texto || '—'}`}
+                              >
+                                <Clock className="w-3 h-3 text-indigo-600" />
+                                <span>Tiempo Total: {piece.tiempo_total_texto || piece.duracion_texto || '—'}</span>
+                                {piece.es_finalizada ? (
+                                  <span className="text-[9px] print:text-[8px] text-emerald-600 font-extrabold uppercase ml-1">✓ OK</span>
+                                ) : (
+                                  <span className="text-[9px] print:text-[8px] text-blue-600 font-extrabold uppercase ml-1">En curso</span>
+                                )}
+                              </span>
+
+                              {piece.tiempo_activo_texto && piece.tiempo_activo_texto !== '—' && (
+                                <span
+                                  className="inline-flex items-center bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-md text-[10px] print:text-[8px] font-semibold"
+                                  title="Suma del tiempo activo de producción en estaciones"
+                                >
+                                  Activo: {piece.tiempo_activo_texto}
+                                </span>
+                              )}
+
+                              {piece.tiempo_espera_texto && piece.tiempo_espera_texto !== '—' && piece.tiempo_espera_ms > 0 && (
+                                <span
+                                  className="inline-flex items-center bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md text-[10px] print:text-[8px]"
+                                  title="Tiempo total en espera entre estaciones y hasta el cierre"
+                                >
+                                  Espera: {piece.tiempo_espera_texto}
+                                </span>
+                              )}
+                            </div>
+
+                            {piece.cierre_excepcion === 1 ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] print:text-[8px] font-bold bg-rose-600 text-white uppercase tracking-wider">
+                                Excepción
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] print:text-[8px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                                Normal
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Station-by-station Time Progression */}
+                        {piece.pasos && piece.pasos.length > 0 && (
+                          <div className="pt-1.5 print:pt-1 border-t border-slate-100 flex flex-wrap items-center gap-1 text-[10px] print:text-[8.5px]">
+                            <span className="text-slate-400 font-semibold uppercase text-[9px] print:text-[8px] mr-1">Tiempos por Estación:</span>
+                            {piece.pasos.map((paso: any) => {
+                              const isTerminado = paso.estado_nombre === 'TERMINADA';
+                              const isEnProceso = paso.estado_nombre === 'EN PROCESO';
+                              const isOmitido = paso.estado_nombre === 'TERMINADA' && !paso.fecha_inicio && !paso.tiempo_activo_ms;
+
+                              const tooltip = isOmitido
+                                ? `${paso.proceso_nombre}: Completado sin escaneo previo (Paso Omitido / Manual)`
+                                : `${paso.proceso_nombre}: Total: ${paso.tiempo_total_texto || paso.duracion_texto || '—'} | Activo: ${paso.tiempo_activo_texto || '—'}${paso.tiempo_espera_texto ? ` | Espera previa: ${paso.tiempo_espera_texto}` : ''}`;
+
+                              return (
+                                <span
+                                  key={paso.id}
+                                  className={`px-1.5 py-0.5 rounded border font-mono flex items-center space-x-1 ${isOmitido
+                                    ? 'bg-amber-50 border-amber-300 text-amber-900 font-medium'
+                                    : isTerminado
+                                      ? 'bg-slate-50 border-slate-200 text-slate-700'
+                                      : isEnProceso
+                                        ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold'
+                                        : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
+                                    }`}
+                                  title={tooltip}
+                                >
+                                  <span>{paso.proceso_nombre}:</span>
+                                  <strong className={isEnProceso ? 'text-blue-700' : isOmitido ? 'text-amber-800' : 'text-slate-900 font-bold'}>
+                                    {isOmitido ? 'Omitido / Manual' : (paso.tiempo_total_texto || paso.duracion_texto || '—')}
+                                  </strong>
+                                  {!isOmitido && paso.tiempo_activo_texto && paso.tiempo_espera_texto && paso.tiempo_espera_ms > 0 && (
+                                    <span className="text-[8.5px] print:text-[7.5px] text-slate-400 font-normal">
+                                      (Act: {paso.tiempo_activo_texto})
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Forensic Audit Events Trail as Table */}
-              <div className="space-y-3">
+              {/* Forensic Audit Events Trail as Table - PAGE 2+ */}
+              <div className="print-page-break-before space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
                     <History className="w-4 h-4 text-slate-500" />
@@ -627,7 +643,8 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 print:bg-slate-200 print:text-black print:border-slate-400">
                         <tr>
-                          <th className="py-2.5 px-3 whitespace-nowrap">Fecha y Hora</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Fecha</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Hora</th>
                           <th className="py-2.5 px-3 whitespace-nowrap">Job / Pieza</th>
                           <th className="py-2.5 px-3 whitespace-nowrap">Estación / Proceso</th>
                           <th className="py-2.5 px-3 whitespace-nowrap">Estado</th>
@@ -638,15 +655,24 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                       <tbody className="divide-y divide-slate-100 print:divide-slate-200 bg-white">
                         {sortedAndFilteredEvents.length > 0 ? (
                           sortedAndFilteredEvents.map((ev: any, idx: number) => {
-                            const dateObj = new Date(ev.timestamp);
-                            const formattedDate = dateObj.toLocaleDateString();
-                            const formattedTime = dateObj.toLocaleTimeString();
+                            const rawTime = ev.timestamp || ev.creado_en || ev.created_at;
+                            let formattedDate = '—';
+                            let formattedTime = '—';
+                            if (rawTime) {
+                              const dateObj = new Date(rawTime);
+                              if (!isNaN(dateObj.getTime())) {
+                                formattedDate = dateObj.toLocaleDateString();
+                                formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                              }
+                            }
 
                             return (
                               <tr key={ev.id || idx} className="hover:bg-slate-50/80 transition-colors print:break-inside-avoid">
-                                <td className="py-2 px-3 font-mono text-[11px] text-slate-600 whitespace-nowrap align-top">
-                                  <div className="font-semibold text-slate-800">{formattedDate}</div>
-                                  <div className="text-[10px] text-slate-400">{formattedTime}</div>
+                                <td className="py-2 px-3 font-mono text-[11px] text-slate-800 font-semibold whitespace-nowrap align-top">
+                                  {formattedDate}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap align-top">
+                                  {formattedTime}
                                 </td>
                                 <td className="py-2 px-3 font-mono font-bold text-blue-700 whitespace-nowrap align-top">
                                   <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded">
@@ -685,7 +711,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                           })
                         ) : (
                           <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                            <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
                               No hay eventos registrados en la bitácora de este Job.
                             </td>
                           </tr>

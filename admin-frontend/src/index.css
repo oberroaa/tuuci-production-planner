@@ -89,17 +89,22 @@ body {
     overflow: visible !important;
   }
 
-  /* Hide everything on the page by default */
-  body > * {
+  /* Completely hide all background application content, navbars, buttons, headers */
+  header,
+  nav,
+  main,
+  .no-print,
+  button,
+  .border-b.bg-slate-50,
+  .border-t.bg-slate-50 {
     display: none !important;
   }
 
-  /* Show the active modal layer */
+  /* Keep the fixed overlay container visible if printing audit or qr-tickets */
   body > #root,
   body > #root > div,
-  body > #root > div > main,
-  body > #root > div > main > div,
-  .fixed.inset-0 {
+  .fixed.inset-0:has(#printable-job-audit),
+  .fixed.inset-0:has(#printable-qr-tickets) {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -113,14 +118,17 @@ body {
     transform: none !important;
   }
 
-  /* Hide modal header, footer, close buttons and navbar */
-  header,
-  nav,
-  .no-print,
-  button,
-  .border-b.bg-slate-50,
-  .border-t.bg-slate-50 {
-    display: none !important;
+  /* Fallback for browsers that do not support :has() on fixed container */
+  .fixed.inset-0 {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   /* Audit & Tickets Containers */
@@ -142,6 +150,20 @@ body {
     visibility: visible !important;
   }
 
+  /* Page 1: Header + Job Info + Cierres + Piezas del Job must fit in 1 page */
+  .print-page-1 {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Bitacora section: Starts on Page 2 and flows downwards cleanly */
+  .print-page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+    margin-top: 0 !important;
+    padding-top: 8px !important;
+  }
+
   #printable-job-audit table {
     width: 100% !important;
     border-collapse: collapse !important;
@@ -161,12 +183,8 @@ body {
   #printable-job-audit td {
     border: 1px solid #cbd5e1 !important;
     color: #0f172a !important;
-    padding: 6px 8px !important;
-  }
-
-  #printable-job-audit .border {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
+    padding: 4px 6px !important;
+    font-size: 10px !important;
   }
 
   .thermal-ticket {
@@ -176,9 +194,6 @@ body {
     background: #ffffff !important;
     color: #000000 !important;
     margin-bottom: 8px !important;
-  }
-  .no-print {
-    display: none !important;
   }
 }
 
