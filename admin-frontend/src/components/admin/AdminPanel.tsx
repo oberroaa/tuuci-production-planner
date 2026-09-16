@@ -2113,7 +2113,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               </p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {catalogs.tipoProcesos.map((tp) => {
+              {[...catalogs.tipoProcesos].sort((a, b) => Number(a.id) - Number(b.id)).map((tp) => {
                 const isEditing = editingTipoId === tp.id;
                 return (
                   <div

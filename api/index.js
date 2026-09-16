@@ -69,7 +69,7 @@ app.get('/api/catalogs', async (req, res) => {
   try {
     const lineas = await db.prepare('SELECT * FROM lineas').all();
     const rutas = await db.prepare('SELECT * FROM rutas ORDER BY linea_id, id ASC').all();
-    const tipoProcesos = await db.prepare('SELECT * FROM tipo_procesos').all();
+    const tipoProcesos = await db.prepare('SELECT * FROM tipo_procesos ORDER BY id ASC').all();
     const estados = await db.prepare('SELECT * FROM estados ORDER BY orden ASC').all();
     const escaneres = await db.prepare(`
       SELECT s.*, tp.nombre as tipo_proceso_nombre, l.nombre as linea_nombre
