@@ -188,29 +188,99 @@ app.get('/api/auth/entra/callback', (req, res) => {
 // Entra SSO Exchange (SPA exchanges handoff code for user session)
 app.post('/api/auth/entra/exchange', async (req, res) => {
   try {
-    const { code, email, name, oid } = req.body;
+    const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Código de autorización requerido' });
 
-    // When Microsoft returns a user:
-    // 1. Check if user already exists in DB by email or microsoft_id
-    const targetEmail = (email || '').trim().toLowerCase();
+    const tenantId = process.env.ENTRA_TENANT_ID || 'common';
+    const clientId = process.env.ENTRA_CLIENT_ID;
+    const clientSecret = process.env.ENTRA_CLIENT_SECRET;
+    const redirectUri = process.env.ENTRA_REDIRECT_URI || 'http://localhost:5173/api/auth/entra/callback';
+
+    let msUser = null;
+
+    // In production or when ENTRA credentials are configured, exchange code with Microsoft
+    if (clientId && clientSecret) {
+      const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+      const params = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+        scope: 'openid profile email User.Read'
+      });
+
+      const tokenRes = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      });
+
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.access_token) {
+        console.error('[entra] Error al canjear code con Microsoft:', tokenData);
+        return res.status(401).json({ error: 'Fallo de autenticación con Microsoft: código no válido o expirado' });
+      }
+
+      // Query Microsoft Graph for verified profile
+      const graphRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+
+      if (!graphRes.ok) {
+        return res.status(401).json({ error: 'No se pudo obtener el perfil del usuario de Microsoft Graph' });
+      }
+
+      const graphData = await graphRes.json();
+      msUser = {
+        email: (graphData.mail || graphData.userPrincipalName || '').trim().toLowerCase(),
+        name: graphData.displayName || (graphData.mail || graphData.userPrincipalName || '').split('@')[0],
+        oid: graphData.id
+      };
+    } else if (process.env.DEV_AUTH_BYPASS === '1' && process.env.NODE_ENV !== 'production') {
+      // In local testing/mock mode ONLY if DEV_AUTH_BYPASS is explicitly enabled
+      const fallbackEmail = (req.body.email || '').trim().toLowerCase();
+      if (fallbackEmail) {
+        msUser = {
+          email: fallbackEmail,
+          name: req.body.name || fallbackEmail.split('@')[0],
+          oid: req.body.oid || `ms-dev-${Date.now()}`
+        };
+      } else {
+        const defaultAdmin = await db.prepare('SELECT * FROM usuarios WHERE rol = "ADMIN" LIMIT 1').get();
+        if (defaultAdmin) {
+          msUser = {
+            email: defaultAdmin.email,
+            name: defaultAdmin.nombre,
+            oid: defaultAdmin.microsoft_id
+          };
+        }
+      }
+    } else {
+      return res.status(503).json({
+        error: 'El servicio Microsoft Entra no está configurado (faltan credenciales en el servidor).'
+      });
+    }
+
+    if (!msUser || !msUser.email) {
+      return res.status(400).json({ error: 'No se pudo determinar el correo del usuario verificado.' });
+    }
+
+    const targetEmail = msUser.email;
     let user = null;
 
-    if (targetEmail) {
-      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE LOWER(u.email) = ?').get(targetEmail);
+    user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE LOWER(u.email) = ?').get(targetEmail);
+
+    if (!user && msUser.oid) {
+      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE u.microsoft_id = ?').get(msUser.oid);
     }
 
-    if (!user && oid) {
-      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE u.microsoft_id = ?').get(oid);
-    }
+    // Auto-provision new user into DB if not found
+    if (!user) {
+      const defaultRole = 'OPERADOR';
+      const userName = msUser.name || targetEmail.split('@')[0];
+      const userOid = msUser.oid || `ms-${Date.now()}`;
 
-    // 2. If it's a completely NEW user from Microsoft, AUTO-PROVISION into the DB:
-    if (!user && targetEmail) {
-      const defaultRole = 'OPERADOR'; // Rol seguro por defecto (menor privilegio)
-      const userName = name && name.trim() ? name.trim() : targetEmail.split('@')[0];
-      const userOid = oid || `ms-${Date.now()}`;
-
-      // Linea inicia VACÍA (null) hasta que el usuario escoja por primera vez
       const insertRes = await db.prepare(`
         INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
         VALUES (?, ?, ?, ?, NULL)
@@ -223,13 +293,8 @@ app.post('/api/auth/entra/exchange', async (req, res) => {
         WHERE u.id = ?
       `).get(insertRes.lastInsertRowid);
 
-      console.log(`[entra] Nuevo usuario auto-registrado en DB (sin línea inicial): ${targetEmail} (ID: ${user.id}, Rol: ${defaultRole})`);
+      console.log(`[entra] Nuevo usuario auto-registrado en DB: ${targetEmail} (ID: ${user.id}, Rol: ${defaultRole})`);
       notifyDashboardUpdate();
-    }
-
-    // Fallback in dev/mock if no email provided in test
-    if (!user) {
-      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE rol = "ADMIN" LIMIT 1').get();
     }
 
     if (user) {
@@ -238,6 +303,7 @@ app.post('/api/auth/entra/exchange', async (req, res) => {
     }
     res.status(404).json({ error: 'Usuario no encontrado' });
   } catch (err) {
+    console.error('[entra] Exchange exception:', err);
     res.status(500).json({ error: err.message });
   }
 });
