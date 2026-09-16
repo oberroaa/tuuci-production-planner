@@ -235,7 +235,16 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
         setShowConfirm(false);
         onJobCreated();
       } else {
-        setConfirmError(data.error || 'Error al registrar la orden');
+        if (data.errorCode === 'ROUTE_WITHOUT_PROCESSES' || (data.error && data.error.includes('No process route defined'))) {
+          const rutaObj = lineRutas.find((r: any) => r.id === selectedRutaId);
+          const rutaNombre = data.rutaNombre || rutaObj?.nombre;
+          const friendlyMsg = rutaNombre
+            ? `La ruta "${rutaNombre}" no tiene procesos configurados. Configura sus estaciones desde el Panel de Administración antes de crear la orden.`
+            : 'La ruta seleccionada no tiene procesos configurados. Ve al Panel de Administración, entra en "Rutas de Procesos por Línea" y agrega al menos una estación a esta ruta antes de crear la orden.';
+          setConfirmError(friendlyMsg);
+        } else {
+          setConfirmError(data.error || 'Error al registrar la orden');
+        }
       }
     } catch (err: any) {
       console.error('Failed to create job', err);

@@ -45,7 +45,10 @@ export class StateEngine {
         const firstRutaRes = await query('SELECT id FROM rutas WHERE linea_id = $1 LIMIT 1', [lineaId]);
         defaultRuta = firstRutaRes.rows[0];
       }
-      if (!defaultRuta) throw new Error(`No route found for line ID ${lineaId}`);
+      if (!defaultRuta) {
+        console.warn(`[StateEngine.createJob] No route found for line ID ${lineaId}`);
+        throw new Error('La línea seleccionada no tiene ninguna ruta configurada en el sistema. Configura sus rutas desde el Panel de Administración.');
+      }
       effectiveRutaId = defaultRuta.id;
     }
 
@@ -57,10 +60,22 @@ export class StateEngine {
       WHERE p.ruta_id = $1
       ORDER BY p.orden ASC
     `, [effectiveRutaId]);
-    const procesos = procesosRes.rows;
+    // Retrieve route details for user-friendly error reporting and logging
+    const rutaInfoRes = await query('SELECT r.id, r.nombre, l.nombre as linea_nombre FROM rutas r LEFT JOIN lineas l ON r.linea_id = l.id WHERE r.id = $1', [effectiveRutaId]);
+    const rutaInfo = rutaInfoRes.rows[0];
+    const rutaNombre = rutaInfo ? rutaInfo.nombre : null;
 
     if (procesos.length === 0) {
-      throw new Error(`No process route defined for route ID ${effectiveRutaId}`);
+      console.warn(`[StateEngine.createJob] Route without processes: route ID ${effectiveRutaId} (${rutaNombre || 'Unknown route'}) for line ID ${lineaId}`);
+      const err = new Error(
+        rutaNombre
+          ? `La ruta "${rutaNombre}" no tiene procesos configurados. Configura sus estaciones desde el Panel de Administración antes de crear la orden.`
+          : 'La ruta seleccionada no tiene procesos configurados. Ve al Panel de Administración, entra en "Rutas de Procesos por Línea" y agrega al menos una estación a esta ruta antes de crear la orden.'
+      );
+      err.code = 'ROUTE_WITHOUT_PROCESSES';
+      err.rutaNombre = rutaNombre;
+      err.rutaId = effectiveRutaId;
+      throw err;
     }
 
     // Ensure jobCode is strictly unique

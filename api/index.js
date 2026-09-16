@@ -872,7 +872,13 @@ app.post('/api/jobs', async (req, res) => {
     notifyDashboardUpdate();
     res.status(201).json({ success: true, job });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({
+      success: false,
+      error: err.message,
+      errorCode: err.code || null,
+      rutaNombre: err.rutaNombre || null,
+      rutaId: err.rutaId || null
+    });
   }
 });
 
