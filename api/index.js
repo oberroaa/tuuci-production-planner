@@ -72,7 +72,7 @@ app.get('/api/catalogs', async (req, res) => {
     const tipoProcesos = await db.prepare('SELECT * FROM tipo_procesos ORDER BY id ASC').all();
     const estados = await db.prepare('SELECT * FROM estados ORDER BY orden ASC').all();
     const escaneres = await db.prepare(`
-      SELECT s.*, tp.nombre as tipo_proceso_nombre, l.nombre as linea_nombre
+      SELECT s.*, tp.nombre as tipo_proceso_nombre, tp.nombre as tipo_nombre, l.nombre as linea_nombre
       FROM escaneres s
       JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
       LEFT JOIN lineas l ON s.linea_id = l.id

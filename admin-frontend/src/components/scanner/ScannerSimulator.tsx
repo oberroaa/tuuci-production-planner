@@ -14,7 +14,8 @@ interface ScannerDevice {
   linea_id?: number | null;
   linea_nombre?: string | null;
   activo: number;
-  tipo_nombre: string;
+  tipo_nombre?: string;
+  tipo_proceso_nombre?: string;
 }
 
 export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess, currentUser, activeLine }) => {
@@ -69,10 +70,12 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           setDevices(active);
           if (active.length > 0) {
             // Default to first active scanner
-            setSelectedStationCode(active[0].codigo_estacion);
+            const firstDev = active[0];
+            const tipoDesc = firstDev.tipo_nombre || firstDev.tipo_proceso_nombre || '';
+            setSelectedStationCode(firstDev.codigo_estacion);
             setOledDisplay({
               line1: 'LISTO PARA ESCANEAR',
-              line2: `ESTACIÓN: ${active[0].codigo_estacion} [${active[0].tipo_nombre}]`,
+              line2: `ESTACIÓN: ${firstDev.codigo_estacion}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
               tone: 'idle'
             });
           } else {
@@ -101,9 +104,10 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     setSelectedStationCode(code);
     const found = devices.find((d) => d.codigo_estacion === code);
     if (found) {
+      const tipoDesc = found.tipo_nombre || found.tipo_proceso_nombre || '';
       setOledDisplay({
         line1: 'LISTO PARA ESCANEAR',
-        line2: `ESTACIÓN: ${found.codigo_estacion} [${found.tipo_nombre}]`,
+        line2: `ESTACIÓN: ${found.codigo_estacion}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
         tone: 'idle'
       });
     } else {
@@ -169,7 +173,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         setHistory((prev) => [
           {
             time: new Date().toLocaleTimeString(),
-            station: selectedStationCode !== 'AUTO' ? `${selectedStationCode} (${currentDev?.tipo_nombre || ''})` : 'AUTO',
+            station: selectedStationCode !== 'AUTO' ? `${selectedStationCode} (${currentDev?.tipo_nombre || currentDev?.tipo_proceso_nombre || ''})` : 'AUTO',
             code,
             action: 'RECHAZADO',
             success: false,
@@ -255,11 +259,14 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             >
               {devices.length > 0 ? (
                 <optgroup label="Dispositivos Físicos Registrados">
-                  {devices.map((dev) => (
-                    <option key={dev.id} value={dev.codigo_estacion}>
-                      {dev.codigo_estacion} — {dev.tipo_nombre} {dev.linea_nombre ? `(${dev.linea_nombre})` : '(Todas las Líneas)'}
-                    </option>
-                  ))}
+                  {devices.map((dev) => {
+                    const tipoDesc = dev.tipo_nombre || dev.tipo_proceso_nombre || '';
+                    return (
+                      <option key={dev.id} value={dev.codigo_estacion}>
+                        {dev.codigo_estacion} {tipoDesc ? `— ${tipoDesc}` : ''} {dev.linea_nombre ? `(${dev.linea_nombre})` : '(Todas las Líneas)'}
+                      </option>
+                    );
+                  })}
                 </optgroup>
               ) : (
                 <option value="AUTO" disabled>Cargando dispositivos...</option>
@@ -273,7 +280,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
               <div className="flex items-center justify-between text-[11px] pt-1 text-slate-400 font-mono border-t border-slate-800/80">
                 <span>Tipo de Proceso que atiende:</span>
                 <span className="font-bold text-emerald-400 uppercase">
-                  {selectedDevice.tipo_nombre}
+                  {selectedDevice.tipo_nombre || selectedDevice.tipo_proceso_nombre || 'ESTACIÓN'}
                 </span>
               </div>
             )}
