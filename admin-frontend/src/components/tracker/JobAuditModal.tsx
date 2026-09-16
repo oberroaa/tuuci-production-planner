@@ -78,7 +78,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn print:m-0 print:p-0 print:bg-white print:static print:block print:h-auto print:overflow-visible print:inset-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden print:m-0 print:p-0 print:border-none print:shadow-none print:max-w-none print:w-full print:max-h-none print:overflow-visible print:static print:block print:rounded-none">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden print:m-0 print:p-0 print:border-none print:shadow-none print:max-w-none print:w-full print:max-h-none print:overflow-visible print:static print:block print:rounded-none">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
           <div className="flex items-center space-x-3">
@@ -214,11 +214,10 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                       {data.batchCloses.map((close: any, cIdx: number) => (
                         <div key={close.id || cIdx} className="py-1.5 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-1 text-[11px]">
                           <div className="flex items-center space-x-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                              close.tipo_cierre === 'TOTAL'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-blue-100 text-blue-900 border border-blue-300'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${close.tipo_cierre === 'TOTAL'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-blue-100 text-blue-900 border border-blue-300'
+                              }`}>
                               Cierre {close.tipo_cierre}
                             </span>
                             <span className="font-bold text-slate-800">
@@ -270,11 +269,10 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                   {sortedPieces.map((piece: any) => (
                     <div
                       key={piece.id}
-                      className={`p-3.5 rounded-xl border text-xs space-y-2 ${
-                        piece.cierre_excepcion === 1
-                          ? 'bg-rose-50/60 border-rose-200'
-                          : 'bg-white border-slate-200 shadow-xs'
-                      }`}
+                      className={`p-3.5 rounded-xl border text-xs space-y-2 ${piece.cierre_excepcion === 1
+                        ? 'bg-rose-50/60 border-rose-200'
+                        : 'bg-white border-slate-200 shadow-xs'
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
@@ -339,7 +337,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                             const isTerminado = paso.estado_nombre === 'TERMINADA';
                             const isEnProceso = paso.estado_nombre === 'EN PROCESO';
                             const isOmitido = paso.estado_nombre === 'TERMINADA' && !paso.fecha_inicio && !paso.tiempo_activo_ms;
-                            
+
                             const tooltip = isOmitido
                               ? `${paso.proceso_nombre}: Completado sin escaneo previo (Paso Omitido / Manual)`
                               : `${paso.proceso_nombre}: Total: ${paso.tiempo_total_texto || paso.duracion_texto || '—'} | Activo: ${paso.tiempo_activo_texto || '—'}${paso.tiempo_espera_texto ? ` | Espera previa: ${paso.tiempo_espera_texto}` : ''}`;
@@ -347,15 +345,14 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                             return (
                               <span
                                 key={paso.id}
-                                className={`px-2 py-0.5 rounded border font-mono flex items-center space-x-1.5 ${
-                                  isOmitido
-                                    ? 'bg-amber-50 border-amber-300 text-amber-900 font-medium'
-                                    : isTerminado
+                                className={`px-2 py-0.5 rounded border font-mono flex items-center space-x-1.5 ${isOmitido
+                                  ? 'bg-amber-50 border-amber-300 text-amber-900 font-medium'
+                                  : isTerminado
                                     ? 'bg-slate-50 border-slate-200 text-slate-700'
                                     : isEnProceso
-                                    ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold'
-                                    : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
-                                }`}
+                                      ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold'
+                                      : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
+                                  }`}
                                 title={tooltip}
                               >
                                 <span>{paso.proceso_nombre}:</span>
@@ -392,11 +389,10 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                       <button
                         type="button"
                         onClick={() => setSelectedPieceFilter('ALL')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${
-                          selectedPieceFilter === 'ALL'
-                            ? 'bg-slate-900 text-white shadow-xs'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${selectedPieceFilter === 'ALL'
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
                       >
                         Todas
                       </button>
@@ -405,11 +401,10 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                           key={p.id}
                           type="button"
                           onClick={() => setSelectedPieceFilter(p.codigo_qr_unico)}
-                          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${
-                            selectedPieceFilter === p.codigo_qr_unico
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
+                          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-colors ${selectedPieceFilter === p.codigo_qr_unico
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
                         >
                           {p.codigo_qr_unico}
                         </button>
@@ -454,13 +449,12 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                                 </td>
                                 <td className="py-2 px-3 whitespace-nowrap align-top">
                                   <span
-                                    className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase inline-block ${
-                                      ev.estado_nombre === 'TERMINADA'
-                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                        : ev.estado_nombre === 'EN PROCESO'
+                                    className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase inline-block ${ev.estado_nombre === 'TERMINADA'
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : ev.estado_nombre === 'EN PROCESO'
                                         ? 'bg-amber-100 text-amber-800 border border-amber-200'
                                         : 'bg-slate-100 text-slate-700 border border-slate-200'
-                                    }`}
+                                      }`}
                                   >
                                     {ev.estado_nombre}
                                   </span>
