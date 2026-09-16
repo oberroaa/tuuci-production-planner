@@ -65,6 +65,8 @@ export class StateEngine {
     const rutaInfo = rutaInfoRes.rows[0];
     const rutaNombre = rutaInfo ? rutaInfo.nombre : null;
 
+    const procesos = procesosRes.rows;
+
     if (procesos.length === 0) {
       console.warn(`[StateEngine.createJob] Route without processes: route ID ${effectiveRutaId} (${rutaNombre || 'Unknown route'}) for line ID ${lineaId}`);
       const err = new Error(
