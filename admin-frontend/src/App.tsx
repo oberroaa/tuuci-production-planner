@@ -7,22 +7,78 @@ import { ScannerSimulator } from './components/scanner/ScannerSimulator';
 import { KanbanTracker } from './components/tracker/KanbanTracker';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { SettingsView } from './components/settings/SettingsView';
+import { Login } from './components/auth/Login';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<string>('DASHBOARD');
   const [activeLine, setActiveLine] = useState<string>('TODAS');
   const [lines, setLines] = useState<Array<{ id: number; nombre: string }>>([]);
   const [summaryData, setSummaryData] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>({
-    id: 1,
-    nombre: 'Otoniel Berroa',
-    email: 'oberroa@tuuci.com',
-    rol: 'ADMIN',
-    microsoft_id: 'ms-admin-001',
-    linea_nombre: null
+
+  // Restore authenticated session from localStorage or set to null
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('tuuci_user');
+      if (saved) return JSON.parse(saved);
+      return null;
+    } catch {
+      return null;
+    }
   });
 
-  // Load product lines and current user
+  // DEV_AUTH_BYPASS: If enabled in .env (VITE_DEV_AUTH_BYPASS=1 or DEV_AUTH_BYPASS=1), automatically sign in default admin user
+  const metaEnv = (import.meta as any).env || {};
+  const isAuthBypass =
+    (metaEnv.VITE_DEV_AUTH_BYPASS === '1' || metaEnv.DEV_AUTH_BYPASS === '1') &&
+    metaEnv.DEV;
+
+  // Handle Entra callback handoff code (?auth_code=...) from Microsoft SSO
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authCode = params.get('auth_code');
+    if (authCode) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('auth_code');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      } catch { /* ignore */ }
+
+      fetch('/api/auth/entra/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: authCode })
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error('Error al intercambiar credencial de Entra');
+          return res.json();
+        })
+        .then((userData) => {
+          if (userData && userData.email) {
+            handleLogin(userData);
+          }
+        })
+        .catch(console.error);
+    }
+  }, []);
+
+  useEffect(() => {
+    // If bypass is active, user is not logged in, and user didn't explicitly log out in this session
+    if (isAuthBypass && !currentUser && sessionStorage.getItem('tuuci_logged_out') !== '1') {
+      fetch('/api/users')
+        .then((r) => r.json())
+        .then((users) => {
+          if (Array.isArray(users) && users.length > 0) {
+            const adminUser = users.find((u: any) => u.rol === 'ADMIN') || users[0];
+            if (adminUser) {
+              handleLogin(adminUser);
+            }
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isAuthBypass, currentUser]);
+
+  // Load product lines
   useEffect(() => {
     fetch('/api/catalogs')
       .then((r) => r.json())
@@ -37,29 +93,34 @@ export function App() {
         }
       })
       .catch(console.error);
-
-    fetch('/api/users')
-      .then((r) => r.json())
-      .then((users) => {
-        if (Array.isArray(users) && users.length > 0) {
-          setCurrentUser(users[0]);
-          if (users[0].rol === 'OPERADOR' && users[0].linea_nombre) {
-            setActiveLine(users[0].linea_nombre);
-          } else {
-            setActiveLine('TODAS');
-          }
-        }
-      })
-      .catch(console.error);
   }, []);
 
-  const handleSwitchUser = (user: any) => {
+  // When user logs in or switches
+  const handleLogin = (user: any) => {
     setCurrentUser(user);
+    try {
+      localStorage.setItem('tuuci_user', JSON.stringify(user));
+      sessionStorage.removeItem('tuuci_logged_out');
+    } catch { /* ignore */ }
+
     if (user.linea_nombre) {
       setActiveLine(user.linea_nombre);
     } else {
       setActiveLine('TODAS');
     }
+  };
+
+  // Sign out / Logout: clears session and redirects to Login screen
+  const handleLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('tuuci_user');
+      sessionStorage.setItem('tuuci_logged_out', '1');
+    } catch { /* ignore */ }
+  };
+
+  const handleSwitchUser = (user: any) => {
+    handleLogin(user);
   };
 
   // Unified shared route state synchronized across Dashboard and Tracker
@@ -133,6 +194,11 @@ export function App() {
     return () => clearInterval(timer);
   }, [fetchSummary]);
 
+  // If user is not authenticated, render Login screen (matching canopy-lookup pattern)
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f7f9] flex flex-col font-sans">
       {/* Top Navbar matching UI screenshot */}
@@ -143,6 +209,7 @@ export function App() {
         setActiveLine={setActiveLine}
         lines={lines}
         currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Content View - Retain views mounted so navigating to Scanner / Cutting and back doesn't destroy state */}
@@ -220,6 +287,7 @@ export function App() {
             activeLine={activeLine}
             onSelectTemporaryLine={setActiveLine}
             lines={lines}
+            onLogout={handleLogout}
           />
         </div>
 

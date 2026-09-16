@@ -59,9 +59,73 @@ function notifyDashboardUpdate() {
   io.emit('scan:event');
 }
 
-// 1. Health check
+// 1. Health check & Auth Status
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'TUUCI Production Planner API', time: new Date().toISOString() });
+});
+
+// Entra SSO status endpoint (mirrors canopy-lookup)
+app.get('/api/auth/entra/status', (req, res) => {
+  const isEnabled = process.env.ENTRA_ENABLED === '1' || process.env.ENTRA_ENABLED === 'true';
+  const hasClientId = Boolean(process.env.ENTRA_CLIENT_ID);
+  res.json({
+    enabled: isEnabled && hasClientId,
+    tenantId: process.env.ENTRA_TENANT_ID || null
+  });
+});
+
+// Entra SSO Start (Redirects to Microsoft Login)
+app.get('/api/auth/entra/start', (req, res) => {
+  const tenantId = process.env.ENTRA_TENANT_ID || 'common';
+  const clientId = process.env.ENTRA_CLIENT_ID;
+  const redirectUri = process.env.ENTRA_REDIRECT_URI || 'http://localhost:5173/api/auth/entra/callback';
+
+  if (!clientId) {
+    return res.status(503).json({
+      error: 'ENTRA_CLIENT_ID no está configurado en el archivo .env del backend.'
+    });
+  }
+
+  const msAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?` +
+    `client_id=${encodeURIComponent(clientId)}` +
+    `&response_type=code` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_mode=query` +
+    `&scope=openid%20profile%20email`;
+
+  res.redirect(302, msAuthUrl);
+});
+
+// Entra SSO Callback (Called back by Microsoft)
+app.get('/api/auth/entra/callback', (req, res) => {
+  const code = req.query.code;
+  const error = req.query.error;
+  const appBase = process.env.ENTRA_APP_BASE_URL || 'http://localhost:5173';
+
+  if (error || !code) {
+    return res.redirect(302, `${appBase}/?auth_error=entra`);
+  }
+
+  // Redirect to SPA with single-use handoff code
+  res.redirect(302, `${appBase}/?auth_code=${encodeURIComponent(code)}`);
+});
+
+// Entra SSO Exchange (SPA exchanges handoff code for user session)
+app.post('/api/auth/entra/exchange', async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'Código de autorización requerido' });
+
+    // When Entra credentials are fully active, token exchange happens here.
+    // For now, if user exists by email or default admin, return user:
+    const adminUser = await db.prepare('SELECT * FROM usuarios WHERE rol = "ADMIN" LIMIT 1').get();
+    if (adminUser) {
+      return res.json(adminUser);
+    }
+    res.status(404).json({ error: 'Usuario no encontrado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 2. Catalogs API

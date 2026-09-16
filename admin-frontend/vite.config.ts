@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.DEV_AUTH_BYPASS': JSON.stringify(process.env.DEV_AUTH_BYPASS || '')
+  },
   server: {
     port: 5173,
     proxy: {

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UserCheck, Sliders, Shield, AlertCircle, RefreshCw, Volume2 } from 'lucide-react';
+import { UserCheck, Sliders, Shield, AlertCircle, RefreshCw, Volume2, LogOut } from 'lucide-react';
 
 interface SettingsViewProps {
-  currentUser: any;
+  currentUser?: any;
   onSwitchUser: (user: any) => void;
   activeLine: string;
   onSelectTemporaryLine: (line: string) => void;
   lines: Array<{ id: number; nombre: string }>;
+  onLogout?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -14,7 +15,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onSwitchUser,
   activeLine,
   onSelectTemporaryLine,
-  lines
+  lines,
+  onLogout
 }) => {
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -240,6 +242,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               );
             })}
           </div>
+
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full py-2.5 px-3 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all flex items-center justify-center space-x-2"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Cerrar Sesión Activa</span>
+            </button>
+          )}
 
           <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-800 flex items-start space-x-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />

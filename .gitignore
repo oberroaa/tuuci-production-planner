@@ -15,7 +15,10 @@ build/
 
 # Environment variables
 .env
-.env.local
+.env.*
+*.env
+**/.env
+**/.env.*
 
 # Logs
 npm-debug.log*

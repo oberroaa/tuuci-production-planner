@@ -8,6 +8,7 @@ interface NavbarProps {
   setActiveLine: (line: string) => void;
   lines: Array<{ id: number; nombre: string }>;
   currentUser?: any;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,7 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeLine,
   setActiveLine,
   lines,
-  currentUser
+  currentUser,
+  onLogout
 }) => {
   const [clock, setClock] = React.useState<string>('');
 
@@ -170,14 +172,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </button>
 
-        {/* Sign Out */}
+        {/* Sign Out / Logout */}
         <button
-          onClick={() => setActiveTab('SETTINGS')}
-          className="flex items-center space-x-1 text-slate-400 hover:text-red-400 transition-colors pl-2"
-          title="Cambiar de usuario"
+          onClick={onLogout || (() => setActiveTab('SETTINGS'))}
+          className="flex items-center space-x-1.5 text-slate-400 hover:text-red-400 transition-colors pl-2 border-l border-[#2b3038]"
+          title="Cerrar sesión"
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span className="text-[11px] font-medium uppercase tracking-wider">Cambiar</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider">Salir</span>
         </button>
       </div>
     </header>
