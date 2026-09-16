@@ -26,6 +26,13 @@ export function App() {
     }
   });
 
+  // Guard activeTab against unauthorized roles (e.g. non-admin accessing ADMIN panel)
+  useEffect(() => {
+    if (currentUser && currentUser.rol !== 'ADMIN' && activeTab === 'ADMIN') {
+      setActiveTab('DASHBOARD');
+    }
+  }, [currentUser, activeTab]);
+
   // DEV_AUTH_BYPASS: If enabled in .env (VITE_DEV_AUTH_BYPASS=1 or DEV_AUTH_BYPASS=1), automatically sign in default admin user
   const metaEnv = (import.meta as any).env || {};
   const isAuthBypass =
@@ -107,6 +114,24 @@ export function App() {
       setActiveLine(user.linea_nombre);
     } else {
       setActiveLine('TODAS');
+    }
+  };
+
+  // Lock initial line for an operator or supervisor who does not have one
+  const handleSetInitialLine = async (lineId: number) => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/users/${currentUser.id}/initial-line`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineaId: lineId })
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        handleLogin(data.user);
+      }
+    } catch (err) {
+      console.error('Error fijando línea inicial:', err);
     }
   };
 
@@ -199,8 +224,65 @@ export function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  // If user is OPERADOR or SUPERVISOR and does NOT have a line assigned yet, show required line selection modal
+  const needsLineSelection =
+    (currentUser.rol === 'OPERADOR' || currentUser.rol === 'SUPERVISOR') &&
+    !currentUser.linea_id &&
+    !currentUser.linea_nombre;
+
   return (
     <div className="min-h-screen bg-[#f4f7f9] flex flex-col font-sans">
+      {/* Modal Obligatorio de Primera Asignación de Línea */}
+      {needsLineSelection && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto text-xl font-bold">
+                🏭
+              </div>
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                Asignación de Línea de Producción
+              </h2>
+              <p className="text-xs text-slate-500">
+                Hola <strong>{currentUser.nombre}</strong>. Como nuevo usuario registrado, debes seleccionar tu línea de trabajo principal. Esta línea quedará fija para tu perfil.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                Selecciona tu línea de trabajo:
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {lines.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => handleSetInitialLine(l.id)}
+                    className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-left transition-all flex items-center justify-between group active:scale-[0.99]"
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700">
+                        {l.nombre}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Línea de ensamblaje y control
+                      </div>
+                    </div>
+                    <span className="text-xs font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Fijar Línea →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-center text-slate-400">
+              Una vez seleccionada, solo un Administrador o Supervisor podrá reasignarte a otra línea.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar matching UI screenshot */}
       <Navbar
         activeTab={activeTab}

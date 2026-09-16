@@ -191,57 +191,92 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Switch User for Testing / Simulation */}
+        {/* Right Column: Profile details or Switch User (Only for ADMIN in dev/testing) */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-          <div className="space-y-1">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
-              <UserCheck className="w-4 h-4 text-emerald-600" />
-              <span>Simular Inicio de Sesión</span>
-            </h3>
-            <p className="text-xs text-slate-500">
-              Selecciona cualquier usuario registrado para probar la aplicación con sus permisos y línea asignada:
-            </p>
-          </div>
+          {isAdmin ? (
+            <>
+              <div className="space-y-1">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                  <UserCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Simular Cambio de Usuario (Solo Admin)</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Como Administrador, puedes alternar entre usuarios para auditar sus permisos:
+                </p>
+              </div>
 
-          <div className="space-y-2.5">
-            {availableUsers.map((u) => {
-              const isSelected = currentUser?.id === u.id;
-              return (
-                <div
-                  key={u.id}
-                  onClick={() => onSwitchUser(u)}
-                  className={`p-3 rounded-lg border text-xs cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-blue-50/80 border-blue-400 ring-1 ring-blue-400 shadow-sm'
-                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900">{u.nombre}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${
-                        u.rol === 'ADMIN'
-                          ? 'bg-purple-100 text-purple-800'
-                          : u.rol === 'SUPERVISOR'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-emerald-100 text-emerald-800'
+              <div className="space-y-2.5">
+                {availableUsers.map((u) => {
+                  const isSelected = currentUser?.id === u.id;
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => onSwitchUser(u)}
+                      className={`p-3 rounded-lg border text-xs cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-blue-50/80 border-blue-400 ring-1 ring-blue-400 shadow-sm'
+                          : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
                       }`}
                     >
-                      {u.rol}
-                    </span>
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">{u.nombre}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${
+                            u.rol === 'ADMIN'
+                              ? 'bg-purple-100 text-purple-800'
+                              : u.rol === 'SUPERVISOR'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {u.rol}
+                        </span>
+                      </div>
 
-                  <div className="text-[11px] text-slate-500 mt-1">
-                    Línea: <strong className="text-slate-700">{u.linea_nombre || (u.rol === 'ADMIN' ? 'Sin filtro' : 'Mueble')}</strong>
-                  </div>
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        Línea: <strong className="text-slate-700">{u.linea_nombre || (u.rol === 'ADMIN' ? 'Sin filtro' : 'Mueble')}</strong>
+                      </div>
 
-                  {isSelected && (
-                    <div className="text-[10px] font-bold text-blue-600 mt-1">✓ SESIÓN ACTIVA</div>
-                  )}
+                      {isSelected && (
+                        <div className="text-[10px] font-bold text-blue-600 mt-1">✓ SESIÓN ACTIVA</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  <span>Permisos de Cuenta</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Tu cuenta opera bajo control de acceso restringido basado en rol.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Nivel de Acceso:</span>
+                  <span className="font-bold text-slate-800">{currentUser?.rol}</span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Línea Autorizada:</span>
+                  <span className="font-bold text-slate-800">{currentUser?.linea_nombre || 'Mueble'}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Gestión de Catálogos:</span>
+                  <span className="font-semibold text-red-600">Restringido (Solo Admin)</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                Para cambiar de cuenta de trabajo, utiliza el botón "Cerrar Sesión Activa" abajo o el botón "Salir" en la barra superior.
+              </p>
+            </div>
+          )}
 
           {onLogout && (
             <button
@@ -254,10 +289,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           )}
 
-          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-800 flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
-            <span>Para crear o eliminar usuarios y roles, dirígete a la pestaña <strong>ADMIN</strong>.</span>
-          </div>
+          {isAdmin && (
+            <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-800 flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
+              <span>Para crear o eliminar usuarios y roles, dirígete a la pestaña <strong>ADMIN</strong>.</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

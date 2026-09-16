@@ -50,37 +50,46 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Line Switcher */}
         <div className="relative">
           {(() => {
-            const isFixedLine = currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'OPERADOR';
+            const hasAssignedLine = Boolean(currentUser?.linea_id || currentUser?.linea_nombre);
+            const isNonAdmin = currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'OPERADOR';
+            const isFixedLine = isNonAdmin && hasAssignedLine;
+
+            // Operator or Supervisor without line: must pick one
+            const needsToPickLine = isNonAdmin && !hasAssignedLine;
+
             return (
               <select
-                value={activeLine}
-                onChange={(e) => setActiveLine(e.target.value)}
+                value={needsToPickLine && !activeLine ? '' : activeLine}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  setActiveLine(val);
+                }}
                 disabled={isFixedLine}
                 aria-label="Select production line"
-                className="appearance-none bg-[#1d2127] text-white text-xs font-medium px-3.5 py-1.5 pr-8 rounded-md border border-[#2f353e] hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                className={`appearance-none text-white text-xs font-medium px-3.5 py-1.5 pr-8 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed ${
+                  needsToPickLine
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-200 animate-pulse'
+                    : 'bg-[#1d2127] border-[#2f353e] hover:border-slate-500'
+                }`}
               >
+                {needsToPickLine && (
+                  <option value="" disabled>
+                    ⚠️ Selecciona tu Línea de Producción...
+                  </option>
+                )}
                 {isFixedLine ? (
                   <option value={currentUser?.linea_nombre || activeLine}>
-                    {currentUser?.linea_nombre || activeLine}
+                    Línea: {currentUser?.linea_nombre || activeLine} (Fija)
                   </option>
                 ) : (
                   <>
-                    <option value="TODAS">🌐 Ver Todo (Todas las Líneas)</option>
-                    {lines.length > 0 ? (
-                      lines.map((l) => (
-                        <option key={l.id} value={l.nombre}>
-                          {l.nombre}
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="Clásica">Clásica</option>
-                        <option value="Cantiléver">Cantiléver</option>
-                        <option value="Cabaña">Cabaña</option>
-                        <option value="Mueble">Mueble</option>
-                        <option value="Otro">Otro</option>
-                      </>
-                    )}
+                    {!isNonAdmin && <option value="TODAS">🌐 Ver Todo (Todas las Líneas)</option>}
+                    {lines.map((l) => (
+                      <option key={l.id} value={l.nombre}>
+                        {l.nombre}
+                      </option>
+                    ))}
                   </>
                 )}
               </select>
@@ -131,14 +140,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             SETTINGS
           </button>
-          <button
-            onClick={() => setActiveTab('ADMIN')}
-            className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
-              activeTab === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            ADMIN
-          </button>
+          {currentUser?.rol === 'ADMIN' && (
+            <button
+              onClick={() => setActiveTab('ADMIN')}
+              className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
+                activeTab === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ADMIN
+            </button>
+          )}
         </nav>
       </div>
 

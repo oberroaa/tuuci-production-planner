@@ -113,14 +113,52 @@ app.get('/api/auth/entra/callback', (req, res) => {
 // Entra SSO Exchange (SPA exchanges handoff code for user session)
 app.post('/api/auth/entra/exchange', async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, email, name, oid } = req.body;
     if (!code) return res.status(400).json({ error: 'Código de autorización requerido' });
 
-    // When Entra credentials are fully active, token exchange happens here.
-    // For now, if user exists by email or default admin, return user:
-    const adminUser = await db.prepare('SELECT * FROM usuarios WHERE rol = "ADMIN" LIMIT 1').get();
-    if (adminUser) {
-      return res.json(adminUser);
+    // When Microsoft returns a user:
+    // 1. Check if user already exists in DB by email or microsoft_id
+    const targetEmail = (email || '').trim().toLowerCase();
+    let user = null;
+
+    if (targetEmail) {
+      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE LOWER(u.email) = ?').get(targetEmail);
+    }
+
+    if (!user && oid) {
+      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE u.microsoft_id = ?').get(oid);
+    }
+
+    // 2. If it's a completely NEW user from Microsoft, AUTO-PROVISION into the DB:
+    if (!user && targetEmail) {
+      const defaultRole = 'OPERADOR'; // Rol seguro por defecto (menor privilegio)
+      const userName = name && name.trim() ? name.trim() : targetEmail.split('@')[0];
+      const userOid = oid || `ms-${Date.now()}`;
+
+      // Linea inicia VACÍA (null) hasta que el usuario escoja por primera vez
+      const insertRes = await db.prepare(`
+        INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
+        VALUES (?, ?, ?, ?, NULL)
+      `).run(userOid, userName, targetEmail, defaultRole);
+
+      user = await db.prepare(`
+        SELECT u.*, l.nombre as linea_nombre
+        FROM usuarios u
+        LEFT JOIN lineas l ON u.linea_id = l.id
+        WHERE u.id = ?
+      `).get(insertRes.lastInsertRowid);
+
+      console.log(`[entra] Nuevo usuario auto-registrado en DB (sin línea inicial): ${targetEmail} (ID: ${user.id}, Rol: ${defaultRole})`);
+      notifyDashboardUpdate();
+    }
+
+    // Fallback in dev/mock if no email provided in test
+    if (!user) {
+      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE rol = "ADMIN" LIMIT 1').get();
+    }
+
+    if (user) {
+      return res.json(user);
     }
     res.status(404).json({ error: 'Usuario no encontrado' });
   } catch (err) {
@@ -694,7 +732,17 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+// Middleware helper to check admin role from header (x-user-role)
+function requireAdminRole(req, res, next) {
+  const role = req.headers['x-user-role'];
+  // In dev without header, allow if bypass, otherwise if role provided, must be ADMIN
+  if (role && role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Acceso denegado: solo Administradores pueden gestionar usuarios o catálogos.' });
+  }
+  next();
+}
+
+app.post('/api/users', requireAdminRole, async (req, res) => {
   try {
     const { microsoftId, nombre, email, rol, lineaId } = req.body;
     if (!nombre || !email || !rol) {
@@ -711,7 +759,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, email, rol, lineaId } = req.body;
@@ -726,13 +774,55 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     await db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Endpoint for first-time line assignment by an operator whose linea_id is NULL
+app.post('/api/users/:id/initial-line', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { lineaId } = req.body;
+
+    if (!lineaId) {
+      return res.status(400).json({ error: 'lineaId es requerido' });
+    }
+
+    // Verify current user state in DB
+    const existing = await db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // If user already has a line and is NOT admin, it cannot be changed via this self-service route
+    if (existing.linea_id !== null && existing.rol !== 'ADMIN') {
+      return res.status(403).json({ error: 'Tu línea ya está fijada. Solo un Administrador o Supervisor puede cambiarla.' });
+    }
+
+    const line = await db.prepare('SELECT * FROM lineas WHERE id = ?').get(lineaId);
+    if (!line) {
+      return res.status(404).json({ error: 'Línea de producción no encontrada' });
+    }
+
+    await db.prepare('UPDATE usuarios SET linea_id = ? WHERE id = ?').run(line.id, id);
+
+    const updatedUser = await db.prepare(`
+      SELECT u.*, l.nombre as linea_nombre
+      FROM usuarios u
+      LEFT JOIN lineas l ON u.linea_id = l.id
+      WHERE u.id = ?
+    `).get(id);
+
+    notifyDashboardUpdate();
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

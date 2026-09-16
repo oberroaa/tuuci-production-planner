@@ -74,6 +74,193 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
     });
   }, [data?.auditEvents, selectedPieceFilter]);
 
+  // Export to native Microsoft Excel (.xls XML Workbook format) with styling, bold headers and columns
+  const handleExportExcel = () => {
+    if (!data || !data.job) return;
+
+    const job = data.job;
+    const pieces = sortedPieces;
+    const events = sortedAndFilteredEvents;
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+  </Style>
+  <Style ss:ID="Title">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1" ss:Color="#0F172A"/>
+  </Style>
+  <Style ss:ID="Subtitle">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Italic="1" ss:Color="#64748B"/>
+  </Style>
+  <Style ss:ID="SectionHeader">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#1E293B"/>
+   <Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="TableHeader">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#2563EB" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#1D4ED8"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="CellNormal">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1E293B"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="CellCenter">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1E293B"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="CellCode">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Consolas" ss:Size="10" ss:Bold="1" ss:Color="#1E40AF"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="TagOk">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#065F46"/>
+   <Interior ss:Color="#D1FAE5" ss:Pattern="Solid"/>
+   <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#A7F3D0"/></Borders>
+  </Style>
+  <Style ss:ID="TagEx">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#991B1B"/>
+   <Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/>
+   <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FECACA"/></Borders>
+  </Style>
+  <Style ss:ID="TagWarning">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#92400E"/>
+   <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+   <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FDE68A"/></Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Auditoría Job">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="140"/>
+   <Column ss:Width="160"/>
+   <Column ss:Width="130"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="280"/>
+
+   <Row ss:Height="26">
+    <Cell ss:MergeAcross="5" ss:StyleID="Title"><Data ss:Type="String">TUUCI • Reporte Forense de Auditoría y Trazabilidad</Data></Cell>
+   </Row>
+   <Row ss:Height="18">
+    <Cell ss:MergeAcross="5" ss:StyleID="Subtitle"><Data ss:Type="String">Fecha de Emisión: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</Data></Cell>
+   </Row>
+   <Row ss:Height="10"/>
+
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">INFORMACIÓN GENERAL DEL JOB</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Código Job:</Data></Cell>
+    <Cell ss:StyleID="CellCode"><Data ss:Type="String">${job.job_code}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Estado de Cierre:</Data></Cell>
+    <Cell ss:StyleID="${job.estado_cierre === 'COMPLETADO' ? 'TagOk' : 'TagWarning'}"><Data ss:Type="String">${job.estado_cierre}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Piezas Totales:</Data></Cell>
+    <Cell ss:StyleID="CellCenter"><Data ss:Type="Number">${job.cantidad_piezas || 0}</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Modelo:</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${job.modelo || '—'}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Línea &amp; Ruta:</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${job.linea_nombre} - ${job.ruta_nombre || 'Principal'}</Data></Cell>
+    <Cell ss:StyleID="CellNormal"><Data ss:Type="String">Tiempo Total Job:</Data></Cell>
+    <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${job.duracion_texto || '—'}</Data></Cell>
+   </Row>
+   <Row ss:Height="16"/>
+
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">RECONCILIACIÓN DE PIEZAS DEL JOB (${pieces.length})</Data></Cell>
+   </Row>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Código Pieza</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Última Estación</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Estado</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Tiempo Total</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Tiempo Activo</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Tiempo Espera</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Diagnóstico</Data></Cell>
+   </Row>
+   ${pieces.map((p: any) => {
+     const isOk = p.estado_reconciliacion === 'NORMAL' || p.estado_nombre === 'TERMINADA';
+     return `<Row>
+      <Cell ss:StyleID="CellCode"><Data ss:Type="String">${p.codigo_qr_unico}</Data></Cell>
+      <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${p.estacion_actual_nombre || p.proceso_nombre || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${p.estado_nombre || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${p.tiempo_total_texto || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${p.tiempo_activo_texto || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${p.tiempo_espera_texto || '—'}</Data></Cell>
+      <Cell ss:StyleID="${isOk ? 'TagOk' : 'TagEx'}"><Data ss:Type="String">${isOk ? 'NORMAL' : 'EXCEPCIÓN'}</Data></Cell>
+     </Row>`;
+   }).join('\n')}
+   <Row ss:Height="16"/>
+
+   <Row ss:Height="22">
+    <Cell ss:MergeAcross="5" ss:StyleID="SectionHeader"><Data ss:Type="String">BITÁCORA DETALLADA DE EVENTOS (${events.length})</Data></Cell>
+   </Row>
+   <Row ss:Height="22">
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Fecha y Hora</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Código Pieza</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Estación / Proceso</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Estado</Data></Cell>
+    <Cell ss:StyleID="TableHeader"><Data ss:Type="String">Operador / Usuario</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="TableHeader"><Data ss:Type="String">Observaciones y Notas</Data></Cell>
+   </Row>
+   ${events.map((ev: any) => {
+     const fecha = ev.creado_en ? new Date(ev.creado_en).toLocaleString() : '—';
+     const obs = (ev.observacion || 'Sin observaciones').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+     return `<Row>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${fecha}</Data></Cell>
+      <Cell ss:StyleID="CellCode"><Data ss:Type="String">${ev.codigo_qr_unico || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${ev.estacion_codigo || ev.proceso_nombre || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellCenter"><Data ss:Type="String">${ev.estado_nombre || '—'}</Data></Cell>
+      <Cell ss:StyleID="CellNormal"><Data ss:Type="String">${ev.usuario_nombre || 'Sistema / Escáner'}</Data></Cell>
+      <Cell ss:MergeAcross="1" ss:StyleID="CellNormal"><Data ss:Type="String">${obs}</Data></Cell>
+     </Row>`;
+   }).join('\n')}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Auditoria_${job.job_code}_${new Date().toISOString().slice(0, 10)}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (!isOpen || !jobId) return null;
 
   return (
@@ -95,9 +282,31 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            {data && !loading && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-bold shadow-2xs transition-all flex items-center space-x-1.5 cursor-pointer"
+                  title="Descargar datos del Job en Excel / CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Exportar a Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs transition-all flex items-center space-x-1.5 cursor-pointer"
+                  title="Imprimir o guardar en PDF apaisado"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Exportar a PDF</span>
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors ml-2"
             >
               <X className="w-5 h-5" />
             </button>
@@ -503,14 +712,25 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
               Cerrar
             </button>
             {data && !loading && (
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Exportar a PDF</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer"
+                  title="Descargar datos en Excel / CSV"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Exportar a Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Exportar a PDF</span>
+                </button>
+              </>
             )}
           </div>
         </div>
