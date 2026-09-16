@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import crypto from 'node:crypto';
 import db, { initDb } from '../db-compat.js';
 import { StateEngine } from '../services/state-engine.js';
 import { DashboardService } from '../services/dashboard-service.js';
@@ -52,6 +53,80 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
+
+// Security & Signed Session Tokens
+// (crypto already imported at top of file)
+
+const SESSION_SECRET = process.env.SESSION_SECRET || 'tuuci-prod-planner-session-sec-2026-key';
+
+export function issueUserToken(user) {
+  const payload = {
+    userId: user.id,
+    email: user.email,
+    rol: user.rol,
+    timestamp: Date.now()
+  };
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
+  return `${data}.${signature}`;
+}
+
+export function verifyUserToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [data, signature] = parts;
+  const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
+  if (signature !== expectedSig) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    if (Date.now() - payload.timestamp > 7 * 24 * 60 * 60 * 1000) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function authenticateUser(req, res, next) {
+  let token = null;
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim();
+  } else if (req.headers['x-session-token']) {
+    token = req.headers['x-session-token'];
+  }
+
+  if (token) {
+    const payload = verifyUserToken(token);
+    if (payload && payload.userId) {
+      const user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE u.id = ?').get(payload.userId);
+      if (user) {
+        req.user = user;
+        return next();
+      }
+    }
+  }
+
+  if (process.env.DEV_AUTH_BYPASS === '1' && process.env.NODE_ENV !== 'production') {
+    const defaultAdmin = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE rol = "ADMIN" LIMIT 1').get();
+    if (defaultAdmin) {
+      req.user = defaultAdmin;
+      return next();
+    }
+  }
+
+  req.user = null;
+  next();
+}
+
+export function requireAdminRole(req, res, next) {
+  if (!req.user || req.user.rol !== 'ADMIN') {
+    return res.status(403).json({ error: 'Acceso denegado: solo Administradores pueden realizar esta acción.' });
+  }
+  next();
+}
+
+app.use(authenticateUser);
 
 // Broadcast helper
 function notifyDashboardUpdate() {
@@ -158,9 +233,32 @@ app.post('/api/auth/entra/exchange', async (req, res) => {
     }
 
     if (user) {
-      return res.json(user);
+      const token = issueUserToken(user);
+      return res.json({ ...user, token });
     }
     res.status(404).json({ error: 'Usuario no encontrado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Direct Login endpoint with token issuance (for testing/local login)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { userId, email } = req.body;
+    let user = null;
+    if (userId) {
+      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE u.id = ?').get(userId);
+    } else if (email) {
+      user = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE LOWER(u.email) = ?').get(email.trim().toLowerCase());
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const token = issueUserToken(user);
+    res.json({ ...user, token });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -194,8 +292,8 @@ app.get('/api/catalogs', async (req, res) => {
   }
 });
 
-// 2b. Add / Edit / Delete Line
-app.post('/api/catalogs/lines', async (req, res) => {
+// 2b. Add / Edit / Delete Line (Admin protected)
+app.post('/api/catalogs/lines', requireAdminRole, async (req, res) => {
   try {
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de línea es requerido' });
@@ -213,7 +311,7 @@ app.post('/api/catalogs/lines', async (req, res) => {
   }
 });
 
-app.put('/api/catalogs/lines/:id', async (req, res) => {
+app.put('/api/catalogs/lines/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre } = req.body;
@@ -226,7 +324,7 @@ app.put('/api/catalogs/lines/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/lines/:id', async (req, res) => {
+app.delete('/api/catalogs/lines/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const tx = db.transaction(async (txDb) => {
@@ -242,8 +340,8 @@ app.delete('/api/catalogs/lines/:id', async (req, res) => {
   }
 });
 
-// 2b.2 Add / Edit / Delete Route
-app.post('/api/catalogs/rutas', async (req, res) => {
+// 2b.2 Add / Edit / Delete Route (Admin protected)
+app.post('/api/catalogs/rutas', requireAdminRole, async (req, res) => {
   try {
     const { lineaId, nombre, esDefault } = req.body;
     if (!lineaId || !nombre || !nombre.trim()) {
@@ -268,7 +366,7 @@ app.post('/api/catalogs/rutas', async (req, res) => {
   }
 });
 
-app.put('/api/catalogs/rutas/:id', async (req, res) => {
+app.put('/api/catalogs/rutas/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM rutas WHERE id = ?').get(id);
@@ -291,7 +389,7 @@ app.put('/api/catalogs/rutas/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/rutas/:id', async (req, res) => {
+app.delete('/api/catalogs/rutas/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM rutas WHERE id = ?').get(id);
@@ -325,8 +423,8 @@ app.delete('/api/catalogs/rutas/:id', async (req, res) => {
   }
 });
 
-// 2c. Add / Edit / Delete TipoProceso
-app.post('/api/catalogs/tipo-procesos', async (req, res) => {
+// 2c. Add / Edit / Delete TipoProceso (Admin protected)
+app.post('/api/catalogs/tipo-procesos', requireAdminRole, async (req, res) => {
   try {
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de tipo de proceso es requerido' });
@@ -338,7 +436,7 @@ app.post('/api/catalogs/tipo-procesos', async (req, res) => {
   }
 });
 
-app.put('/api/catalogs/tipo-procesos/:id', async (req, res) => {
+app.put('/api/catalogs/tipo-procesos/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre } = req.body;
@@ -351,7 +449,7 @@ app.put('/api/catalogs/tipo-procesos/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/tipo-procesos/:id', async (req, res) => {
+app.delete('/api/catalogs/tipo-procesos/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     await db.prepare('DELETE FROM tipo_procesos WHERE id = ?').run(id);
@@ -362,8 +460,8 @@ app.delete('/api/catalogs/tipo-procesos/:id', async (req, res) => {
   }
 });
 
-// 2d. Add process step to a line route
-app.post('/api/catalogs/procesos', async (req, res) => {
+// 2d. Add process step to a line route (Admin protected)
+app.post('/api/catalogs/procesos', requireAdminRole, async (req, res) => {
   try {
     const { lineaId, rutaId, tipoProcesoId, orden, modoTrabajo } = req.body;
     if (!lineaId || !tipoProcesoId || orden === undefined || orden === null || !modoTrabajo) {
@@ -430,8 +528,8 @@ app.post('/api/catalogs/procesos', async (req, res) => {
   }
 });
 
-// 2e. Delete process step from line route
-app.delete('/api/catalogs/procesos/:id', async (req, res) => {
+// 2e. Delete process step from line route (Admin protected)
+app.delete('/api/catalogs/procesos/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
@@ -462,8 +560,8 @@ app.delete('/api/catalogs/procesos/:id', async (req, res) => {
   }
 });
 
-// 2e.2 Edit process step
-app.put('/api/catalogs/procesos/:id', async (req, res) => {
+// 2e.2 Edit process step (Admin protected)
+app.put('/api/catalogs/procesos/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
@@ -502,8 +600,8 @@ app.put('/api/catalogs/procesos/:id', async (req, res) => {
   }
 });
 
-// 2e.2a Quick inline edit for tiempo de demora
-app.patch('/api/catalogs/procesos/:id/tiempo-demora', async (req, res) => {
+// 2e.2a Quick inline edit for tiempo de demora (Admin protected)
+app.patch('/api/catalogs/procesos/:id/tiempo-demora', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const { segundos } = req.body;
@@ -519,8 +617,8 @@ app.patch('/api/catalogs/procesos/:id/tiempo-demora', async (req, res) => {
   }
 });
 
-// 2e.2b Set process step as the designated route closure step
-app.post('/api/catalogs/procesos/:id/set-cierre', async (req, res) => {
+// 2e.2b Set process step as the designated route closure step (Admin protected)
+app.post('/api/catalogs/procesos/:id/set-cierre', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
@@ -533,14 +631,14 @@ app.post('/api/catalogs/procesos/:id/set-cierre', async (req, res) => {
     await tx();
 
     notifyDashboardUpdate();
-    res.json({ success: true, id: current.id, rutaId: current.ruta_id, modoTrabajo: current.modo_trabajo });
+    res.json({ success: true, id, rutaId: current.ruta_id, modoTrabajo: current.modo_trabajo });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// 2e.3 Reorder process steps
-app.post('/api/catalogs/procesos/reorder', async (req, res) => {
+// 2e.3 Reorder process steps (Admin protected)
+app.post('/api/catalogs/procesos/reorder', requireAdminRole, async (req, res) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: 'Array de items requerido' });
@@ -560,8 +658,8 @@ app.post('/api/catalogs/procesos/reorder', async (req, res) => {
   }
 });
 
-// 2e.4 Toggle work mode
-app.patch('/api/catalogs/procesos/:id/toggle-mode', async (req, res) => {
+// 2e.4 Toggle work mode (Admin protected)
+app.patch('/api/catalogs/procesos/:id/toggle-mode', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const current = await db.prepare('SELECT * FROM procesos WHERE id = ?').get(id);
@@ -575,8 +673,8 @@ app.patch('/api/catalogs/procesos/:id/toggle-mode', async (req, res) => {
   }
 });
 
-// 2f. Add / Edit / Delete State
-app.post('/api/catalogs/estados', async (req, res) => {
+// 2f. Add / Edit / Delete State (Admin protected)
+app.post('/api/catalogs/estados', requireAdminRole, async (req, res) => {
   try {
     const { nombre, orden, visibleParaOperador, permiteEscaneo, disparaActivacionSiguiente } = req.body;
     if (!nombre || !orden) return res.status(400).json({ error: 'Nombre y orden son requeridos' });
@@ -597,7 +695,7 @@ app.post('/api/catalogs/estados', async (req, res) => {
   }
 });
 
-app.put('/api/catalogs/estados/:id', async (req, res) => {
+app.put('/api/catalogs/estados/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const currentState = await db.prepare('SELECT * FROM estados WHERE id = ?').get(id);
@@ -627,7 +725,7 @@ app.put('/api/catalogs/estados/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/catalogs/estados/:id/toggle', async (req, res) => {
+app.patch('/api/catalogs/estados/:id/toggle', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     const { field } = req.body;
@@ -644,7 +742,7 @@ app.patch('/api/catalogs/estados/:id/toggle', async (req, res) => {
   }
 });
 
-app.delete('/api/catalogs/estados/:id', async (req, res) => {
+app.delete('/api/catalogs/estados/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     await db.prepare('DELETE FROM estados WHERE id = ?').run(id);
@@ -655,7 +753,7 @@ app.delete('/api/catalogs/estados/:id', async (req, res) => {
   }
 });
 
-app.post('/api/catalogs/estados/reorder', async (req, res) => {
+app.post('/api/catalogs/estados/reorder', requireAdminRole, async (req, res) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: 'Items array required' });
@@ -672,41 +770,49 @@ app.post('/api/catalogs/estados/reorder', async (req, res) => {
   }
 });
 
-// 2g. Register / Edit / Delete physical scanner
-app.post('/api/catalogs/scanners', async (req, res) => {
+// 2g. Register / Edit / Delete physical scanner (Admin protected)
+app.post('/api/catalogs/scanners', requireAdminRole, async (req, res) => {
   try {
-    const { codigoEstacion, tipoProcesoId, lineaId } = req.body;
+    const { codigoEstacion, tipoProcesoId, lineaId, apiKey } = req.body;
     if (!codigoEstacion || !tipoProcesoId) return res.status(400).json({ error: 'Código de estación y proceso son requeridos' });
     const targetLineaId = lineaId ? parseInt(lineaId, 10) : null;
+    const finalKey = (apiKey && apiKey.trim()) ? apiKey.trim() : `tuuci_key_${codigoEstacion.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}_${crypto.randomBytes(4).toString('hex')}`;
     const result = await db.prepare(`
-      INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo)
-      VALUES (?, ?, ?, 1)
-    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId);
+      INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo, api_key)
+      VALUES (?, ?, ?, 1, ?)
+    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId, finalKey);
     notifyDashboardUpdate();
-    res.status(201).json({ id: result.lastInsertRowid, success: true });
+    res.status(201).json({ id: result.lastInsertRowid, success: true, apiKey: finalKey });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.put('/api/catalogs/scanners/:id', async (req, res) => {
+app.put('/api/catalogs/scanners/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
-    const { codigoEstacion, tipoProcesoId, lineaId, activo } = req.body;
+    const { codigoEstacion, tipoProcesoId, lineaId, activo, apiKey } = req.body;
     const targetLineaId = lineaId !== undefined && lineaId !== '' && lineaId !== null ? parseInt(lineaId, 10) : null;
+    
+    // If apiKey is provided, update it; otherwise preserve existing
+    const current = await db.prepare('SELECT api_key FROM escaneres WHERE id = ?').get(id);
+    const finalKey = (apiKey !== undefined && apiKey !== null) 
+      ? (apiKey.trim() || `tuuci_key_${codigoEstacion.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}_${crypto.randomBytes(4).toString('hex')}`)
+      : (current?.api_key || `tuuci_key_${codigoEstacion.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}_${crypto.randomBytes(4).toString('hex')}`);
+
     await db.prepare(`
       UPDATE escaneres
-      SET codigo_estacion = ?, tipo_proceso_id = ?, linea_id = ?, activo = ?
+      SET codigo_estacion = ?, tipo_proceso_id = ?, linea_id = ?, activo = ?, api_key = ?
       WHERE id = ?
-    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId, activo ? 1 : 0, id);
+    `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId, activo ? 1 : 0, finalKey, id);
     notifyDashboardUpdate();
-    res.json({ success: true });
+    res.json({ success: true, apiKey: finalKey });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.delete('/api/catalogs/scanners/:id', async (req, res) => {
+app.delete('/api/catalogs/scanners/:id', requireAdminRole, async (req, res) => {
   try {
     const { id } = req.params;
     await db.prepare('DELETE FROM escaneres WHERE id = ?').run(id);
@@ -732,15 +838,6 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Middleware helper to check admin role from header (x-user-role)
-function requireAdminRole(req, res, next) {
-  const role = req.headers['x-user-role'];
-  // In dev without header, allow if bypass, otherwise if role provided, must be ADMIN
-  if (role && role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Acceso denegado: solo Administradores pueden gestionar usuarios o catálogos.' });
-  }
-  next();
-}
 
 app.post('/api/users', requireAdminRole, async (req, res) => {
   try {
@@ -934,7 +1031,19 @@ app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
       }
     }
 
-    const result = await StateEngine.handleScan({ codigoEstacion, codigoQRUnico: cleanQR });
+    const scannerToken = req.headers['x-scanner-token'] 
+      || req.headers['x-api-key']
+      || req.body?.apiKey 
+      || req.body?.token 
+      || req.query?.token 
+      || req.query?.apiKey 
+      || null;
+
+    const result = await StateEngine.handleScan({ 
+      codigoEstacion, 
+      codigoQRUnico: cleanQR,
+      apiKey: scannerToken
+    });
 
     if (result.success) {
       scanCooldownMap.set(cleanQR, Date.now());
@@ -1766,8 +1875,8 @@ app.post('/api/seed-demo', async (req, res) => {
   }
 });
 
-// 8. Clean all operational jobs
-app.post('/api/admin/clean-jobs', async (req, res) => {
+// 8. Clean all operational jobs (Admin protected)
+app.post('/api/admin/clean-jobs', requireAdminRole, async (req, res) => {
   try {
     const tx = db.transaction(async (txDb) => {
       await txDb.prepare('DELETE FROM evento_estados').run();

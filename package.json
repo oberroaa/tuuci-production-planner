@@ -8,7 +8,6 @@
   "scripts": {
     "start": "node api/index.js",
     "dev": "node --watch api/index.js",
-    "seed": "node scripts/seed.mjs",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "verify:prod-boot": "node tests/verify-prod-boot.mjs"
@@ -19,7 +18,6 @@
     "node": ">=20.0"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",

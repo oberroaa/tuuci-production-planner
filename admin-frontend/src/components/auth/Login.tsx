@@ -61,11 +61,26 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
   };
 
-  const handleSelectUser = (user: User) => {
+  const handleSelectUser = async (user: User) => {
     setSigningInUserId(user.id);
-    setTimeout(() => {
-      onLogin(user);
-    }, 200);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        onLogin(data);
+      } else {
+        setError(data.error || 'Error al iniciar sesión');
+      }
+    } catch (err: any) {
+      setError('Error de conexión con el servidor');
+    } finally {
+      setSigningInUserId(null);
+    }
   };
 
   return (

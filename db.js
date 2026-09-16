@@ -121,10 +121,12 @@ export async function initDb() {
         codigo_estacion TEXT UNIQUE NOT NULL,
         tipo_proceso_id INTEGER NOT NULL REFERENCES tipo_procesos(id) ON DELETE RESTRICT,
         linea_id INTEGER REFERENCES lineas(id) ON DELETE SET NULL,
-        activo INTEGER NOT NULL DEFAULT 1
+        activo INTEGER NOT NULL DEFAULT 1,
+        api_key TEXT UNIQUE
       );
 
       ALTER TABLE escaneres ADD COLUMN IF NOT EXISTS linea_id INTEGER REFERENCES lineas(id) ON DELETE SET NULL;
+      ALTER TABLE escaneres ADD COLUMN IF NOT EXISTS api_key TEXT;
 
       CREATE TABLE IF NOT EXISTS pieza_procesos (
         id SERIAL PRIMARY KEY,
@@ -177,6 +179,15 @@ export async function initDb() {
 
     await client.query('COMMIT');
     await seedDefaultCatalogs(client);
+    
+    // Backfill any existing scanner rows that lack an api_key
+    // Run this outside seedDefaultCatalogs so it executes even if the db is already seeded
+    const nullKeys = await client.query('SELECT id, codigo_estacion FROM escaneres WHERE api_key IS NULL');
+    for (const row of nullKeys.rows) {
+      const genKey = `tuuci_key_${row.codigo_estacion.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 8)}`;
+      await client.query('UPDATE escaneres SET api_key = $1 WHERE id = $2', [genKey, row.id]);
+    }
+
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error initializing PostgreSQL tables:', error);
@@ -300,9 +311,12 @@ async function seedDefaultCatalogs(client) {
     const tipoId = await getTipoId(s.tipo);
     const muebleLine = await client.query("SELECT id FROM lineas WHERE nombre = 'Mueble'");
     const lineaId = muebleLine.rows.length > 0 ? muebleLine.rows[0].id : null;
+    const defaultKey = `tuuci_key_${s.code.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     await client.query(
-      'INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo) VALUES ($1, $2, $3, 1) ON CONFLICT (codigo_estacion) DO NOTHING',
-      [s.code, tipoId, lineaId]
+      `INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo, api_key) 
+       VALUES ($1, $2, $3, 1, $4) 
+       ON CONFLICT (codigo_estacion) DO NOTHING`,
+      [s.code, tipoId, lineaId, defaultKey]
     );
   }
 

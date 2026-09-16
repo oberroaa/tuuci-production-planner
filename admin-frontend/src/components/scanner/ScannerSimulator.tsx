@@ -16,6 +16,7 @@ interface ScannerDevice {
   activo: number;
   tipo_nombre?: string;
   tipo_proceso_nombre?: string;
+  api_key?: string | null;
 }
 
 export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess, currentUser, activeLine }) => {
@@ -130,17 +131,21 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
       const endpoint = selectedStationCode && selectedStationCode !== 'AUTO'
         ? `/api/scan/${encodeURIComponent(selectedStationCode)}`
         : '/api/scan';
+      const currentDev = devices.find((d) => d.codigo_estacion === selectedStationCode);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (currentDev?.api_key) {
+        headers['X-Scanner-Token'] = currentDev.api_key;
+      }
 
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           codigoQRUnico: code
         })
       });
 
       const data = await res.json();
-      const currentDev = devices.find((d) => d.codigo_estacion === selectedStationCode);
 
       if (data.success) {
         setCooldown(configCooldownSecs);

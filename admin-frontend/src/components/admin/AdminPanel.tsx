@@ -239,7 +239,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [newScannerCode, setNewScannerCode] = useState('');
   const [newScannerTipoId, setNewScannerTipoId] = useState<number | ''>('');
   const [newScannerLineaId, setNewScannerLineaId] = useState<number | ''>('');
+  const [newScannerApiKey, setNewScannerApiKey] = useState<string>('');
   const [copiedStation, setCopiedStation] = useState<string | null>(null);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const handleCopyScannerUrl = (code: string) => {
     const host = window.location.hostname || 'localhost';
@@ -247,6 +249,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     navigator.clipboard.writeText(url);
     setCopiedStation(code);
     setTimeout(() => setCopiedStation(null), 2500);
+  };
+
+  const handleCopyScannerToken = (token: string, stationCode: string) => {
+    navigator.clipboard.writeText(token);
+    setCopiedToken(stationCode);
+    setTimeout(() => setCopiedToken(null), 2500);
+  };
+
+  const handleCreateScanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newScannerCode.trim() || !newScannerTipoId) {
+      showToast('Código de estación y proceso son obligatorios', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('/api/catalogs/scanners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigoEstacion: newScannerCode.trim().toUpperCase(),
+          tipoProcesoId: Number(newScannerTipoId),
+          lineaId: newScannerLineaId ? Number(newScannerLineaId) : null,
+          apiKey: newScannerApiKey.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewScannerCode('');
+        setNewScannerTipoId('');
+        setNewScannerLineaId('');
+        setNewScannerApiKey('');
+        showToast('Dispositivo escáner registrado con éxito', 'success');
+        await loadCatalogs();
+        onCatalogUpdated();
+      } else {
+        showToast(data.error || 'Error al registrar el escáner.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error de conexión al registrar escáner.', 'error');
+    }
   };
 
   // User form states
@@ -268,6 +311,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [editingScannerCode, setEditingScannerCode] = useState<string>('');
   const [editingScannerTipoId, setEditingScannerTipoId] = useState<number | ''>('');
   const [editingScannerLineaId, setEditingScannerLineaId] = useState<number | ''>('');
+  const [editingScannerApiKey, setEditingScannerApiKey] = useState<string>('');
 
   const [editingProcessId, setEditingProcessId] = useState<number | null>(null);
   const [editingProcessTipoId, setEditingProcessTipoId] = useState<number | ''>('');
@@ -769,6 +813,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     setEditingScannerCode(s.codigo_estacion);
     setEditingScannerTipoId(s.tipo_proceso_id);
     setEditingScannerLineaId(s.linea_id || '');
+    setEditingScannerApiKey(s.api_key || '');
   };
 
   const handleCancelEditScanner = () => {
@@ -776,6 +821,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     setEditingScannerCode('');
     setEditingScannerTipoId('');
     setEditingScannerLineaId('');
+    setEditingScannerApiKey('');
   };
 
   const handleSaveEditScanner = async (id: number) => {
@@ -792,7 +838,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           codigoEstacion: editingScannerCode.trim().toUpperCase(),
           tipoProcesoId: Number(editingScannerTipoId),
           lineaId: editingScannerLineaId ? Number(editingScannerLineaId) : null,
-          activo: 1
+          activo: 1,
+          apiKey: editingScannerApiKey.trim() || undefined
         })
       });
 
@@ -1248,44 +1295,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
       }
     } catch (err) {
       console.error(err);
-    }
-  };
-
-  // 5. Register Physical Scanner
-  const handleCreateScanner = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newScannerCode.trim()) {
-      showToast('Ingresa el código de estación fija', 'error');
-      return;
-    }
-    if (!newScannerTipoId) {
-      showToast('Selecciona el tipo de proceso que atiende este escáner', 'error');
-      return;
-    }
-    try {
-      const res = await fetch('/api/catalogs/scanners', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          codigoEstacion: newScannerCode.trim(),
-          tipoProcesoId: newScannerTipoId,
-          lineaId: newScannerLineaId ? Number(newScannerLineaId) : null
-        })
-      });
-      if (res.ok) {
-        showToast(`Escáner "${newScannerCode.trim().toUpperCase()}" registrado`, 'success');
-        setNewScannerCode('');
-        setNewScannerTipoId('');
-        setNewScannerLineaId('');
-        await loadCatalogs();
-        onCatalogUpdated();
-      } else {
-        const data = await res.json();
-        showToast(data.error || 'Error al registrar escáner', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Error de conexión al registrar escáner', 'error');
     }
   };
 
@@ -2680,6 +2689,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           </select>
                         </div>
 
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-700">Token / API Key <span className="text-slate-400 font-normal">(Opcional)</span></label>
+                          <input
+                            type="text"
+                            value={editingScannerApiKey}
+                            onChange={(e) => setEditingScannerApiKey(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            placeholder="Dejar vacío para generar uno automático"
+                          />
+                        </div>
+
                         <div className="flex items-center justify-end space-x-2 pt-2 border-t border-blue-200">
                           <button
                             type="button"
@@ -2767,6 +2787,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             <span className="text-slate-500">Body:</span>
                             <span className="text-slate-300 font-bold">{'{ "codigoQRUnico": "JOB..." }'}</span>
                           </div>
+                          {/* Scanner Token (API Key) */}
+                          {s.api_key && (
+                            <div className="mt-1.5 pt-1.5 border-t border-slate-700">
+                              <div className="flex items-center justify-between text-[10px] text-amber-400 font-semibold uppercase mb-1">
+                                <span>Token Dispositivo (X-Scanner-Token):</span>
+                              </div>
+                              <div className="flex items-center justify-between font-mono text-[11px] bg-slate-950/80 px-2 py-1 rounded border border-amber-900/50">
+                                <span className="text-amber-300 truncate mr-2">{s.api_key}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyScannerToken(s.api_key!, s.codigo_estacion)}
+                                  className="ml-1 px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-amber-600 hover:bg-amber-500 text-white flex items-center space-x-1 transition-colors flex-shrink-0"
+                                  title="Copiar token para programar el firmware del escáner"
+                                >
+                                  {copiedToken === s.codigo_estacion ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-300" />
+                                      <span className="text-emerald-300">¡Copiado!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" />
+                                      <span>Copiar Token</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <p className="text-[9px] text-slate-500 mt-0.5">
+                                Configura este token en el header <code className="text-amber-400">X-Scanner-Token</code> del firmware.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -2825,6 +2877,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   </select>
                   <span className="text-[10px] text-slate-400">
                     Los supervisores y operadores solo verán los escáneres de su línea asignada.
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-slate-600">
+                    Token / API Key <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Se genera automáticamente si se deja vacío"
+                    value={newScannerApiKey}
+                    onChange={(e) => setNewScannerApiKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 text-[11px]"
+                  />
+                  <span className="text-[10px] text-slate-400">
+                    Se enviará como header <code className="text-amber-600">X-Scanner-Token</code> desde el firmware del aparato.
                   </span>
                 </div>
 

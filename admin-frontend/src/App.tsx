@@ -144,8 +144,22 @@ export function App() {
     } catch { /* ignore */ }
   };
 
-  const handleSwitchUser = (user: any) => {
-    handleLogin(user);
+  const handleSwitchUser = async (user: any) => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        handleLogin(data);
+      } else {
+        handleLogin(user);
+      }
+    } catch {
+      handleLogin(user);
+    }
   };
 
   // Unified shared route state synchronized across Dashboard and Tracker

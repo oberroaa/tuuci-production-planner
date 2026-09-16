@@ -250,7 +250,7 @@ export class StateEngine {
   /**
    * Phase 2: Wireless Scanner Event.
    */
-  static async handleScan({ codigoEstacion, codigoQRUnico }) {
+  static async handleScan({ codigoEstacion, codigoQRUnico, apiKey = null }) {
     if (!codigoQRUnico) {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' };
     }
@@ -282,7 +282,8 @@ export class StateEngine {
         p.tipo_proceso_id,
         tp.nombre as tipo_nombre,
         s.id as scanner_id,
-        s.codigo_estacion as default_codigo_estacion
+        s.codigo_estacion as default_codigo_estacion,
+        s.api_key as scanner_api_key
       FROM pieza_procesos pp
       JOIN procesos p ON pp.proceso_id = p.id
       JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
@@ -301,7 +302,7 @@ export class StateEngine {
 
     if (codigoEstacion) {
       const scannerRes = await query(`
-        SELECT s.id, s.codigo_estacion, s.tipo_proceso_id, s.activo, tp.nombre as tipo_nombre
+        SELECT s.id, s.codigo_estacion, s.tipo_proceso_id, s.activo, s.api_key, tp.nombre as tipo_nombre
         FROM escaneres s
         JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
         WHERE s.codigo_estacion = $1
@@ -310,6 +311,18 @@ export class StateEngine {
       const scanner = scannerRes.rows[0];
       if (!scanner || !scanner.activo) {
         return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Scanner not found or inactive' };
+      }
+
+      // Scanner Device Authentication (Option A)
+      if (scanner.api_key) {
+        if (!apiKey || apiKey.trim() !== scanner.api_key.trim()) {
+          return {
+            success: false,
+            oled_message: 'NO AUTORIZADO',
+            tone: 'red',
+            reason: 'Dispositivo escáner no autorizado (Token / API Key inválida o ausente)'
+          };
+        }
       }
 
       targetStep = allSteps.find(s => s.tipo_proceso_id === scanner.tipo_proceso_id);
@@ -385,6 +398,34 @@ export class StateEngine {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Concurrency protection: Row-level lock FOR UPDATE on target pieza_proceso
+      const lockedPPRes = await client.query(`
+        SELECT pp.id, pp.estado_id, e.nombre as estado_nombre
+        FROM pieza_procesos pp
+        JOIN estados e ON pp.estado_id = e.id
+        WHERE pp.id = $1
+        FOR UPDATE
+      `, [pp.id]);
+
+      if (lockedPPRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Paso de proceso no encontrado' };
+      }
+
+      const lockedPP = lockedPPRes.rows[0];
+
+      // Verify that another concurrent scan hasn't changed the state in between
+      if (lockedPP.estado_id !== pp.estado_id) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          oled_message: 'REINTENTE',
+          tone: 'red',
+          reason: `Conflicto de concurrencia: la pieza ya cambió de estado (${lockedPP.estado_nombre}) por otro escaneo simultáneo.`
+        };
+      }
+
       const now = new Date();
 
       if (pp.estado_nombre === 'ESPERANDO') {
