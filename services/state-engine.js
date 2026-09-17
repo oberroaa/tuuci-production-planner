@@ -255,6 +255,33 @@ export class StateEngine {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' };
     }
 
+    let scanner = null;
+    if (codigoEstacion) {
+      const scannerRes = await query(`
+        SELECT s.id, s.codigo_estacion, s.tipo_proceso_id, s.activo, s.api_key, tp.nombre as tipo_nombre
+        FROM escaneres s
+        JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
+        WHERE s.codigo_estacion = $1
+      `, [codigoEstacion]);
+
+      scanner = scannerRes.rows[0];
+      if (!scanner || !scanner.activo) {
+        return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Scanner not found or inactive' };
+      }
+
+      // Scanner Device Authentication: Hardware device must provide valid api_key
+      if (!isSimulator && scanner.api_key) {
+        if (!apiKey || apiKey.trim() !== scanner.api_key.trim()) {
+          return {
+            success: false,
+            oled_message: 'NO AUTORIZADO',
+            tone: 'red',
+            reason: 'Dispositivo escáner no autorizado (Token / API Key inválida o ausente)'
+          };
+        }
+      }
+    }
+
     const piezaRes = await query(`
       SELECT p.id, p.job_id, p.codigo_qr_unico, j.linea_id, j.job_code
       FROM piezas p
@@ -300,31 +327,7 @@ export class StateEngine {
 
     let targetStep = null;
 
-    if (codigoEstacion) {
-      const scannerRes = await query(`
-        SELECT s.id, s.codigo_estacion, s.tipo_proceso_id, s.activo, s.api_key, tp.nombre as tipo_nombre
-        FROM escaneres s
-        JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
-        WHERE s.codigo_estacion = $1
-      `, [codigoEstacion]);
-
-      const scanner = scannerRes.rows[0];
-      if (!scanner || !scanner.activo) {
-        return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Scanner not found or inactive' };
-      }
-
-      // Scanner Device Authentication (Option A: Hardware device must provide valid api_key; Simulator is authenticated via user session)
-      if (!isSimulator && scanner.api_key) {
-        if (!apiKey || apiKey.trim() !== scanner.api_key.trim()) {
-          return {
-            success: false,
-            oled_message: 'NO AUTORIZADO',
-            tone: 'red',
-            reason: 'Dispositivo escáner no autorizado (Token / API Key inválida o ausente)'
-          };
-        }
-      }
-
+    if (codigoEstacion && scanner) {
       targetStep = allSteps.find(s => s.tipo_proceso_id === scanner.tipo_proceso_id);
       if (!targetStep) {
         return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Station not part of piece route' };
@@ -685,8 +688,8 @@ export class StateEngine {
     }
 
     // Determinar si es PARCIAL o TOTAL si no viene explícito
-    // Si hay piezas rezagadas y no se pidió explícitamente forzar TOTAL, es PARCIAL.
-    const isPartial = tipoCierre === 'PARCIAL' || (!tipoCierre && audit.laggingPieces.length > 0);
+    // Cierre de lote final reconcilia y cierra el Job (TOTAL) a menos que se solicite expresamente 'PARCIAL'
+    const isPartial = tipoCierre === 'PARCIAL';
 
     const targetProcesoId = procesoId || audit.finalProceso.id;
     const stateTerminadaRes = await query("SELECT id FROM estados WHERE nombre = 'TERMINADA'");

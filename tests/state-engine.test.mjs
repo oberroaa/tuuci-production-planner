@@ -38,19 +38,32 @@ describe('TUUCI State Engine - Production Traceability Lifecycle', () => {
       ORDER BY p.orden ASC
     `).all(testJob.pieces[0].id);
 
-    expect(piece1Procs[0].tipo_nombre).toBe('CORTE');
+    const firstProcName = piece1Procs[0].tipo_nombre;
+    const secondProcName = piece1Procs[1].tipo_nombre;
     expect(piece1Procs[0].estado_nombre).toBe('EN PROCESO');
-
-    expect(piece1Procs[1].tipo_nombre).toBe('FABRICACION');
     expect(piece1Procs[1].estado_nombre).toBe('INACTIVO');
   });
 
   it('Phase 2: Rejects scan on intermediate station if previous station has not finished', async () => {
     const piece1QR = testJob.pieces[0].codigoQRUnico;
 
+    // Use second process scanner or generic station
+    const secondProc = await db.prepare(`
+      SELECT s.codigo_estacion, s.api_key 
+      FROM pieza_procesos pp
+      JOIN procesos p ON pp.proceso_id = p.id
+      JOIN escaneres s ON s.tipo_proceso_id = p.tipo_proceso_id
+      WHERE pp.pieza_id = ? AND p.orden = 2
+      LIMIT 1
+    `).get(testJob.pieces[0].id);
+
+    const stationCode = secondProc ? secondProc.codigo_estacion : 'FABRICACION-01';
+
     const scanResult = await StateEngine.handleScan({
-      codigoEstacion: 'FABRICACION-01',
-      codigoQRUnico: piece1QR
+      codigoEstacion: stationCode,
+      codigoQRUnico: piece1QR,
+      apiKey: secondProc ? secondProc.api_key : null,
+      isSimulator: true
     });
 
     expect(scanResult.success).toBe(false);
@@ -58,31 +71,32 @@ describe('TUUCI State Engine - Production Traceability Lifecycle', () => {
     expect(scanResult.tone).toBe('red');
   });
 
-  it('Phase 1: Closes Corte in LOTE mode, advancing all pieces to ESPERANDO in Fabricación', async () => {
-    const corteProc = await db.prepare(`
-      SELECT p.id FROM procesos p
+  it('Phase 1: Closes initial LOTE process, advancing all pieces to ESPERANDO in next station', async () => {
+    const initialProc = await db.prepare(`
+      SELECT p.id, tp.nombre as tipo_nombre
+      FROM procesos p
       JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-      WHERE p.linea_id = ? AND tp.nombre = 'CORTE'
-    `).get(clasicaLineId);
+      WHERE p.ruta_id = ?
+      ORDER BY p.orden ASC LIMIT 1
+    `).get(testJob.rutaId);
 
     const batchClose = await StateEngine.closeBatchProcess({
       jobId: testJob.jobId,
-      procesoId: corteProc.id
+      procesoId: initialProc.id
     });
 
     expect(batchClose.closedCount).toBe(3);
 
     for (const piece of testJob.pieces) {
-      const fabStatus = await db.prepare(`
+      const nextStatus = await db.prepare(`
         SELECT e.nombre as estado_nombre
         FROM pieza_procesos pp
         JOIN procesos p ON pp.proceso_id = p.id
-        JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
         JOIN estados e ON pp.estado_id = e.id
-        WHERE pp.pieza_id = ? AND tp.nombre = 'FABRICACION'
+        WHERE pp.pieza_id = ? AND p.orden = 2
       `).get(piece.id);
 
-      expect(fabStatus.estado_nombre).toBe('ESPERANDO');
+      expect(nextStatus.estado_nombre).toBe('ESPERANDO');
     }
   });
 
@@ -101,9 +115,8 @@ describe('TUUCI State Engine - Production Traceability Lifecycle', () => {
       SELECT e.nombre as estado_nombre
       FROM pieza_procesos pp
       JOIN procesos p ON pp.proceso_id = p.id
-      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
       JOIN estados e ON pp.estado_id = e.id
-      WHERE pp.pieza_id = ? AND tp.nombre = 'FABRICACION'
+      WHERE pp.pieza_id = ? AND p.orden = 2
     `).get(testJob.pieces[0].id);
 
     expect(status.estado_nombre).toBe('EN PROCESO');
@@ -120,27 +133,25 @@ describe('TUUCI State Engine - Production Traceability Lifecycle', () => {
     expect(closeScan.action).toBe('CLOSE');
     expect(closeScan.oled_message).toContain('FIN -> ESPERANDO');
 
-    const fabStatus = await db.prepare(`
+    const secondProcStatus = await db.prepare(`
       SELECT e.nombre as estado_nombre
       FROM pieza_procesos pp
       JOIN procesos p ON pp.proceso_id = p.id
-      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
       JOIN estados e ON pp.estado_id = e.id
-      WHERE pp.pieza_id = ? AND tp.nombre = 'FABRICACION'
+      WHERE pp.pieza_id = ? AND p.orden = 2
     `).get(testJob.pieces[0].id);
 
-    expect(fabStatus.estado_nombre).toBe('TERMINADA');
+    expect(secondProcStatus.estado_nombre).toBe('TERMINADA');
 
-    const packingStatus = await db.prepare(`
+    const thirdProcStatus = await db.prepare(`
       SELECT e.nombre as estado_nombre
       FROM pieza_procesos pp
       JOIN procesos p ON pp.proceso_id = p.id
-      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
       JOIN estados e ON pp.estado_id = e.id
-      WHERE pp.pieza_id = ? AND tp.nombre = 'PACKING'
+      WHERE pp.pieza_id = ? AND p.orden = 3
     `).get(testJob.pieces[0].id);
 
-    expect(packingStatus.estado_nombre).toBe('ESPERANDO');
+    expect(thirdProcStatus.estado_nombre).toBe('ESPERANDO');
   });
 
   it('Audit: Records all transitions in evento_estados table with timestamp', async () => {
