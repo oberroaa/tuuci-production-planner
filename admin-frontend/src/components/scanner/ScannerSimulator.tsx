@@ -48,15 +48,17 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         if (data?.escaneres) {
           let active = data.escaneres.filter((s: ScannerDevice) => s.activo === 1);
           
-          // Role & Line-based filtering:
-          // Non-admin users (SUPERVISOR and OPERADOR) only see scanners for their line or global ones
-          const userRole = currentUser?.rol;
-          const userLine = currentUser?.linea_nombre || activeLine;
+          // Line-based filtering:
+          // If a specific line is selected (or assigned to the user), only show scanners for that line or global ones (without line).
+          // Scanners assigned to other lines are excluded.
+          const effectiveLine = activeLine && activeLine !== 'TODAS' && activeLine !== 'ALL'
+            ? activeLine
+            : (currentUser?.rol !== 'ADMIN' ? (currentUser?.linea_nombre || null) : null);
 
-          if (userRole && userRole !== 'ADMIN' && userLine) {
+          if (effectiveLine) {
             active = active.filter((s: ScannerDevice) => {
-              if (!s.linea_id) return true; // Global scanner available to all
-              return s.linea_nombre === userLine;
+              if (!s.linea_id) return true; // Global scanner available to all lines
+              return s.linea_nombre?.toLowerCase() === effectiveLine.toLowerCase();
             });
           }
 
