@@ -421,15 +421,15 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
   };
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
+    <div className="p-3 sm:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center space-x-2">
             <Scissors className="w-5 h-5 text-blue-600" />
             <span>{t('cutting.title')}</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
             {t('cutting.activeLine', { line: activeLine })}
           </p>
         </div>

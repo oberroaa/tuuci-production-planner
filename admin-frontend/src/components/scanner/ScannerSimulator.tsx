@@ -251,44 +251,44 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   const selectedDevice = devices.find((d) => d.codigo_estacion === selectedStationCode);
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-6">
+    <div className="p-3 sm:p-6 max-w-[1200px] mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center space-x-2">
             <Radio className="w-5 h-5 text-emerald-600" />
             <span>{t('scanner.title')}</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
             {t('scanner.subtitle')}
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="flex items-center space-x-2 self-start sm:self-auto">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
             <span>{t('scanner.onlineWebSocket')}</span>
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
         {/* Physical Handheld Scanner Representation */}
-        <div className="bg-[#1a1d22] rounded-3xl p-8 border-4 border-[#2b313a] shadow-2xl space-y-5 text-white max-w-md mx-auto w-full">
+        <div className="bg-[#1a1d22] rounded-2xl sm:rounded-3xl p-4 sm:p-8 border-2 sm:border-4 border-[#2b313a] shadow-2xl space-y-4 sm:space-y-5 text-white max-w-md mx-auto w-full">
           {/* Top Sensor Bezel */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 sm:pb-4">
             <div className="flex items-center space-x-2">
               <Barcode className="w-5 h-5 text-blue-400" />
-              <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">{t('scanner.scannerWireless')}</span>
+              <span className="text-[11px] sm:text-xs font-bold tracking-widest text-slate-400 uppercase">{t('scanner.scannerWireless')}</span>
             </div>
             <div className="flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[10px] text-emerald-400 font-bold uppercase">{t('scanner.wifiConnected')}</span>
+              <span className="text-[9px] sm:text-[10px] text-emerald-400 font-bold uppercase">{t('scanner.wifiConnected')}</span>
             </div>
           </div>
 
           {/* Scanner Device Selector & Hardware Station Association */}
-          <div className="space-y-2 bg-[#12151a] border border-[#2d333e] rounded-xl p-3.5">
+          <div className="space-y-2 bg-[#12151a] border border-[#2d333e] rounded-xl p-3 sm:p-3.5">
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
                 <Radio className="w-3.5 h-3.5 text-blue-400" />
@@ -365,7 +365,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
                   : 'bg-[#0b0d10] border-slate-700 text-cyan-400'
               }`}
             >
-              <div className="text-base font-bold tracking-wider uppercase">{oledDisplay.line1}</div>
+              <div className="text-sm sm:text-base font-bold tracking-wider uppercase truncate">{oledDisplay.line1}</div>
               <div className="text-xs text-slate-300 truncate mt-1">{oledDisplay.line2}</div>
             </div>
           </div>
@@ -376,7 +376,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
               e.preventDefault();
               handleExecuteScan();
             }}
-            className="space-y-3 pt-2"
+            className="space-y-3 pt-1"
           >
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -396,19 +396,19 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
                   value={pieceQr}
                   disabled={cooldown > 0}
                   onChange={(e) => setPieceQr(e.target.value)}
-                  className="flex-1 bg-[#111317] border border-[#2f3540] rounded-lg px-3 py-2.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+                  className="flex-1 min-w-0 bg-[#111317] border border-[#2f3540] rounded-lg px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
                 />
                 <button
                   type="submit"
                   disabled={scanning || !pieceQr || cooldown > 0}
-                  className={`px-5 py-2.5 font-bold text-xs rounded-lg shadow transition-all flex items-center space-x-1.5 ${
+                  className={`px-3 sm:px-5 py-2 sm:py-2.5 font-bold text-xs rounded-lg shadow transition-all flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0 ${
                     cooldown > 0
                       ? 'bg-amber-600 text-amber-100 cursor-not-allowed animate-pulse'
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50'
                   }`}
                 >
-                  <Scan className="w-4 h-4" />
-                  <span>{cooldown > 0 ? t('scanner.waitCooldown', { sec: cooldown }) : t('scanner.trigger')}</span>
+                  <Scan className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-[11px] sm:text-xs">{cooldown > 0 ? `${cooldown}s` : t('scanner.trigger')}</span>
                 </button>
               </div>
               {cooldown > 0 && (

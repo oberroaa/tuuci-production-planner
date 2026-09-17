@@ -82,8 +82,8 @@
     "noDelayedPieces": "No delayed pieces recorded for the selected line or route"
   },
   "cutting": {
-    "title": "Phase 1: Cutting Station (Overhead USB Camera & QR Printing)",
-    "activeLine": "Active Line: {{line}} • Operating in BATCH Mode",
+    "title": "Cutting Station",
+    "activeLine": "Line: {{line}} • BATCH Mode",
     "overheadCamera": "Overhead Camera (IPEVO V4K-PRO)",
     "deviceConnected": "DEVICE CONNECTED",
     "processingOcr": "Processing OCR...",
@@ -143,8 +143,8 @@
     "sendToPrinter": "Send to Printer"
   },
   "scanner": {
-    "title": "Phase 2: Wireless Wi-Fi Scanner Terminal",
-    "subtitle": "Shop Floor Physical Station Simulator • 1st Scan: IN PROCESS • 2nd Scan: FINISHED & advances next to WAITING",
+    "title": "Scanning Terminal",
+    "subtitle": "Shop Floor Simulator • 1st Scan: IN PROCESS • 2nd Scan: FINISHED",
     "onlineWebSocket": "ONLINE (WEBSOCKET)",
     "scannerWireless": "TUUCI SCANNER WIRELESS",
     "wifiConnected": "Wi-Fi CONNECTED",

@@ -82,8 +82,8 @@
     "noDelayedPieces": "No se registran piezas demoradas para la línea o ruta seleccionada"
   },
   "cutting": {
-    "title": "Fase 1: Estación de Corte (Cámara Cenital USB & Impresión QR)",
-    "activeLine": "Línea Activa: {{line}} • Operación en Modo LOTE",
+    "title": "Estación de Corte",
+    "activeLine": "Línea: {{line}} • Modo LOTE",
     "overheadCamera": "Cámara Cenital (IPEVO V4K-PRO)",
     "deviceConnected": "DISPOSITIVO CONECTADO",
     "processingOcr": "Procesando OCR...",
@@ -143,8 +143,8 @@
     "sendToPrinter": "Mandar a Imprimir"
   },
   "scanner": {
-    "title": "Fase 2: Terminal Inalámbrico de Escaneo Wi-Fi",
-    "subtitle": "Simulador de Estación Física de Piso • 1er Escaneo: EN PROCESO • 2do Escaneo: TERMINADA & pasa siguiente a ESPERANDO",
+    "title": "Terminal de Escaneo",
+    "subtitle": "Simulador de Piso • 1er Escaneo: EN PROCESO • 2do Escaneo: TERMINADA",
     "onlineWebSocket": "EN LÍNEA (WEBSOCKET)",
     "scannerWireless": "TUUCI SCANNER WIRELESS",
     "wifiConnected": "Wi-Fi CONECTADO",
