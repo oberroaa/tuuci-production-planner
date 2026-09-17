@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Printer, CheckCircle, RefreshCw, Layers, Scissors, AlertTriangle, Search, Check, AlertCircle, ExternalLink, X, Barcode } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { io } from 'socket.io-client';
 import { Barcode128 } from '../common/Barcode128';
 
 interface CuttingStationProps {
@@ -91,19 +92,24 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
     return lines[0]?.id || 1;
   };
 
-  // Load routes and catalogs for the active line / user's line
-  useEffect(() => {
+  const fetchCatalogsAndJobs = useCallback(() => {
     fetch('/api/catalogs')
       .then((r) => r.json())
       .then((data) => {
         setCatalogsData(data);
         const defaultLineId = getUserDefaultLineId();
-        setSelectedLineId(defaultLineId);
+        setSelectedLineId((prev) => prev || defaultLineId);
         if (data.rutas) {
-          const rutas = data.rutas.filter((r: any) => r.linea_id === defaultLineId);
+          const currentLine = selectedLineId || defaultLineId;
+          const rutas = data.rutas.filter((r: any) => r.linea_id === currentLine);
           setLineRutas(rutas);
-          const def = rutas.find((r: any) => r.es_default === 1) || rutas[0];
-          setSelectedRutaId(def?.id || null);
+          setSelectedRutaId((prevRutaId) => {
+            if (prevRutaId && rutas.some((r: any) => r.id === prevRutaId)) {
+              return prevRutaId;
+            }
+            const def = rutas.find((r: any) => r.es_default === 1) || rutas[0];
+            return def?.id || null;
+          });
         }
       })
       .catch(console.error);
@@ -115,7 +121,23 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
         if (Array.isArray(data)) setAvailableJobs(data);
       })
       .catch(console.error);
-  }, [activeLine, lines, currentUser]);
+  }, [activeLine, lines, currentUser, selectedLineId]);
+
+  // Load routes and catalogs for the active line / user's line
+  useEffect(() => {
+    fetchCatalogsAndJobs();
+  }, [fetchCatalogsAndJobs]);
+
+  // Real-time WebSocket listener: when routes or processes change in Admin, update live
+  useEffect(() => {
+    const socket = io();
+    socket.on('dashboard:update', () => {
+      fetchCatalogsAndJobs();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [fetchCatalogsAndJobs]);
 
   // Click outside listener to close autocomplete dropdown
   useEffect(() => {

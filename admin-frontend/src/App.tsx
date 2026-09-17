@@ -85,8 +85,7 @@ export function App() {
     }
   }, [isAuthBypass, currentUser]);
 
-  // Load product lines
-  useEffect(() => {
+  const fetchLines = useCallback(() => {
     fetch('/api/catalogs')
       .then((r) => r.json())
       .then((data) => {
@@ -101,6 +100,11 @@ export function App() {
       })
       .catch(console.error);
   }, []);
+
+  // Load product lines
+  useEffect(() => {
+    fetchLines();
+  }, [fetchLines]);
 
   // When user logs in or switches
   const handleLogin = (user: any) => {
@@ -213,16 +217,19 @@ export function App() {
 
     socket.on('dashboard:update', () => {
       fetchSummary();
+      fetchLines();
+      triggerGlobalRefresh();
     });
 
     socket.on('scan:event', () => {
       fetchSummary();
+      triggerGlobalRefresh();
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [fetchSummary]);
+  }, [fetchSummary, fetchLines, triggerGlobalRefresh]);
 
   // Periodic ticker to keep dashboard elapsed times ticking live
   useEffect(() => {
@@ -391,11 +398,8 @@ export function App() {
           <AdminPanel
             onCatalogUpdated={() => {
               fetchSummary();
-              fetch('/api/catalogs')
-                .then((r) => r.json())
-                .then((data) => {
-                  if (data.lineas) setLines(data.lineas);
-                });
+              fetchLines();
+              triggerGlobalRefresh();
             }}
           />
         </div>

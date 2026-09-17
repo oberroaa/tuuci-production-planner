@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles, Barcode } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { io } from 'socket.io-client';
 
 interface ScannerSimulatorProps {
   onScanSuccess: () => void;
@@ -40,17 +41,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     inputRef.current?.focus();
   }, []);
 
-  // Load configured cooldown duration and registered physical scanners from server
-  useEffect(() => {
-    fetch('/api/config')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.values?.scanner_cooldown_segundos !== undefined) {
-          setConfigCooldownSecs(data.values.scanner_cooldown_segundos);
-        }
-      })
-      .catch(console.error);
-
+  const fetchScannerDevices = useCallback(() => {
     fetch('/api/catalogs')
       .then((r) => r.json())
       .then((data) => {
@@ -70,28 +61,60 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           }
 
           setDevices(active);
-          if (active.length > 0) {
-            // Default to first active scanner
-            const firstDev = active[0];
-            const tipoDesc = firstDev.tipo_nombre || firstDev.tipo_proceso_nombre || '';
-            setSelectedStationCode(firstDev.codigo_estacion);
-            setOledDisplay({
-              line1: t('scanner.readyToScan'),
-              line2: `${t('scanner.stationLabel', { station: firstDev.codigo_estacion })}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
-              tone: 'idle'
-            });
-          } else {
-            setSelectedStationCode('AUTO');
+          setSelectedStationCode((prev) => {
+            // If previous selection is still active, keep it
+            if (prev !== 'AUTO' && active.some((d: ScannerDevice) => d.codigo_estacion === prev)) {
+              return prev;
+            }
+            if (active.length > 0) {
+              const firstDev = active[0];
+              const tipoDesc = firstDev.tipo_nombre || firstDev.tipo_proceso_nombre || '';
+              setOledDisplay({
+                line1: t('scanner.readyToScan'),
+                line2: `${t('scanner.stationLabel', { station: firstDev.codigo_estacion })}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
+                tone: 'idle'
+              });
+              return firstDev.codigo_estacion;
+            }
             setOledDisplay({
               line1: t('scanner.readyToScan'),
               line2: t('scanner.autoDetectionActive'),
               tone: 'idle'
             });
-          }
+            return 'AUTO';
+          });
         }
       })
       .catch(console.error);
   }, [currentUser, activeLine, t]);
+
+  // Load configured cooldown duration and registered physical scanners from server
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.values?.scanner_cooldown_segundos !== undefined) {
+          setConfigCooldownSecs(data.values.scanner_cooldown_segundos);
+        }
+      })
+      .catch(console.error);
+
+    fetchScannerDevices();
+  }, [fetchScannerDevices]);
+
+  // Real-time WebSocket listener: when processes, routes, or scanners are modified in Admin, reload devices list instantly
+  useEffect(() => {
+    const socket = io();
+    socket.on('dashboard:update', () => {
+      fetchScannerDevices();
+    });
+    socket.on('scan:event', () => {
+      fetchScannerDevices();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [fetchScannerDevices]);
 
   // Timer countdown for cooldown
   useEffect(() => {
