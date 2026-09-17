@@ -130,6 +130,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </p>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-red-300 text-xs flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
           {/* Dev / Fast Sign-in Picker (Only active in Dev Auth Bypass mode) */}
           {import.meta.env.VITE_DEV_AUTH_BYPASS === '1' && (
             <>
@@ -141,14 +149,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </span>
                 <div className="h-px flex-1 bg-slate-800" />
               </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className="p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-red-300 text-xs flex items-start space-x-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
 
               <div className="space-y-2">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
