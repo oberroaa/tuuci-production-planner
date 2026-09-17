@@ -209,8 +209,12 @@ export function handleServerError(res, err, defaultStatus = 500) {
   return res.status(defaultStatus).json({ error: err.message || 'Error en la solicitud' });
 }
 
-// Broadcast helper
+// Broadcast helpers
 function notifyDashboardUpdate() {
+  io.emit('dashboard:update');
+}
+
+function notifyScanEvent() {
   io.emit('dashboard:update');
   io.emit('scan:event');
 }

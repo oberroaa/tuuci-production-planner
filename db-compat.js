@@ -1,6 +1,6 @@
-import { pool, query, initDb, updatePoolConfig } from './db.js';
+import { pool, getPool, query, initDb, updatePoolConfig } from './db.js';
 
-export { pool, query, initDb, updatePoolConfig };
+export { pool, getPool, query, initDb, updatePoolConfig };
 
 /**
  * SQLite-like compatibility adapter for PostgreSQL Pool.
@@ -18,18 +18,18 @@ class StatementWrapper {
   }
 
   async get(...params) {
-    const res = await pool.query(this.sql, params);
+    const res = await getPool().query(this.sql, params);
     return res.rows[0] || null;
   }
 
   async all(...params) {
-    const res = await pool.query(this.sql, params);
+    const res = await getPool().query(this.sql, params);
     return res.rows;
   }
 
   async run(...params) {
     let querySql = this.sql;
-    const res = await pool.query(querySql, params);
+    const res = await getPool().query(querySql, params);
     const lastId = (res.rows && res.rows[0] && ('id' in res.rows[0])) ? res.rows[0].id : null;
     return {
       lastInsertRowid: lastId,
@@ -45,12 +45,12 @@ export const dbCompat = {
   },
 
   async exec(sql) {
-    return await pool.query(sql);
+    return await getPool().query(sql);
   },
 
   transaction(fn) {
     return async (...args) => {
-      const client = await pool.connect();
+      const client = await getPool().connect();
       try {
         await client.query('BEGIN');
         const txDb = {

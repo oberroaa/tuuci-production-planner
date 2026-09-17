@@ -21,29 +21,46 @@ if (isProduction) {
   }
 }
 
-export let pool = new Pool({
+let currentPoolMax = parseInt(process.env.PG_POOL_MAX || '50', 10);
+let currentPoolTimeoutMs = parseInt(process.env.PG_POOL_TIMEOUT_MS || '15000', 10);
+
+let activePool = new Pool({
   host: process.env.PGHOST || 'localhost',
   port: parseInt(process.env.PGPORT || '5432', 10),
   user: process.env.PGUSER || 'tuuci',
   password: process.env.PGPASSWORD || (isProduction ? undefined : 'tuuci123'),
   database: process.env.PGDATABASE || 'tuuci_production',
-  max: parseInt(process.env.PG_POOL_MAX || '50', 10),
+  max: currentPoolMax,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: parseInt(process.env.PG_POOL_TIMEOUT_MS || '15000', 10),
+  connectionTimeoutMillis: currentPoolTimeoutMs,
+});
+
+export function getPool() {
+  return activePool;
+}
+
+// Transparent Proxy so any external module importing `pool` automatically forwards
+// method and property accesses to whichever `activePool` is currently running!
+export const pool = new Proxy({}, {
+  get(target, prop, receiver) {
+    const val = activePool[prop];
+    if (typeof val === 'function') {
+      return val.bind(activePool);
+    }
+    return val;
+  }
 });
 
 // Helper to update pool parameters dynamically at runtime
 export async function updatePoolConfig({ maxConnections, timeoutMs }) {
-  const currentMax = pool.options.max;
-  const currentTimeout = pool.options.connectionTimeoutMillis;
-  const newMax = maxConnections ? Math.max(5, Math.min(200, parseInt(maxConnections, 10))) : currentMax;
-  const newTimeout = timeoutMs ? Math.max(1000, Math.min(60000, parseInt(timeoutMs, 10))) : currentTimeout;
+  const newMax = maxConnections ? Math.max(5, Math.min(200, parseInt(maxConnections, 10))) : currentPoolMax;
+  const newTimeout = timeoutMs ? Math.max(1000, Math.min(60000, parseInt(timeoutMs, 10))) : currentPoolTimeoutMs;
 
-  if (newMax === currentMax && newTimeout === currentTimeout) {
-    return { max: currentMax, connectionTimeoutMillis: currentTimeout };
+  if (newMax === currentPoolMax && newTimeout === currentPoolTimeoutMs) {
+    return { max: currentPoolMax, connectionTimeoutMillis: currentPoolTimeoutMs };
   }
 
-  const oldPool = pool;
+  const oldPool = activePool;
   const newPool = new Pool({
     host: process.env.PGHOST || 'localhost',
     port: parseInt(process.env.PGPORT || '5432', 10),
@@ -59,12 +76,14 @@ export async function updatePoolConfig({ maxConnections, timeoutMs }) {
   const testClient = await newPool.connect();
   testClient.release();
 
-  pool = newPool;
+  activePool = newPool;
+  currentPoolMax = newMax;
+  currentPoolTimeoutMs = newTimeout;
 
-  // Drain old pool in background gracefully
+  // Drain old pool gracefully only after giving existing transactions sufficient time
   setTimeout(() => {
     oldPool.end().catch(() => {});
-  }, 5000);
+  }, 30000);
 
   return { max: newMax, connectionTimeoutMillis: newTimeout };
 }
@@ -72,7 +91,7 @@ export async function updatePoolConfig({ maxConnections, timeoutMs }) {
 // Helper for queries with automatic connection handling
 export async function query(text, params) {
   const start = Date.now();
-  const res = await pool.query(text, params);
+  const res = await getPool().query(text, params);
   return res;
 }
 
