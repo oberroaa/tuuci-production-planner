@@ -1,5 +1,6 @@
 import React from 'react';
-import { ChevronDown, Sun, LogOut } from 'lucide-react';
+import { ChevronDown, Sun, LogOut, Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface NavbarProps {
   activeTab: string;
@@ -20,6 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onLogout
 }) => {
+  const { t, i18n } = useTranslation();
   const [clock, setClock] = React.useState<string>('');
 
   React.useEffect(() => {
@@ -43,7 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <path d="M10 2 Q25 14 45 2 Q30 18 10 2 Z" opacity="0.9" />
               <text x="50" y="20" fontFamily="sans-serif" fontWeight="bold" fontSize="18" fill="white" letterSpacing="3">TUUCI</text>
             </svg>
-            <span className="text-xs font-normal text-slate-400 pl-1">Production Planner</span>
+            <span className="text-xs font-normal text-slate-400 pl-1">{t('navbar.title')}</span>
           </div>
         </div>
 
@@ -75,16 +77,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 {needsToPickLine && (
                   <option value="" disabled>
-                    ⚠️ Selecciona tu Línea de Producción...
+                    {t('navbar.selectLine')}
                   </option>
                 )}
                 {isFixedLine ? (
                   <option value={currentUser?.linea_nombre || activeLine}>
-                    Línea: {currentUser?.linea_nombre || activeLine} (Fija)
+                    {t('navbar.lineFixed', { line: currentUser?.linea_nombre || activeLine })}
                   </option>
                 ) : (
                   <>
-                    {!isNonAdmin && <option value="TODAS">🌐 Ver Todo (Todas las Líneas)</option>}
+                    {!isNonAdmin && <option value="TODAS">{t('navbar.viewAll')}</option>}
                     {lines.map((l) => (
                       <option key={l.id} value={l.nombre}>
                         {l.nombre}
@@ -106,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               activeTab === 'TRACKER' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
             }`}
           >
-            TRACKER
+            {t('navbar.tabs.tracker')}
           </button>
           <button
             onClick={() => setActiveTab('DASHBOARD')}
@@ -114,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               activeTab === 'DASHBOARD' ? 'bg-[#1a73e8] text-white shadow-sm' : 'text-slate-300 hover:text-white'
             }`}
           >
-            DASHBOARD
+            {t('navbar.tabs.dashboard')}
           </button>
           <button
             onClick={() => setActiveTab('CUTTING')}
@@ -122,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               activeTab === 'CUTTING' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            CUTTING (PC)
+            {t('navbar.tabs.cutting')}
           </button>
           <button
             onClick={() => setActiveTab('SCANNER')}
@@ -130,7 +132,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               activeTab === 'SCANNER' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            SCANNER (OLED)
+            {t('navbar.tabs.scanner')}
           </button>
           <button
             onClick={() => setActiveTab('SETTINGS')}
@@ -138,7 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               activeTab === 'SETTINGS' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            SETTINGS
+            {t('navbar.tabs.settings')}
           </button>
           {currentUser?.rol === 'ADMIN' && (
             <button
@@ -147,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 activeTab === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              ADMIN
+              {t('navbar.tabs.admin')}
             </button>
           )}
         </nav>
@@ -161,8 +163,24 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span>{clock || '07:52:55 PM'}</span>
         </div>
 
+        {/* Language switcher */}
+        <button 
+          onClick={() => {
+            const current = (i18n.resolvedLanguage || i18n.language || 'en').toLowerCase();
+            const next = current.startsWith('es') ? 'en' : 'es';
+            i18n.changeLanguage(next);
+          }}
+          className="flex items-center space-x-1 px-2 py-1 rounded bg-[#1d2127] border border-[#2f353e] hover:border-slate-400 text-slate-300 hover:text-white transition-all text-xs font-bold" 
+          title={t('navbar.langTitle')}
+        >
+          <Globe className="w-3.5 h-3.5 text-blue-400" />
+          <span className="mono text-[10px] uppercase">
+            {(i18n.resolvedLanguage || i18n.language || 'en').toLowerCase().startsWith('es') ? 'ES' : 'EN'}
+          </span>
+        </button>
+
         {/* Theme icon */}
-        <button className="text-slate-400 hover:text-white transition-colors" title="Toggle theme">
+        <button className="text-slate-400 hover:text-white transition-colors" title={t('navbar.themeTitle')}>
           <Sun className="w-4 h-4" />
         </button>
 
@@ -170,14 +188,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           onClick={() => setActiveTab('SETTINGS')}
           className="flex items-center space-x-2 hover:opacity-80 transition-opacity text-left"
-          title="Ver configuración de perfil y sesión"
+          title={t('navbar.profileTitle')}
         >
           <div className="text-right leading-tight">
             <div className="font-semibold text-slate-200">{currentUser?.nombre || 'Otoniel Berroa'}</div>
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
               {currentUser?.rol || 'ADMIN'}
               {(currentUser?.rol === 'OPERADOR' || currentUser?.rol === 'SUPERVISOR') && activeLine !== (currentUser?.linea_nombre || 'Mueble') && (
-                <span className="ml-1 text-amber-400 font-normal lowercase">(temp)</span>
+                <span className="ml-1 text-amber-400 font-normal lowercase">{t('navbar.temp')}</span>
               )}
             </div>
           </div>
@@ -187,10 +205,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           onClick={onLogout || (() => setActiveTab('SETTINGS'))}
           className="flex items-center space-x-1.5 text-slate-400 hover:text-red-400 transition-colors pl-2 border-l border-[#2b3038]"
-          title="Cerrar sesión"
+          title={t('navbar.logoutTitle')}
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span className="text-[11px] font-bold uppercase tracking-wider">Salir</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider">{t('navbar.changeUser')}</span>
         </button>
       </div>
     </header>

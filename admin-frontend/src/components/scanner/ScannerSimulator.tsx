@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles, Barcode } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface ScannerSimulatorProps {
   onScanSuccess: () => void;
@@ -19,12 +20,13 @@ interface ScannerDevice {
 }
 
 export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess, currentUser, activeLine }) => {
+  const { t } = useTranslation();
   const [pieceQr, setPieceQr] = useState<string>('');
   const [devices, setDevices] = useState<ScannerDevice[]>([]);
   const [selectedStationCode, setSelectedStationCode] = useState<string>('AUTO');
   const [oledDisplay, setOledDisplay] = useState<{ line1: string; line2: string; tone: 'green' | 'red' | 'idle' }>({
-    line1: 'LISTO PARA ESCANEAR',
-    line2: 'SELECCIONE DISPOSITIVO',
+    line1: 'READY TO SCAN',
+    line2: 'SELECT DEVICE',
     tone: 'idle'
   });
   const [history, setHistory] = useState<any[]>([]);
@@ -74,22 +76,22 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             const tipoDesc = firstDev.tipo_nombre || firstDev.tipo_proceso_nombre || '';
             setSelectedStationCode(firstDev.codigo_estacion);
             setOledDisplay({
-              line1: 'LISTO PARA ESCANEAR',
-              line2: `ESTACIÓN: ${firstDev.codigo_estacion}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
+              line1: t('scanner.readyToScan'),
+              line2: `${t('scanner.stationLabel', { station: firstDev.codigo_estacion })}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
               tone: 'idle'
             });
           } else {
             setSelectedStationCode('AUTO');
             setOledDisplay({
-              line1: 'LISTO PARA ESCANEAR',
-              line2: 'AUTO-DETECCIÓN ACTIVA',
+              line1: t('scanner.readyToScan'),
+              line2: t('scanner.autoDetectionActive'),
               tone: 'idle'
             });
           }
         }
       })
       .catch(console.error);
-  }, [currentUser, activeLine]);
+  }, [currentUser, activeLine, t]);
 
   // Timer countdown for cooldown
   useEffect(() => {
@@ -106,14 +108,14 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
     if (found) {
       const tipoDesc = found.tipo_nombre || found.tipo_proceso_nombre || '';
       setOledDisplay({
-        line1: 'LISTO PARA ESCANEAR',
-        line2: `ESTACIÓN: ${found.codigo_estacion}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
+        line1: t('scanner.readyToScan'),
+        line2: `${t('scanner.stationLabel', { station: found.codigo_estacion })}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
         tone: 'idle'
       });
     } else {
       setOledDisplay({
-        line1: 'LISTO PARA ESCANEAR',
-        line2: 'AUTO-DETECCIÓN ACTIVA',
+        line1: t('scanner.readyToScan'),
+        line2: t('scanner.autoDetectionActive'),
         tone: 'idle'
       });
     }
@@ -220,17 +222,17 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
             <Radio className="w-5 h-5 text-emerald-600" />
-            <span>Fase 2: Terminal Inalámbrico de Escaneo Wi-Fi</span>
+            <span>{t('scanner.title')}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Simulador de Estación Física de Piso • 1er Escaneo: <strong className="text-amber-600">EN PROCESO</strong> • 2do Escaneo: <strong className="text-emerald-700">TERMINADA</strong> &amp; pasa siguiente a <strong className="text-blue-600">ESPERANDO</strong>
+            {t('scanner.subtitle')}
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
           <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            <span>EN LÍNEA (WEBSOCKET)</span>
+            <span>{t('scanner.onlineWebSocket')}</span>
           </span>
         </div>
       </div>
@@ -242,11 +244,11 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="flex items-center space-x-2">
               <Barcode className="w-5 h-5 text-blue-400" />
-              <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">TUUCI SCANNER WIRELESS</span>
+              <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">{t('scanner.scannerWireless')}</span>
             </div>
             <div className="flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[10px] text-emerald-400 font-bold uppercase">Wi-Fi CONECTADO</span>
+              <span className="text-[10px] text-emerald-400 font-bold uppercase">{t('scanner.wifiConnected')}</span>
             </div>
           </div>
 
@@ -255,15 +257,15 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
                 <Radio className="w-3.5 h-3.5 text-blue-400" />
-                <span>Dispositivo Escáner Asignado</span>
+                <span>{t('scanner.assignedScanner')}</span>
               </label>
               {selectedStationCode !== 'AUTO' ? (
                 <span className="px-2 py-0.5 bg-blue-950 border border-blue-600/40 text-blue-400 font-mono text-[10px] rounded uppercase font-bold">
-                  ESTACIÓN FIJA
+                  {t('scanner.fixedStation')}
                 </span>
               ) : (
                 <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-600/40 text-emerald-400 font-mono text-[10px] rounded uppercase font-bold">
-                  AUTO-DETECCIÓN
+                  {t('scanner.autoDetection')}
                 </span>
               )}
             </div>
@@ -274,29 +276,29 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
               className="w-full bg-[#181c24] border border-[#3b4352] rounded-lg px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
             >
               {devices.length > 0 ? (
-                <optgroup label="Dispositivos Físicos Registrados">
+                <optgroup label={t('scanner.registeredDevices')}>
                   {devices.map((dev) => {
                     const tipoDesc = dev.tipo_nombre || dev.tipo_proceso_nombre || '';
                     return (
                       <option key={dev.id} value={dev.codigo_estacion}>
-                        {dev.codigo_estacion} {tipoDesc ? `— ${tipoDesc}` : ''} {dev.linea_nombre ? `(${dev.linea_nombre})` : '(Todas las Líneas)'}
+                        {dev.codigo_estacion} {tipoDesc ? `— ${tipoDesc}` : ''} {dev.linea_nombre ? `(${dev.linea_nombre})` : `(${t('common.allLines')})`}
                       </option>
                     );
                   })}
                 </optgroup>
               ) : (
-                <option value="AUTO" disabled>Cargando dispositivos...</option>
+                <option value="AUTO" disabled>{t('scanner.loadingDevices')}</option>
               )}
-              <optgroup label="Modos Especiales">
-                <option value="AUTO">⚡ Modo Auto-Detección (Global / Automático)</option>
+              <optgroup label={t('scanner.specialModes')}>
+                <option value="AUTO">{t('scanner.autoModeDesc')}</option>
               </optgroup>
             </select>
 
             {selectedDevice && (
               <div className="flex items-center justify-between text-[11px] pt-1 text-slate-400 font-mono border-t border-slate-800/80">
-                <span>Tipo de Proceso que atiende:</span>
+                <span>{t('scanner.processServed')}</span>
                 <span className="font-bold text-emerald-400 uppercase">
-                  {selectedDevice.tipo_nombre || selectedDevice.tipo_proceso_nombre || 'ESTACIÓN'}
+                  {selectedDevice.tipo_nombre || selectedDevice.tipo_proceso_nombre || 'STATION'}
                 </span>
               </div>
             )}
@@ -305,16 +307,16 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           {/* 2-LINE OLED HARDWARE DISPLAY */}
           <div className="space-y-1.5">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>Pantalla OLED (0.96" 128x32)</span>
+              <span>{t('scanner.oledDisplayTitle')}</span>
               {oledDisplay.tone === 'green' ? (
                 <span className="text-emerald-400 flex items-center space-x-1 text-[11px] font-bold">
                   <Volume2 className="w-3.5 h-3.5" />
-                  <span>BIP VERDE ✓</span>
+                  <span>{t('scanner.greenBeep')}</span>
                 </span>
               ) : oledDisplay.tone === 'red' ? (
                 <span className="text-rose-400 flex items-center space-x-1 text-[11px] font-bold">
                   <Volume2 className="w-3.5 h-3.5" />
-                  <span>BIP ROJO ✗</span>
+                  <span>{t('scanner.redBeep')}</span>
                 </span>
               ) : null}
             </div>
@@ -344,10 +346,10 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Escanear Código de Barras
+                  {t('scanner.scanBarcodeLabel')}
                 </label>
                 <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800">
-                  Listo para Pistola Láser
+                  {t('scanner.laserReady')}
                 </span>
               </div>
               <div className="flex space-x-2">
@@ -355,7 +357,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
                   ref={inputRef}
                   autoFocus
                   type="text"
-                  placeholder="Apunta la pistola láser al código impreso o escribe ej. JOB0279087-01"
+                  placeholder={t('scanner.placeholder')}
                   value={pieceQr}
                   disabled={cooldown > 0}
                   onChange={(e) => setPieceQr(e.target.value)}
@@ -371,12 +373,12 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
                   }`}
                 >
                   <Scan className="w-4 h-4" />
-                  <span>{cooldown > 0 ? `ESPERE (${cooldown}s)` : 'GATILLO'}</span>
+                  <span>{cooldown > 0 ? t('scanner.waitCooldown', { sec: cooldown }) : t('scanner.trigger')}</span>
                 </button>
               </div>
               {cooldown > 0 && (
                 <div className="text-[10px] text-amber-400 font-mono flex items-center space-x-1 pt-1 animate-pulse">
-                  <span>⏱ Cooldown activo: espera {cooldown}s antes de reintentar otro escaneo</span>
+                  <span>{t('scanner.cooldownActive', { sec: cooldown })}</span>
                 </div>
               )}
             </div>
@@ -387,9 +389,9 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Bitácora de Auditoría en Tiempo Real
+              {t('scanner.auditFeedTitle')}
             </h3>
-            <span className="text-[10px] font-semibold text-slate-400">ÚLTIMOS ESCANEOS</span>
+            <span className="text-[10px] font-semibold text-slate-400">{t('scanner.recentScans')}</span>
           </div>
 
           {history.length > 0 ? (
@@ -423,7 +425,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           ) : (
             <div className="py-16 text-center text-slate-400 space-y-2">
               <Scan className="w-8 h-8 mx-auto stroke-1 opacity-50" />
-              <p className="text-xs font-medium">Apunta y dispara la pistola lectora o usa el gatillo para simular.</p>
+              <p className="text-xs font-medium">{t('scanner.pointAndShootPrompt')}</p>
             </div>
           )}
         </div>

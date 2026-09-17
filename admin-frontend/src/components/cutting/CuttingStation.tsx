@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, Printer, CheckCircle, RefreshCw, Layers, Scissors, AlertTriangle, Search, Check, AlertCircle, ExternalLink, X, Barcode } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Barcode128 } from '../common/Barcode128';
 
 interface CuttingStationProps {
@@ -15,6 +16,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
   currentUser,
   onJobCreated
 }) => {
+  const { t } = useTranslation();
   const [capturing, setCapturing] = useState(false);
   const [ocrResult, setOcrResult] = useState<any | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -392,10 +394,10 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
             <Scissors className="w-5 h-5 text-blue-600" />
-            <span>Fase 1: Estación de Corte (Cámara Cenital USB & Impresión QR)</span>
+            <span>{t('cutting.title')}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Línea Activa: <strong className="text-slate-800">{activeLine}</strong> • Operación en <strong className="text-blue-600">Modo LOTE</strong>
+            {t('cutting.activeLine', { line: activeLine })}
           </p>
         </div>
 
@@ -407,12 +409,12 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
           {capturing ? (
             <>
               <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Procesando OCR...</span>
+              <span>{t('cutting.processingOcr')}</span>
             </>
           ) : (
             <>
               <Camera className="w-4 h-4" />
-              <span>Capturar Hoja de ERP (IPEVO)</span>
+              <span>{t('cutting.captureERP')}</span>
             </>
           )}
         </button>
@@ -425,10 +427,10 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
               <Camera className="w-4 h-4 text-slate-400" />
-              <span>Cámara Cenital (IPEVO V4K-PRO)</span>
+              <span>{t('cutting.overheadCamera')}</span>
             </span>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-              DISPOSITIVO CONECTADO
+              {t('cutting.deviceConnected')}
             </span>
           </div>
 
@@ -436,7 +438,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             {capturing ? (
               <div className="text-center space-y-3">
                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p className="text-xs font-semibold text-blue-400 mono">Extrayendo Job ID, piezas y modelo con OCR...</p>
+                <p className="text-xs font-semibold text-blue-400 mono">{t('cutting.extractingOcr')}</p>
               </div>
             ) : ocrResult ? (
               <div className="w-full h-full bg-white p-6 rounded shadow text-slate-800 space-y-3 text-xs overflow-auto">
@@ -452,8 +454,8 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                   <span className="font-bold bg-slate-100 px-2 py-0.5 rounded">TUUCI Production Traveler</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div><strong className="text-slate-500">Modelo:</strong> {ocrResult.modelo}</div>
-                  <div><strong className="text-slate-500">Total Piezas:</strong> {ocrResult.cantidadPiezas} unidades</div>
+                  <div><strong className="text-slate-500">{t('cutting.model')}</strong> {ocrResult.modelo}</div>
+                  <div><strong className="text-slate-500">{t('cutting.totalQty')}</strong> {ocrResult.cantidadPiezas} {t('common.pieces')}</div>
                 </div>
                 <div className="bg-slate-50 p-2.5 rounded border border-slate-200 mono text-[10px] text-slate-600 whitespace-pre-line">
                   {ocrResult.specsRaw}
@@ -462,7 +464,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             ) : (
               <div className="text-center space-y-2 text-slate-400">
                 <Camera className="w-12 h-12 mx-auto stroke-1 opacity-50" />
-                <p className="text-xs font-medium">Coloca la orden de producción impresa bajo la cámara y presiona "Capturar".</p>
+                <p className="text-xs font-medium">{t('cutting.sheetInstructions')}</p>
               </div>
             )}
           </div>
@@ -473,7 +475,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
               <Printer className="w-4 h-4 text-slate-400" />
-              <span>Etiquetas QR Generadas para Impresión</span>
+              <span>{t('cutting.labelsGenerated')}</span>
             </span>
             <div className="flex items-center space-x-2">
               {printedLabels.length > 0 && (
@@ -482,13 +484,13 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                     type="button"
                     onClick={() => handleReprintJob(activeJob || { job_code: printedLabels[0]?.split('-')[0], pieces: printedLabels })}
                     className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 flex items-center space-x-1 shadow-2xs transition-all"
-                    title="Abrir vista de impresión y mandar a impresora física Zebra / Térmica"
+                    title={t('cutting.printTickets')}
                   >
                     <Printer className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Imprimir Tickets</span>
+                    <span>{t('cutting.printTickets')}</span>
                   </button>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                    {printedLabels.length} ETIQUETAS
+                    {t('cutting.labelsCount', { count: printedLabels.length })}
                   </span>
                 </>
               )}
@@ -506,11 +508,11 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                       <div className="text-xs font-extrabold text-slate-800 mono">
                         {activeJob?.jobCode || printedLabels[0]?.split('-')[0]}
                       </div>
-                      <div className="text-[10px] text-slate-500">Etiquetas Listas para Impresión Térmica</div>
+                      <div className="text-[10px] text-slate-500">{t('cutting.readyForThermal')}</div>
                     </div>
                   </div>
                   <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-800">
-                    {printedLabels.length} {printedLabels.length === 1 ? 'Etiqueta' : 'Etiquetas en Lote'}
+                    {printedLabels.length} {t('cutting.labelsCount', { count: printedLabels.length })}
                   </span>
                 </div>
 
@@ -524,20 +526,20 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                       <div className="text-xs font-bold text-slate-900 mono truncate">
                         {printedLabels[0]}
                         {printedLabels.length > 1 && (
-                          <span className="text-slate-400 font-normal"> ... al ... </span>
+                          <span className="text-slate-400 font-normal"> ... </span>
                         )}
                         {printedLabels.length > 1 && (
                           <span className="text-blue-700 font-bold">{printedLabels[printedLabels.length - 1]}</span>
                         )}
                       </div>
                       <div className="text-[11px] text-slate-600 mt-0.5">
-                        Rango correlativo: <strong className="text-blue-600 font-bold">Pieza 1 a {printedLabels.length}</strong> (Total {printedLabels.length} piezas)
+                        {t('cutting.rangeNotice', { count: printedLabels.length })}
                       </div>
                     </div>
                   </div>
                   <div className="text-right text-[10px] text-slate-400 flex-shrink-0 pl-2">
-                    <div>Código 128 / Zebra</div>
-                    <div className="text-emerald-600 font-bold">✓ Generadas</div>
+                    <div>{t('cutting.code128Zebra')}</div>
+                    <div className="text-emerald-600 font-bold">{t('cutting.generatedStatus')}</div>
                   </div>
                 </div>
 
@@ -548,7 +550,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                     onClick={() => setShowAllTickets(!showAllTickets)}
                     className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors flex items-center space-x-1"
                   >
-                    <span>{showAllTickets ? '▲ Ocultar desglose de piezas' : `▼ Ver detalle de las ${printedLabels.length} piezas individuales`}</span>
+                    <span>{showAllTickets ? t('cutting.hidePieceBreakdown') : t('cutting.showPieceBreakdown', { count: printedLabels.length })}</span>
                   </button>
 
                   {showAllTickets && (
@@ -572,33 +574,33 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Layers className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold text-slate-800">Cierre de Lote (Modo LOTE)</span>
+                    <span className="text-xs font-bold text-slate-800">{t('cutting.batchClose')}</span>
                   </div>
                   {batchFinished ? (
                     <span className="inline-flex items-center space-x-1 text-xs font-bold text-emerald-700">
                       <CheckCircle className="w-4 h-4" />
-                      <span>CORTE TERMINADO</span>
+                      <span>{t('cutting.cuttingFinished')}</span>
                     </span>
                   ) : (
-                    <span className="text-xs font-semibold text-blue-600">EN PROCESO</span>
+                    <span className="text-xs font-semibold text-blue-600">{t('cutting.inProgress')}</span>
                   )}
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Al completar el corte de todo el lote físico de tela, presiona el botón inferior para cerrar el proceso para todas las piezas a la vez y activar automáticamente la siguiente estación (<strong className="text-slate-800">ESPERANDO</strong>).
+                  {t('cutting.batchCloseDesc')}
                 </p>
                 <button
                   onClick={handleCloseCorteBatch}
                   disabled={closingBatch || batchFinished}
                   className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow transition-all disabled:opacity-50"
                 >
-                  {closingBatch ? 'Cerrando Lote...' : batchFinished ? '✓ Lote Cerrado con Éxito' : 'Completar Corte (Cerrar Lote)'}
+                  {closingBatch ? t('cutting.closingBatch') : batchFinished ? t('cutting.batchClosedSuccess') : t('cutting.completeBatch')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="h-44 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-lg space-y-2">
               <Printer className="w-8 h-8 stroke-1 opacity-50" />
-              <p className="text-xs font-medium">No hay etiquetas activas en pantalla. Captura una orden o usa el cierre por Job abajo.</p>
+              <p className="text-xs font-medium">{t('cutting.noActiveLabels')}</p>
             </div>
           )}
 
@@ -608,10 +610,10 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
               <div className="flex items-center space-x-2">
                 <Search className="w-4 h-4 text-slate-600" />
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Cerrar Lote por Código de Job (Recuperación)
+                  {t('cutting.manualRecoveryTitle')}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 font-medium">Si cerró la ventana o la máquina</span>
+              <span className="text-[10px] text-slate-400 font-medium">{t('cutting.manualRecoverySubtitle')}</span>
             </div>
 
             <form onSubmit={handleManualJobClose} className="flex items-center space-x-2">
@@ -619,7 +621,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Escribe o busca el Job (ej: JOB0279087)..."
+                    placeholder={t('cutting.searchJobInput')}
                     value={manualJobInput}
                     onChange={(e) => {
                       setManualJobInput(e.target.value.toUpperCase());
@@ -647,8 +649,8 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 {isManualDropdownOpen && (
                   <div className="absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden text-xs divide-y divide-slate-100 max-h-56 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
                     <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                      <span>Lotes Activos para Cierre</span>
-                      <span className="font-mono text-blue-600">{availableJobs.filter((j) => j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL').length} disponibles</span>
+                      <span>{t('cutting.activeBatchesForClose')}</span>
+                      <span className="font-mono text-blue-600">{t('cutting.availableCount', { count: availableJobs.filter((j) => j.estado_cierre === 'EN_PROCESO' || j.estado_cierre === 'PARCIAL').length })}</span>
                     </div>
 
                     {availableJobs
@@ -675,7 +677,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                             <div className="font-mono font-bold text-blue-700 flex items-center space-x-2">
                               <span>{j.job_code}</span>
                               <span className="text-[10px] text-slate-400 font-sans font-normal">
-                                ({j.cantidad_piezas} piezas)
+                                ({j.cantidad_piezas} {t('common.pieces')})
                               </span>
                             </div>
                             <div className="text-[11px] text-slate-500 truncate mt-0.5">{j.modelo}</div>
@@ -683,7 +685,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                           <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                             j.estado_cierre === 'EN_PROCESO' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
                           }`}>
-                            {j.estado_cierre === 'EN_PROCESO' ? 'EN CORTE' : j.estado_cierre}
+                            {j.estado_cierre === 'EN_PROCESO' ? t('cutting.inProgress') : j.estado_cierre}
                           </span>
                         </button>
                       ))}
@@ -694,7 +696,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                       return j.job_code.toLowerCase().includes(q) || (j.modelo && j.modelo.toLowerCase().includes(q));
                     }).length === 0 && (
                       <div className="p-3 text-center text-slate-400 text-xs">
-                        No se encontraron jobs que coincidan con &quot;{manualJobInput}&quot;
+                        {t('cutting.noJobsMatch', { query: manualJobInput })}
                       </div>
                     )}
                   </div>
@@ -712,12 +714,12 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 {manualCloseLoading ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Cerrando...</span>
+                    <span>{t('cutting.closing')}</span>
                   </>
                 ) : (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Cerrar Todo el Lote</span>
+                    <span>{t('cutting.closeEntireBatch')}</span>
                   </>
                 )}
               </button>
@@ -736,7 +738,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                   <div className="flex items-center space-x-2">
                     <span className="font-mono font-bold text-sm">{inspectedJob.job_code}</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-white/80 border">
-                      {inspectedJob.linea_nombre} • {inspectedJob.ruta_nombre || 'Ruta Estándar'}
+                      {inspectedJob.linea_nombre} • {inspectedJob.ruta_nombre || 'Standard'}
                     </span>
                   </div>
 
@@ -745,20 +747,20 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                       type="button"
                       onClick={() => handleReprintJob(inspectedJob)}
                       className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 shadow-xs flex items-center space-x-1 transition-all"
-                      title="Reimprimir etiquetas térmicas para este Job"
+                      title={t('cutting.reprint', { count: inspectedJob.cantidad_piezas || inspectedJob.pieces?.length || 0 })}
                     >
                       <Printer className="w-3 h-3 text-blue-600" />
-                      <span>Reimprimir ({inspectedJob.cantidad_piezas || inspectedJob.pieces?.length || 0} QR)</span>
+                      <span>{t('cutting.reprint', { count: inspectedJob.cantidad_piezas || inspectedJob.pieces?.length || 0 })}</span>
                     </button>
 
                     {inspectedJob.corte_cerrado ? (
                       <span className="inline-flex items-center space-x-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white shadow-xs">
                         <CheckCircle className="w-3 h-3" />
-                        <span>CORTE YA CERRADO</span>
+                        <span>{t('cutting.cuttingAlreadyClosed')}</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center space-x-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
-                        <span>EN CORTE (ACTIVO)</span>
+                        <span>{t('cutting.inCuttingActive')}</span>
                       </span>
                     )}
                   </div>
@@ -767,13 +769,13 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/60">
                   <span className="truncate font-medium">{inspectedJob.modelo}</span>
                   <span className="font-mono font-bold flex-shrink-0 pl-2">
-                    {inspectedJob.cantidad_piezas} piezas
+                    {inspectedJob.cantidad_piezas} {t('common.pieces')}
                   </span>
                 </div>
 
                 {inspectedJob.corte_cerrado && (
                   <div className="text-[10px] font-semibold text-emerald-700 flex items-center space-x-1 pt-0.5">
-                    <span>✓ Este lote ya completó el proceso de corte y se encuentra en estaciones posteriores.</span>
+                    <span>{t('cutting.alreadyCompletedNotice')}</span>
                   </div>
                 )}
               </div>
@@ -805,9 +807,9 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="text-center space-y-1">
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 uppercase tracking-wide">
-                Verificación de OCR (3-4 Segundos)
+                {t('cutting.ocrVerification')}
               </span>
-              <h3 className="text-lg font-bold text-slate-900">Confirmar Orden de Producción</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('cutting.confirmOrder')}</h3>
             </div>
 
             {/* DUPLICATE WARNING IN RED */}
@@ -815,42 +817,46 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
               <div className="p-4 bg-red-50 border-2 border-red-500 rounded-xl space-y-2 text-xs animate-in fade-in duration-150">
                 <div className="flex items-center space-x-2 text-red-800 font-bold text-sm">
                   <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                  <span>⚠️ ESTE JOB YA FUE REGISTRADO Y CORTADO</span>
+                  <span>{t('cutting.duplicateWarningTitle')}</span>
                 </div>
                 <p className="text-red-700 leading-relaxed text-[11px]">
-                  El Job <strong className="font-extrabold mono">{ocrResult.jobCode}</strong> ya existe en la base de datos de producción (Línea: <strong>{duplicateJob.linea_nombre || 'Clásica'}</strong>, Ruta: <strong>{duplicateJob.ruta_nombre || 'Ruta Estándar'}</strong>).
+                  {t('cutting.duplicateWarningDesc', {
+                    jobCode: ocrResult.jobCode,
+                    line: duplicateJob.linea_nombre || 'Clásica',
+                    route: duplicateJob.ruta_nombre || 'Standard'
+                  })}
                 </p>
                 <div className="p-2 bg-red-100/90 rounded border border-red-200 text-red-950 font-bold text-[11px] text-center">
-                  ⛔ ORDEN BLOQUEADA: No se puede volver a cortar un Job ya registrado.
+                  {t('cutting.duplicateBlocked')}
                 </div>
               </div>
             )}
 
             <div className="bg-slate-50 p-4 rounded-xl space-y-2.5 border border-slate-200 text-xs">
               <div className="flex justify-between items-center">
-                <span className="text-slate-500 font-medium">Job Code:</span>
+                <span className="text-slate-500 font-medium">{t('cutting.jobCode')}</span>
                 <span className={`font-extrabold text-sm mono ${duplicateJob ? 'text-red-600 line-through' : 'text-blue-700'}`}>
                   {ocrResult.jobCode}
                 </span>
               </div>
               {ocrResult.itemCode && (
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Item ERP:</span>
+                  <span className="text-slate-500 font-medium">{t('cutting.itemErp')}</span>
                   <span className="font-bold text-xs mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                     {ocrResult.itemCode}
                   </span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Cantidad Total:</span>
-                <span className="font-bold text-slate-800 mono">{ocrResult.cantidadPiezas} piezas</span>
+                <span className="text-slate-500 font-medium">{t('cutting.totalQty')}</span>
+                <span className="font-bold text-slate-800 mono">{ocrResult.cantidadPiezas} {t('common.pieces')}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Modelo:</span>
+                <span className="text-slate-500 font-medium">{t('cutting.model')}</span>
                 <span className="font-semibold text-slate-800 text-right truncate max-w-[200px]">{ocrResult.modelo}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Línea de Producción:</span>
+                <span className="text-slate-500 font-medium">{t('cutting.productionLine')}</span>
                 <select
                   value={selectedLineId}
                   disabled={Boolean(duplicateJob)}
@@ -874,7 +880,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 </select>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-slate-200">
-                <span className="text-slate-500 font-medium">Ruta de Proceso:</span>
+                <span className="text-slate-500 font-medium">{t('cutting.processRoute')}</span>
                 <select
                   value={selectedRutaId || ''}
                   disabled={Boolean(duplicateJob)}
@@ -903,7 +909,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 disabled={isConfirming}
                 className="py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 font-semibold text-xs hover:bg-slate-100 transition-colors disabled:opacity-50"
               >
-                {duplicateJob ? 'Cerrar / Otra orden' : 'No, repetir foto'}
+                {duplicateJob ? t('cutting.closeOther') : t('cutting.cancelRepeat')}
               </button>
               <button
                 onClick={handleConfirmOrder}
@@ -917,12 +923,12 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 {isConfirming ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Creando orden...</span>
+                    <span>{t('cutting.creatingOrder')}</span>
                   </>
                 ) : duplicateJob ? (
-                  <span>⛔ Bloqueado: Ya fue Cortado</span>
+                  <span>{t('cutting.blockedAlreadyCut')}</span>
                 ) : (
-                  <span>Sí, imprimir ({ocrResult.cantidadPiezas} QR)</span>
+                  <span>{t('cutting.yesPrint', { count: ocrResult.cantidadPiezas })}</span>
                 )}
               </button>
             </div>
@@ -941,15 +947,15 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-slate-900 flex items-center space-x-2">
-                    <span>Impresión de Etiquetas (Código de Barras)</span>
+                    <span>{t('cutting.printModalTitle')}</span>
                     <span className="font-mono text-blue-600 text-sm font-extrabold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       {reprintModalJob.job_code || reprintModalJob.jobCode}
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {reprintModalJob.modelo || 'Orden de Producción'} • Total:{' '}
+                    {reprintModalJob.modelo || 'Production Order'} • Total:{' '}
                     <strong className="text-slate-800">
-                      {reprintModalJob.piecesList?.length || reprintModalJob.cantidad_piezas || 0} piezas
+                      {reprintModalJob.piecesList?.length || reprintModalJob.cantidad_piezas || 0} {t('common.pieces')}
                     </strong>
                   </p>
                 </div>
@@ -967,10 +973,10 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             <div className="overflow-y-auto flex-1 pr-1 space-y-3" id="printable-qr-tickets">
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center justify-between no-print">
                 <span>
-                  💡 Etiquetas con <strong>Código de Barras Code 128</strong> para escaneo con pistola láser/CCD e impresoras térmicas Zebra.
+                  {t('cutting.printNotice')}
                 </span>
                 <span className="text-[11px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-300">
-                  Formato: 2x1" / Code 128
+                  {t('cutting.printFormat')}
                 </span>
               </div>
 
@@ -984,7 +990,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                     <div className="w-full flex items-center justify-between border-b border-slate-200 pb-1 text-[10px]">
                       <span className="font-extrabold text-slate-900 tracking-wider">TUUCI</span>
                       <span className="font-mono font-bold text-slate-600">
-                        PIEZA #{idx + 1} de {reprintModalJob.piecesList.length}
+                        {t('cutting.pieceLabel', { current: idx + 1, total: reprintModalJob.piecesList.length })}
                       </span>
                     </div>
 
@@ -994,7 +1000,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                     </div>
 
                     <div className="w-full text-[10px] text-slate-600 truncate border-t border-slate-100 pt-1 flex items-center justify-between">
-                      <span className="truncate font-medium">{reprintModalJob.modelo || 'Lote de Producción'}</span>
+                      <span className="truncate font-medium">{reprintModalJob.modelo || 'Production Batch'}</span>
                       <span className="font-mono font-bold text-slate-700 ml-1 flex-shrink-0">
                         {reprintModalJob.job_code || reprintModalJob.jobCode}
                       </span>
@@ -1007,7 +1013,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             {/* Actions footer */}
             <div className="pt-3 border-t border-slate-200 flex items-center justify-between flex-shrink-0">
               <span className="text-xs text-slate-500">
-                {reprintModalJob.piecesList?.length || 0} tickets listos para reimpresión.
+                {t('cutting.ticketsReady', { count: reprintModalJob.piecesList?.length || 0 })}
               </span>
               <div className="flex items-center space-x-2">
                 <button
@@ -1015,7 +1021,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                   onClick={() => setReprintModalJob(null)}
                   className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
                 >
-                  Cerrar
+                  {t('common.close')}
                 </button>
                 <button
                   type="button"
@@ -1023,7 +1029,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
                   className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md flex items-center space-x-1.5 transition-all"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Mandar a Imprimir</span>
+                  <span>{t('cutting.sendToPrinter')}</span>
                 </button>
               </div>
             </div>

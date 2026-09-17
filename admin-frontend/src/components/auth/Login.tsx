@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface User {
   id: number;
@@ -16,6 +17,7 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,10 +102,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </svg>
           </div>
           <h1 className="text-xl font-black text-white tracking-wide uppercase">
-            Production Planner
+            {t('login.title')}
           </h1>
           <p className="text-xs text-slate-400 font-medium">
-            Control de Trazabilidad, Escaneo en Planta y Órdenes
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -123,10 +125,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
                 <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
               </svg>
-              <span>Iniciar con Microsoft 365</span>
+              <span>{t('login.signInMicrosoft')}</span>
             </button>
             <p className="text-[10px] text-center text-slate-500">
-              Autenticación corporativa delegada con Azure AD / Microsoft Entra
+              {t('login.entraNotice')}
             </p>
           </div>
 
@@ -145,7 +147,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="flex items-center space-x-3 pt-1">
                 <div className="h-px flex-1 bg-slate-800" />
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  O selecciona tu rol (Modo Dev)
+                  {t('login.devRoleDivider')}
                 </span>
                 <div className="h-px flex-1 bg-slate-800" />
               </div>
@@ -154,9 +156,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                   <span className="flex items-center space-x-1.5">
                     <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Cuentas Asignadas para Pruebas:</span>
+                    <span>{t('login.assignedDevAccounts')}</span>
                   </span>
-                  {loading && <span className="text-slate-500 text-[9px] animate-pulse">Cargando...</span>}
+                  {loading && <span className="text-slate-500 text-[9px] animate-pulse">{t('login.loadingUsers')}</span>}
                 </div>
 
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">

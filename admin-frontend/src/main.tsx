@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './i18n';
 import './index.css';
 
 // Intercept window.fetch to automatically append session token if present
