@@ -1184,10 +1184,49 @@ app.put('/api/config', requireAdminRole, async (req, res) => {
 // Cooldown / Debounce map to prevent accidental double scans within configured seconds
 const scanCooldownMap = new Map();
 
+// Helper to validate whether a user has permissions to scan a station
+export async function validateStationAccess(user, codigoEstacion) {
+  if (!codigoEstacion || codigoEstacion === 'AUTO') {
+    return { ok: true };
+  }
+
+  const scanner = await db.prepare(
+    'SELECT id, codigo_estacion, tipo_proceso_id, linea_id, activo FROM escaneres WHERE codigo_estacion = ?'
+  ).get(codigoEstacion);
+
+  if (!scanner || !scanner.activo) {
+    return {
+      ok: false,
+      status: 200,
+      oled_message: 'ERROR',
+      tone: 'red',
+      reason: 'Estación de escáner no encontrada o inactiva.'
+    };
+  }
+
+  // Role-based Line Permissions:
+  // ADMIN can scan in any station
+  // OPERADOR and SUPERVISOR can only scan in stations belonging to their line or global stations (linea_id IS NULL)
+  if (user.rol !== 'ADMIN') {
+    if (scanner.linea_id !== null && scanner.linea_id !== undefined && user.linea_id !== scanner.linea_id) {
+      return {
+        ok: false,
+        status: 403,
+        oled_message: 'NO AUTORIZADO',
+        tone: 'red',
+        reason: 'Permisos insuficientes: el operador/supervisor no pertenece a la línea de esta estación.'
+      };
+    }
+  }
+
+  return { ok: true, scanner };
+}
+
 // Accepts POST /api/scan and POST /api/scan/:codigoEstacion (dedicated endpoint per device)
 app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
   try {
-    const codigoEstacion = req.params.codigoEstacion || req.body?.codigoEstacion || req.query?.estacion || null;
+    const rawEstacion = req.params.codigoEstacion || req.body?.codigoEstacion || req.query?.estacion || null;
+    const codigoEstacion = rawEstacion === 'AUTO' ? null : rawEstacion;
     let rawQR = req.body?.codigoQRUnico || req.body?.code || req.body?.qr || (typeof req.body === 'string' ? req.body : '');
     const cleanQR = (rawQR || '').trim();
 
@@ -1214,6 +1253,7 @@ app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
       }
     }
 
+    const isSimulator = Boolean(req.body?.simulator);
     const scannerToken = req.headers['x-scanner-token'] 
       || req.headers['x-api-key']
       || req.body?.apiKey 
@@ -1222,21 +1262,57 @@ app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
       || req.query?.apiKey 
       || null;
 
-    // Security check: Request must either come from an authenticated user (browser/tablet)
-    // OR specify a hardware scanner station with its valid apiKey/token
-    if (!req.user && !scannerToken && !codigoEstacion) {
-      return res.status(401).json({
-        success: false,
-        oled_message: 'NO AUTORIZADO',
-        tone: 'red',
-        reason: 'Solicitud de escaneo anónima no autorizada: requiere sesión de usuario o token de escáner.'
-      });
+    let usuarioId = null;
+
+    if (isSimulator) {
+      // 1. Web Simulator Flow: strictly requires a valid authenticated user session (req.user)
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          oled_message: 'NO AUTORIZADO',
+          tone: 'red',
+          reason: 'Solicitud de simulador no autorizada: requiere sesión de usuario activa.'
+        });
+      }
+
+      usuarioId = req.user.id;
+
+      // Validate station access according to user role and line
+      if (codigoEstacion) {
+        const access = await validateStationAccess(req.user, codigoEstacion);
+        if (!access.ok) {
+          return res.status(access.status || 403).json({
+            success: false,
+            oled_message: access.oled_message || 'NO AUTORIZADO',
+            tone: access.tone || 'red',
+            reason: access.reason
+          });
+        }
+      }
+    } else {
+      // 2. Physical Hardware Flow:
+      // Request must either provide scanner token or specify a station (which will be validated against scanner.api_key in StateEngine)
+      // Completely anonymous requests with no token and no station are rejected
+      if (!req.user && !scannerToken && !codigoEstacion) {
+        return res.status(401).json({
+          success: false,
+          oled_message: 'NO AUTORIZADO',
+          tone: 'red',
+          reason: 'Solicitud de escaneo anónima no autorizada: requiere sesión de usuario o token de escáner.'
+        });
+      }
+
+      if (req.user) {
+        usuarioId = req.user.id;
+      }
     }
 
     const result = await StateEngine.handleScan({ 
       codigoEstacion, 
       codigoQRUnico: cleanQR,
-      apiKey: scannerToken
+      apiKey: scannerToken,
+      isSimulator,
+      usuarioId
     });
 
     if (result.success) {

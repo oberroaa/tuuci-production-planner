@@ -250,7 +250,7 @@ export class StateEngine {
   /**
    * Phase 2: Wireless Scanner Event.
    */
-  static async handleScan({ codigoEstacion, codigoQRUnico, apiKey = null }) {
+  static async handleScan({ codigoEstacion, codigoQRUnico, apiKey = null, isSimulator = false, usuarioId = null }) {
     if (!codigoQRUnico) {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' };
     }
@@ -313,8 +313,8 @@ export class StateEngine {
         return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Scanner not found or inactive' };
       }
 
-      // Scanner Device Authentication (Option A)
-      if (scanner.api_key) {
+      // Scanner Device Authentication (Option A: Hardware device must provide valid api_key; Simulator is authenticated via user session)
+      if (!isSimulator && scanner.api_key) {
         if (!apiKey || apiKey.trim() !== scanner.api_key.trim()) {
           return {
             success: false,
@@ -437,9 +437,9 @@ export class StateEngine {
         `, [stateEnProceso.id, now, scannerId, pp.id]);
 
         await client.query(`
-          INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id)
-          VALUES ($1, $2, $3, $4)
-        `, [pp.id, pp.estado_id, stateEnProceso.id, scannerId]);
+          INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id, usuario_id)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [pp.id, pp.estado_id, stateEnProceso.id, scannerId, usuarioId]);
 
         await client.query('COMMIT');
 
@@ -464,9 +464,9 @@ export class StateEngine {
         `, [stateTerminada.id, now, scannerId, pp.id]);
 
         await client.query(`
-          INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id)
-          VALUES ($1, $2, $3, $4)
-        `, [pp.id, pp.estado_id, stateTerminada.id, scannerId]);
+          INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id, usuario_id)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [pp.id, pp.estado_id, stateTerminada.id, scannerId, usuarioId]);
 
         // Downstream activation
         const nextProcesoRes = await client.query(`
@@ -492,9 +492,9 @@ export class StateEngine {
           );
           if (nextPPRes.rows.length > 0) {
             await client.query(`
-              INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id)
-              VALUES ($1, NULL, $2, $3)
-            `, [nextPPRes.rows[0].id, stateEsperando.id, scannerId]);
+              INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id, usuario_id)
+              VALUES ($1, NULL, $2, $3, $4)
+            `, [nextPPRes.rows[0].id, stateEsperando.id, scannerId, usuarioId]);
           }
         }
 

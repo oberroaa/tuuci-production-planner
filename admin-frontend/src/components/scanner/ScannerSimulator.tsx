@@ -16,7 +16,6 @@ interface ScannerDevice {
   activo: number;
   tipo_nombre?: string;
   tipo_proceso_nombre?: string;
-  api_key?: string | null;
 }
 
 export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess, currentUser, activeLine }) => {
@@ -133,15 +132,27 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         : '/api/scan';
       const currentDev = devices.find((d) => d.codigo_estacion === selectedStationCode);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (currentDev?.api_key) {
-        headers['X-Scanner-Token'] = currentDev.api_key;
+      
+      // Pass session authentication headers when available
+      const token = currentUser?.token || (typeof localStorage !== 'undefined' ? (() => {
+        try {
+          return JSON.parse(localStorage.getItem('tuuci_user') || '{}')?.token;
+        } catch {
+          return null;
+        }
+      })() : null);
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-session-token'] = token;
       }
 
       const res = await fetch(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          codigoQRUnico: code
+          codigoQRUnico: code,
+          simulator: true
         })
       });
 
