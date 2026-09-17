@@ -26,11 +26,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   useEffect(() => {
     fetch('/api/users')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
         if (Array.isArray(data)) setAvailableUsers(data);
       })
-      .catch(console.error);
+      .catch(() => {});
   }, []);
 
   const isOperator = currentUser?.rol === 'OPERADOR';

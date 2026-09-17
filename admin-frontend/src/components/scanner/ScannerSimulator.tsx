@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles, Barcode } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { io } from 'socket.io-client';
+import { getSocket } from '../../socket';
 
 interface ScannerSimulatorProps {
   onScanSuccess: () => void;
@@ -43,8 +43,12 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
 
   const fetchScannerDevices = useCallback(() => {
     fetch('/api/catalogs')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
+        if (!data) return;
         if (data?.escaneres) {
           let active = data.escaneres.filter((s: ScannerDevice) => s.activo === 1);
           
@@ -87,34 +91,40 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
           });
         }
       })
-      .catch(console.error);
+      .catch(() => {});
   }, [currentUser, activeLine, t]);
 
   // Load configured cooldown duration and registered physical scanners from server
   useEffect(() => {
     fetch('/api/config')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
         if (data?.values?.scanner_cooldown_segundos !== undefined) {
           setConfigCooldownSecs(data.values.scanner_cooldown_segundos);
         }
       })
-      .catch(console.error);
+      .catch(() => {});
 
     fetchScannerDevices();
   }, [fetchScannerDevices]);
 
   // Real-time WebSocket listener: when processes, routes, or scanners are modified in Admin, reload devices list instantly
   useEffect(() => {
-    const socket = io();
-    socket.on('dashboard:update', () => {
+    const socket = getSocket();
+
+    const onUpdate = () => {
       fetchScannerDevices();
-    });
-    socket.on('scan:event', () => {
-      fetchScannerDevices();
-    });
+    };
+
+    socket.on('dashboard:update', onUpdate);
+    socket.on('scan:event', onUpdate);
+
     return () => {
-      socket.disconnect();
+      socket.off('dashboard:update', onUpdate);
+      socket.off('scan:event', onUpdate);
     };
   }, [fetchScannerDevices]);
 

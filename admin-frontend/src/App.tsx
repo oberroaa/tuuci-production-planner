@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { io } from 'socket.io-client';
+import { getSocket } from './socket';
 import { Navbar } from './components/shared/Navbar';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { CuttingStation } from './components/cutting/CuttingStation';
@@ -72,7 +72,10 @@ export function App() {
     // If bypass is active, user is not logged in, and user didn't explicitly log out in this session
     if (isAuthBypass && !currentUser && sessionStorage.getItem('tuuci_logged_out') !== '1') {
       fetch('/api/users')
-        .then((r) => r.json())
+        .then((r) => {
+          if (!r.ok) return null;
+          return r.json();
+        })
         .then((users) => {
           if (Array.isArray(users) && users.length > 0) {
             const adminUser = users.find((u: any) => u.rol === 'ADMIN') || users[0];
@@ -81,13 +84,16 @@ export function App() {
             }
           }
         })
-        .catch(console.error);
+        .catch(() => {});
     }
   }, [isAuthBypass, currentUser]);
 
   const fetchLines = useCallback(() => {
     fetch('/api/catalogs')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`GET /api/catalogs ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (data.lineas && data.lineas.length > 0) {
           setLines(data.lineas);
@@ -98,7 +104,7 @@ export function App() {
           });
         }
       })
-      .catch(console.error);
+      .catch(() => { /* silenced – will retry on next interval */ });
   }, []);
 
   // Load product lines
@@ -200,10 +206,11 @@ export function App() {
       const rutaQuery = (targetRutaId && targetRutaId !== 'ALL') ? `&rutaId=${targetRutaId}` : '';
       const jobQuery = (targetJobCode && targetJobCode.trim()) ? `&jobCode=${encodeURIComponent(targetJobCode.trim())}` : '';
       const res = await fetch(`/api/dashboard/summary?${lineaQuery}${rutaQuery}${jobQuery}`);
+      if (!res.ok) return; // silently skip – will retry on next interval
       const data = await res.json();
       setSummaryData(data);
-    } catch (err) {
-      console.error('Failed to fetch summary', err);
+    } catch {
+      // silenced – transient network / server errors will auto-recover on next fetch cycle
     }
   }, [activeLine, lines, selectedRutaId, dashboardJobCode]);
 
@@ -211,23 +218,30 @@ export function App() {
     fetchSummary();
   }, [fetchSummary]);
 
-  // WebSocket Live Updates Listener
+  // WebSocket Live Updates Listener with slight debounce to prevent query stampedes
   useEffect(() => {
-    const socket = io();
+    const socket = getSocket();
+    let debounceTimer: any = null;
 
-    socket.on('dashboard:update', () => {
-      fetchSummary();
-      fetchLines();
-      triggerGlobalRefresh();
-    });
+    const debouncedRefresh = (includeLines = false) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchSummary();
+        if (includeLines) fetchLines();
+        triggerGlobalRefresh();
+      }, 150);
+    };
 
-    socket.on('scan:event', () => {
-      fetchSummary();
-      triggerGlobalRefresh();
-    });
+    const onDashboardUpdate = () => debouncedRefresh(true);
+    const onScan = () => debouncedRefresh(false);
+
+    socket.on('dashboard:update', onDashboardUpdate);
+    socket.on('scan:event', onScan);
 
     return () => {
-      socket.disconnect();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      socket.off('dashboard:update', onDashboardUpdate);
+      socket.off('scan:event', onScan);
     };
   }, [fetchSummary, fetchLines, triggerGlobalRefresh]);
 

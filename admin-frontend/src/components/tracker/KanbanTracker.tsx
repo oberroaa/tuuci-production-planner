@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { io } from 'socket.io-client';
+import { getSocket } from '../../socket';
 import {
   Layers,
   QrCode,
@@ -230,6 +230,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
       // 1. Fetch catalogs for routes
       const catRes = await fetch('/api/catalogs');
+      if (!catRes.ok) return;
       const catData = await catRes.json();
       const allRutas = catData.rutas || [];
       const lineRutas = isAllLines
@@ -241,6 +242,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
       const lineaParam = isAllLines ? 'lineaId=ALL' : `lineaId=${currentLineObj.id}`;
       const rutaParam = selectedRutaId && selectedRutaId !== 'ALL' ? `&rutaId=${selectedRutaId}` : '&rutaId=ALL';
       const kanbanRes = await fetch(`/api/kanban?${lineaParam}${rutaParam}`);
+      if (!kanbanRes.ok) return;
       const kanbanJson = await kanbanRes.json();
       setKanbanData({
         line: kanbanJson.line,
@@ -256,10 +258,11 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         ? `/api/jobs?lineaId=ALL${jobsRutaParam}`
         : `/api/jobs?lineaId=${currentLineObj.id}${jobsRutaParam}`;
       const jobsRes = await fetch(jobsUrl);
+      if (!jobsRes.ok) return;
       const jobsJson = await jobsRes.json();
       setJobs(Array.isArray(jobsJson) ? jobsJson : []);
-    } catch (err) {
-      console.error('Failed to load tracker data', err);
+    } catch {
+      // silenced – will auto-recover on next cycle
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -272,40 +275,37 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
   // Real-time WebSocket listener for immediate card movement on scan
   useEffect(() => {
-    const socket = io();
+    const socket = getSocket();
+    let debounceTimer: any = null;
 
-    socket.on('scan:event', () => {
-      fetchKanbanAndJobs();
-      if (selectedJobCode) {
-        const currentJob = jobs.find((j) => j.job_code === selectedJobCode);
-        if (currentJob) {
-          fetch(`/api/jobs/${currentJob.id}`)
-            .then((res) => res.json())
-            .then((data) => {
-              setSelectedJobPieces(data.pieces || []);
-            })
-            .catch(console.error);
+    const debouncedRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchKanbanAndJobs();
+        if (selectedJobCode) {
+          const currentJob = jobs.find((j) => j.job_code === selectedJobCode);
+          if (currentJob) {
+            fetch(`/api/jobs/${currentJob.id}`)
+              .then((res) => {
+                if (!res.ok) return null;
+                return res.json();
+              })
+              .then((data) => {
+                if (data?.pieces) setSelectedJobPieces(data.pieces);
+              })
+              .catch(() => {});
+          }
         }
-      }
-    });
+      }, 150);
+    };
 
-    socket.on('dashboard:update', () => {
-      fetchKanbanAndJobs();
-      if (selectedJobCode) {
-        const currentJob = jobs.find((j) => j.job_code === selectedJobCode);
-        if (currentJob) {
-          fetch(`/api/jobs/${currentJob.id}`)
-            .then((res) => res.json())
-            .then((data) => {
-              setSelectedJobPieces(data.pieces || []);
-            })
-            .catch(console.error);
-        }
-      }
-    });
+    socket.on('scan:event', debouncedRefresh);
+    socket.on('dashboard:update', debouncedRefresh);
 
     return () => {
-      socket.disconnect();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      socket.off('scan:event', debouncedRefresh);
+      socket.off('dashboard:update', debouncedRefresh);
     };
   }, [fetchKanbanAndJobs, selectedJobCode, jobs]);
 
@@ -909,7 +909,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     {/* Model */}
                     <div className="text-[10px] text-slate-500 flex items-center space-x-1 truncate" title={item.modelo}>
                       <QrCode className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                      <span className="truncate">{item.modelo}</span>
+                      <span className="truncate">{item.modelo} </span>
                     </div>
 
                     {/* Elapsed Time & Status Badge (Inline at bottom like LOTE mode) */}

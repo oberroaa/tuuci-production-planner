@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
-import db, { initDb } from '../db-compat.js';
+import db, { initDb, updatePoolConfig } from '../db-compat.js';
 import { StateEngine } from '../services/state-engine.js';
 import { DashboardService } from '../services/dashboard-service.js';
 
@@ -198,6 +198,7 @@ app.use(authenticateUser);
 // Safe error response helper (shields internal SQL/DB traces in production)
 export function handleServerError(res, err, defaultStatus = 500) {
   console.error('[SERVER ERROR]', err);
+  if (res.headersSent) return; // response already flushed — nothing we can do
   if (process.env.NODE_ENV === 'production') {
     return res.status(defaultStatus).json({
       error: defaultStatus === 500
@@ -674,6 +675,32 @@ app.post('/api/catalogs/procesos', requireAdminRole, async (req, res) => {
         `).run(lineaId, targetRutaId, tipoProcesoId, targetOrder, finalModo, esCierre, tiempoDemoraSegundos);
         insertedId = result.lastInsertRowid;
       }
+
+      // Ensure existing active jobs on this route receive the new process step
+      if (insertedId) {
+        const activeJobsOnRuta = await txDb.prepare(`
+          SELECT j.id FROM jobs j 
+          WHERE j.ruta_id = ? AND (j.fecha_cierre IS NULL OR j.estado_cierre IN ('EN_PROCESO', 'PARCIAL'))
+        `).all(targetRutaId);
+
+        if (activeJobsOnRuta.length > 0) {
+          const stateInactivo = await txDb.prepare("SELECT id FROM estados WHERE nombre = 'INACTIVO'").get();
+          if (stateInactivo) {
+            for (const aj of activeJobsOnRuta) {
+              const pieces = await txDb.prepare('SELECT id FROM piezas WHERE job_id = ?').all(aj.id);
+              for (const p of pieces) {
+                const existingPP = await txDb.prepare('SELECT id FROM pieza_procesos WHERE pieza_id = ? AND proceso_id = ?').get(p.id, insertedId);
+                if (!existingPP) {
+                  await txDb.prepare(`
+                    INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+                    VALUES (?, ?, ?, NULL)
+                  `).run(p.id, insertedId, stateInactivo.id);
+                }
+              }
+            }
+          }
+        }
+      }
     });
     await tx();
 
@@ -1109,7 +1136,9 @@ app.post('/api/users/:id/initial-line', requireAuth, async (req, res) => {
 // Dynamic configuration helper with in-memory caching
 let cachedConfigs = {
   scanner_cooldown_segundos: 5,
-  auto_refresh_interval_segundos: 5
+  auto_refresh_interval_segundos: 5,
+  pg_pool_max: 50,
+  pg_pool_timeout_segundos: 15
 };
 
 async function loadSystemConfigs() {
@@ -1120,8 +1149,17 @@ async function loadSystemConfigs() {
         cachedConfigs.scanner_cooldown_segundos = Math.max(0, parseInt(r.valor, 10) || 5);
       } else if (r.clave === 'auto_refresh_interval_segundos') {
         cachedConfigs.auto_refresh_interval_segundos = Math.max(1, parseInt(r.valor, 10) || 5);
+      } else if (r.clave === 'pg_pool_max') {
+        cachedConfigs.pg_pool_max = Math.max(5, Math.min(200, parseInt(r.valor, 10) || 50));
+      } else if (r.clave === 'pg_pool_timeout_segundos') {
+        cachedConfigs.pg_pool_timeout_segundos = Math.max(1, Math.min(60, parseInt(r.valor, 10) || 15));
       }
     }
+    // Apply database-stored pool parameters to live pool
+    await updatePoolConfig({
+      maxConnections: cachedConfigs.pg_pool_max,
+      timeoutMs: cachedConfigs.pg_pool_timeout_segundos * 1000
+    });
   } catch (err) {
     console.error('Error loading configuraciones:', err);
   }
@@ -1141,7 +1179,9 @@ app.get('/api/config', async (req, res) => {
       configs: rows,
       values: {
         scanner_cooldown_segundos: parseInt(configMap.scanner_cooldown_segundos || '5', 10),
-        auto_refresh_interval_segundos: parseInt(configMap.auto_refresh_interval_segundos || '5', 10)
+        auto_refresh_interval_segundos: parseInt(configMap.auto_refresh_interval_segundos || '5', 10),
+        pg_pool_max: parseInt(configMap.pg_pool_max || '50', 10),
+        pg_pool_timeout_segundos: parseInt(configMap.pg_pool_timeout_segundos || '15', 10)
       }
     });
   } catch (err) {
@@ -1151,7 +1191,12 @@ app.get('/api/config', async (req, res) => {
 
 app.put('/api/config', requireAdminRole, async (req, res) => {
   try {
-    const { scanner_cooldown_segundos, auto_refresh_interval_segundos } = req.body;
+    const { 
+      scanner_cooldown_segundos, 
+      auto_refresh_interval_segundos,
+      pg_pool_max,
+      pg_pool_timeout_segundos
+    } = req.body;
 
     if (scanner_cooldown_segundos !== undefined) {
       const cooldownVal = Math.max(0, parseInt(scanner_cooldown_segundos, 10) || 0);
@@ -1171,6 +1216,36 @@ app.put('/api/config', requireAdminRole, async (req, res) => {
         ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = CURRENT_TIMESTAMP
       `).run(String(refreshVal));
       cachedConfigs.auto_refresh_interval_segundos = refreshVal;
+    }
+
+    let poolNeedsUpdate = false;
+    if (pg_pool_max !== undefined) {
+      const poolMaxVal = Math.max(5, Math.min(200, parseInt(pg_pool_max, 10) || 50));
+      await db.prepare(`
+        INSERT INTO configuraciones (clave, valor, updated_at)
+        VALUES ('pg_pool_max', ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = CURRENT_TIMESTAMP
+      `).run(String(poolMaxVal));
+      cachedConfigs.pg_pool_max = poolMaxVal;
+      poolNeedsUpdate = true;
+    }
+
+    if (pg_pool_timeout_segundos !== undefined) {
+      const poolTimeoutVal = Math.max(1, Math.min(60, parseInt(pg_pool_timeout_segundos, 10) || 15));
+      await db.prepare(`
+        INSERT INTO configuraciones (clave, valor, updated_at)
+        VALUES ('pg_pool_timeout_segundos', ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = CURRENT_TIMESTAMP
+      `).run(String(poolTimeoutVal));
+      cachedConfigs.pg_pool_timeout_segundos = poolTimeoutVal;
+      poolNeedsUpdate = true;
+    }
+
+    if (poolNeedsUpdate) {
+      await updatePoolConfig({
+        maxConnections: cachedConfigs.pg_pool_max,
+        timeoutMs: cachedConfigs.pg_pool_timeout_segundos * 1000
+      });
     }
 
     io.emit('config:updated', cachedConfigs);
@@ -2169,6 +2244,7 @@ app.post('/api/admin/clean-jobs', requireAdminRole, async (req, res) => {
 
 // Centralized Express Error-Handling Middleware (catches synchronous and unhandled exceptions)
 app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
   handleServerError(res, err, err.status || 500);
 });
 

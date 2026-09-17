@@ -49,8 +49,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Fetch routes and jobs for autocomplete
   React.useEffect(() => {
     fetch('/api/catalogs')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
+        if (!data) return;
         const allRutas = data.rutas || [];
         const isAllLines = !activeLine || activeLine === 'TODAS' || activeLine === 'ALL';
         if (isAllLines) {
@@ -64,18 +68,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           }
         }
       })
-      .catch(console.error);
+      .catch(() => {});
 
     // Fetch jobs for fast search
     const lineParam = (!activeLine || activeLine === 'TODAS' || activeLine === 'ALL') ? 'lineaId=ALL' : `lineaId=${lines.find(l => l.nombre === activeLine)?.id || 'ALL'}`;
     fetch(`/api/jobs?${lineParam}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((jobs) => {
         if (Array.isArray(jobs)) {
           setAvailableJobs(jobs);
         }
       })
-      .catch(console.error);
+      .catch(() => {});
   }, [activeLine, lines]);
 
   const [lastUpdatedTime, setLastUpdatedTime] = React.useState<string>('7:52:53 PM');

@@ -21,16 +21,53 @@ if (isProduction) {
   }
 }
 
-export const pool = new Pool({
+export let pool = new Pool({
   host: process.env.PGHOST || 'localhost',
   port: parseInt(process.env.PGPORT || '5432', 10),
   user: process.env.PGUSER || 'tuuci',
   password: process.env.PGPASSWORD || (isProduction ? undefined : 'tuuci123'),
   database: process.env.PGDATABASE || 'tuuci_production',
-  max: 20,
+  max: parseInt(process.env.PG_POOL_MAX || '50', 10),
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: parseInt(process.env.PG_POOL_TIMEOUT_MS || '15000', 10),
 });
+
+// Helper to update pool parameters dynamically at runtime
+export async function updatePoolConfig({ maxConnections, timeoutMs }) {
+  const currentMax = pool.options.max;
+  const currentTimeout = pool.options.connectionTimeoutMillis;
+  const newMax = maxConnections ? Math.max(5, Math.min(200, parseInt(maxConnections, 10))) : currentMax;
+  const newTimeout = timeoutMs ? Math.max(1000, Math.min(60000, parseInt(timeoutMs, 10))) : currentTimeout;
+
+  if (newMax === currentMax && newTimeout === currentTimeout) {
+    return { max: currentMax, connectionTimeoutMillis: currentTimeout };
+  }
+
+  const oldPool = pool;
+  const newPool = new Pool({
+    host: process.env.PGHOST || 'localhost',
+    port: parseInt(process.env.PGPORT || '5432', 10),
+    user: process.env.PGUSER || 'tuuci',
+    password: process.env.PGPASSWORD || (isProduction ? undefined : 'tuuci123'),
+    database: process.env.PGDATABASE || 'tuuci_production',
+    max: newMax,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: newTimeout,
+  });
+
+  // Verify new pool connects successfully before replacing
+  const testClient = await newPool.connect();
+  testClient.release();
+
+  pool = newPool;
+
+  // Drain old pool in background gracefully
+  setTimeout(() => {
+    oldPool.end().catch(() => {});
+  }, 5000);
+
+  return { max: newMax, connectionTimeoutMillis: newTimeout };
+}
 
 // Helper for queries with automatic connection handling
 export async function query(text, params) {
@@ -189,7 +226,9 @@ export async function initDb() {
       INSERT INTO configuraciones (clave, valor, descripcion)
       VALUES 
         ('scanner_cooldown_segundos', '5', 'Tiempo de espera (segundos) entre escaneos para evitar reenvíos accidentales'),
-        ('auto_refresh_interval_segundos', '5', 'Intervalo de actualización automática del tablero Kanban')
+        ('auto_refresh_interval_segundos', '5', 'Intervalo de actualización automática del tablero Kanban'),
+        ('pg_pool_max', '50', 'Límite máximo de conexiones simultáneas en el pool de PostgreSQL'),
+        ('pg_pool_timeout_segundos', '15', 'Tiempo máximo de espera (segundos) para obtener una conexión del pool')
       ON CONFLICT (clave) DO NOTHING;
     `);
 

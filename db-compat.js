@@ -1,6 +1,6 @@
-import { pool, query, initDb } from './db.js';
+import { pool, query, initDb, updatePoolConfig } from './db.js';
 
-export { pool, query, initDb };
+export { pool, query, initDb, updatePoolConfig };
 
 /**
  * SQLite-like compatibility adapter for PostgreSQL Pool.

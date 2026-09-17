@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Printer, CheckCircle, RefreshCw, Layers, Scissors, AlertTriangle, Search, Check, AlertCircle, ExternalLink, X, Barcode } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { io } from 'socket.io-client';
+import { getSocket } from '../../socket';
 import { Barcode128 } from '../common/Barcode128';
 
 interface CuttingStationProps {
@@ -57,9 +57,12 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
     const timer = setTimeout(() => {
       setLoadingInspectedJob(true);
       fetch(`/api/jobs/check/${encodeURIComponent(code)}`)
-        .then((r) => r.json())
+        .then((r) => {
+          if (!r.ok) return null;
+          return r.json();
+        })
         .then((data) => {
-          if (data.exists && data.job) {
+          if (data && data.exists && data.job) {
             setInspectedJob(data.job);
           } else {
             setInspectedJob(null);
@@ -94,8 +97,12 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
 
   const fetchCatalogsAndJobs = useCallback(() => {
     fetch('/api/catalogs')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
+        if (!data) return;
         setCatalogsData(data);
         const defaultLineId = getUserDefaultLineId();
         setSelectedLineId((prev) => prev || defaultLineId);
@@ -112,15 +119,18 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
           });
         }
       })
-      .catch(console.error);
+      .catch(() => {});
 
     // Fetch active jobs for quick recovery search
     fetch('/api/jobs?lineaId=ALL')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
         if (Array.isArray(data)) setAvailableJobs(data);
       })
-      .catch(console.error);
+      .catch(() => {});
   }, [activeLine, lines, currentUser, selectedLineId]);
 
   // Load routes and catalogs for the active line / user's line
@@ -130,12 +140,13 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
 
   // Real-time WebSocket listener: when routes or processes change in Admin, update live
   useEffect(() => {
-    const socket = io();
-    socket.on('dashboard:update', () => {
+    const socket = getSocket();
+    const onUpdate = () => {
       fetchCatalogsAndJobs();
-    });
+    };
+    socket.on('dashboard:update', onUpdate);
     return () => {
-      socket.disconnect();
+      socket.off('dashboard:update', onUpdate);
     };
   }, [fetchCatalogsAndJobs]);
 

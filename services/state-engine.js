@@ -212,21 +212,33 @@ export class StateEngine {
         `, [item.id, item.estado_id, stateTerminada.id, usuarioId]);
 
         if (nextProc) {
-          await client.query(`
-            UPDATE pieza_procesos
-            SET estado_id = $1
-            WHERE pieza_id = $2 AND proceso_id = $3
-          `, [stateEsperando.id, item.pieza_id, nextProc.id]);
-
-          const nextPPRes = await client.query(
+          const checkNextPP = await client.query(
             'SELECT id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
             [item.pieza_id, nextProc.id]
           );
-          if (nextPPRes.rows.length > 0) {
+
+          let nextPPId = null;
+          if (checkNextPP.rows.length === 0) {
+            const insertedNextPP = await client.query(`
+              INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+              VALUES ($1, $2, $3, NULL)
+              RETURNING id
+            `, [item.pieza_id, nextProc.id, stateEsperando.id]);
+            nextPPId = insertedNextPP.rows[0].id;
+          } else {
+            nextPPId = checkNextPP.rows[0].id;
+            await client.query(`
+              UPDATE pieza_procesos
+              SET estado_id = $1
+              WHERE id = $2
+            `, [stateEsperando.id, nextPPId]);
+          }
+
+          if (nextPPId) {
             await client.query(`
               INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
               VALUES ($1, NULL, $2, $3)
-            `, [nextPPRes.rows[0].id, stateEsperando.id, usuarioId]);
+            `, [nextPPId, stateEsperando.id, usuarioId]);
           }
         }
       }
@@ -471,7 +483,7 @@ export class StateEngine {
           VALUES ($1, $2, $3, $4, $5)
         `, [pp.id, pp.estado_id, stateTerminada.id, scannerId, usuarioId]);
 
-        // Downstream activation
+        // Downstream activation: find the next process in the piece's route
         const nextProcesoRes = await client.query(`
           SELECT p.id, tp.nombre as tipo_nombre
           FROM procesos p
@@ -483,21 +495,35 @@ export class StateEngine {
         const nextProceso = nextProcesoRes.rows[0] || null;
 
         if (nextProceso) {
-          await client.query(`
-            UPDATE pieza_procesos
-            SET estado_id = $1
-            WHERE pieza_id = $2 AND proceso_id = $3
-          `, [stateEsperando.id, pieza.id, nextProceso.id]);
-
-          const nextPPRes = await client.query(
+          // Check if piece_process row exists for next process (in case route was modified after job creation)
+          const checkPP = await client.query(
             'SELECT id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
             [pieza.id, nextProceso.id]
           );
-          if (nextPPRes.rows.length > 0) {
+
+          let nextPPId = null;
+          if (checkPP.rows.length === 0) {
+            // Self-healing: Insert missing process step directly into ESPERANDO
+            const insertedPP = await client.query(`
+              INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+              VALUES ($1, $2, $3, NULL)
+              RETURNING id
+            `, [pieza.id, nextProceso.id, stateEsperando.id]);
+            nextPPId = insertedPP.rows[0].id;
+          } else {
+            nextPPId = checkPP.rows[0].id;
+            await client.query(`
+              UPDATE pieza_procesos
+              SET estado_id = $1
+              WHERE id = $2
+            `, [stateEsperando.id, nextPPId]);
+          }
+
+          if (nextPPId) {
             await client.query(`
               INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, escaner_id, usuario_id)
               VALUES ($1, NULL, $2, $3, $4)
-            `, [nextPPRes.rows[0].id, stateEsperando.id, scannerId, usuarioId]);
+            `, [nextPPId, stateEsperando.id, scannerId, usuarioId]);
           }
         }
 

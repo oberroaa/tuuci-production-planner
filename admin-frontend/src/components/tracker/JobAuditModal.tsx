@@ -304,7 +304,7 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                   title="Descargar datos del Job en Excel / CSV"
                 >
                   <Download className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Exportar a Excel</span>
+                
                 </button>
                 <button
                   type="button"
@@ -313,7 +313,6 @@ export const JobAuditModal: React.FC<JobAuditModalProps> = ({ jobId, isOpen, onC
                   title="Imprimir o guardar en PDF apaisado"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Exportar a PDF</span>
                 </button>
               </>
             )}

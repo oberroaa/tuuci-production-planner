@@ -219,7 +219,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                     </div>
                     <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
                       {auditData.laggingPieces.map((p: any) => (
-                        <div key={p.id} className="p-3 bg-white hover:bg-slate-50/80 transition-colors text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div key={p.piezaId} className="p-3 bg-white hover:bg-slate-50/80 transition-colors text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div>
                             <span className="font-mono font-bold text-blue-700">{p.codigoQRUnico}</span>
                             <div className="text-[11px] text-slate-500 mt-0.5">
@@ -237,7 +237,7 @@ export const BatchCloseModal: React.FC<BatchCloseModalProps> = ({
                             <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
                               {p.pasosFaltantes.map((f: any, idx: number) => (
                                 <span
-                                  key={idx}
+                                  key={f.procesoId}
                                   className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 rounded text-[10px] font-medium"
                                 >
                                   {f.tipo_nombre}

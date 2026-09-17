@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy, Search, ChevronDown } from 'lucide-react';
+import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy, Search, ChevronDown, Database } from 'lucide-react';
 
 interface AdminPanelProps {
   onCatalogUpdated: () => void;
@@ -339,18 +339,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [editingUserRol, setEditingUserRol] = useState<'ADMIN' | 'SUPERVISOR' | 'OPERADOR'>('OPERADOR');
   const [editingUserLineaId, setEditingUserLineaId] = useState<number | ''>('');
 
-  // System Configuration state (cooldown, refresh)
+  // System Configuration state (cooldown, refresh, database pool)
   const [systemCooldownSecs, setSystemCooldownSecs] = useState<number>(5);
   const [systemRefreshSecs, setSystemRefreshSecs] = useState<number>(5);
+  const [systemPoolMax, setSystemPoolMax] = useState<number>(50);
+  const [systemPoolTimeoutSecs, setSystemPoolTimeoutSecs] = useState<number>(15);
   const [savingConfig, setSavingConfig] = useState<boolean>(false);
 
   const loadSystemConfigs = async () => {
     try {
       const res = await fetch('/api/config');
+      if (!res.ok) return;
       const data = await res.json();
       if (data?.values) {
         setSystemCooldownSecs(data.values.scanner_cooldown_segundos || 5);
         setSystemRefreshSecs(data.values.auto_refresh_interval_segundos || 5);
+        setSystemPoolMax(data.values.pg_pool_max || 50);
+        setSystemPoolTimeoutSecs(data.values.pg_pool_timeout_segundos || 15);
       }
     } catch (err) {
       console.error('Failed to load system configs', err);
@@ -366,12 +371,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scanner_cooldown_segundos: systemCooldownSecs,
-          auto_refresh_interval_segundos: systemRefreshSecs
+          auto_refresh_interval_segundos: systemRefreshSecs,
+          pg_pool_max: systemPoolMax,
+          pg_pool_timeout_segundos: systemPoolTimeoutSecs
         })
       });
       const data = await res.json();
       if (res.ok) {
-        showToast('Parámetros del sistema actualizados con éxito', 'success');
+        showToast('Parámetros del sistema y pool de conexiones actualizados con éxito', 'success');
       } else {
         showToast(data.error || 'No se pudo guardar la configuración', 'error');
       }
@@ -417,6 +424,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const loadCatalogs = async () => {
     try {
       const res = await fetch('/api/catalogs');
+      if (!res.ok) return; // silently skip – will retry next cycle
       const data = await res.json();
       
       // Admins fetch full scanner details (including api_keys for hardware configuration)
@@ -442,6 +450,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const loadUsers = async () => {
     try {
       const res = await fetch('/api/users');
+      if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data)) setUsersList(data);
     } catch (err) {
@@ -3215,6 +3224,139 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <span className="text-xs text-slate-500 font-medium">{t('admin.systemSec.secondsUnit')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* PostgreSQL Connection Pool configuration */}
+              <div className="pt-4 border-t border-slate-200/80 space-y-4">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200">
+                    <Database className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      {t('admin.systemSec.poolSecTitle')}
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      {t('admin.systemSec.poolSecSubtitle')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pool Max Connections */}
+                <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <span>{t('admin.systemSec.poolMaxLabel')}</span>
+                    </label>
+                    <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-indigo-100 text-indigo-900 border border-indigo-300">
+                      {t('admin.systemSec.poolMaxCount', { count: systemPoolMax })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {t('admin.systemSec.poolMaxDesc')}
+                  </p>
+
+                  <div className="pt-2 flex items-center space-x-4">
+                    <input
+                      type="range"
+                      min="5"
+                      max="150"
+                      step="5"
+                      value={systemPoolMax}
+                      onChange={(e) => setSystemPoolMax(parseInt(e.target.value, 10))}
+                      className="flex-1 accent-indigo-600 cursor-pointer"
+                    />
+                    <div className="flex items-center space-x-1">
+                      <input
+                        type="number"
+                        min="5"
+                        max="200"
+                        value={systemPoolMax}
+                        onChange={(e) => setSystemPoolMax(Math.max(5, Math.min(200, parseInt(e.target.value, 10) || 5)))}
+                        className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs text-slate-500 font-medium">{t('admin.systemSec.connectionsUnit')}</span>
+                    </div>
+                  </div>
+
+                  {/* Preset buttons */}
+                  <div className="flex flex-wrap gap-1.5 pt-2">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 self-center">{t('admin.systemSec.presets')}</span>
+                    {[20, 35, 50, 75, 100].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setSystemPoolMax(val)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold font-mono transition-all ${
+                          systemPoolMax === val
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pool Connection Timeout */}
+                <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                      <Timer className="w-4 h-4 text-purple-600" />
+                      <span>{t('admin.systemSec.poolTimeoutLabel')}</span>
+                    </label>
+                    <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-purple-100 text-purple-900 border border-purple-300">
+                      {t('admin.systemSec.poolTimeoutSecs', { count: systemPoolTimeoutSecs })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {t('admin.systemSec.poolTimeoutDesc')}
+                  </p>
+
+                  <div className="pt-2 flex items-center space-x-4">
+                    <input
+                      type="range"
+                      min="2"
+                      max="30"
+                      step="1"
+                      value={systemPoolTimeoutSecs}
+                      onChange={(e) => setSystemPoolTimeoutSecs(parseInt(e.target.value, 10))}
+                      className="flex-1 accent-purple-600 cursor-pointer"
+                    />
+                    <div className="flex items-center space-x-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={systemPoolTimeoutSecs}
+                        onChange={(e) => setSystemPoolTimeoutSecs(Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 1)))}
+                        className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <span className="text-xs text-slate-500 font-medium">{t('admin.systemSec.secondsUnit')}</span>
+                    </div>
+                  </div>
+
+                  {/* Preset buttons */}
+                  <div className="flex flex-wrap gap-1.5 pt-2">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 self-center">{t('admin.systemSec.presets')}</span>
+                    {[5, 10, 15, 20, 30].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setSystemPoolTimeoutSecs(val)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold font-mono transition-all ${
+                          systemPoolTimeoutSecs === val
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {val}s
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
