@@ -416,6 +416,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     try {
       const res = await fetch('/api/catalogs');
       const data = await res.json();
+      
+      // Admins fetch full scanner details (including api_keys for hardware configuration)
+      try {
+        const adminScanRes = await fetch('/api/admin/scanners');
+        if (adminScanRes.ok) {
+          const adminScanners = await adminScanRes.json();
+          if (Array.isArray(adminScanners)) {
+            data.escaneres = adminScanners;
+          }
+        }
+      } catch { /* non-admin fallback to public scanners list */ }
+
       setCatalogs(data);
       if (data.lineas && data.lineas.length > 0 && selectedLineId === null) {
         setSelectedLineId(data.lineas[0].id);

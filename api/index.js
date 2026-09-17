@@ -107,9 +107,16 @@ app.use(cors({
 app.use(express.json());
 
 // Security & Signed Session Tokens
-// (crypto already imported at top of file)
-
-const SESSION_SECRET = process.env.SESSION_SECRET || 'tuuci-prod-planner-session-sec-2026-key';
+// In production, SESSION_SECRET is strictly mandatory; in development, generate ephemeral key if missing
+let SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[SEGURIDAD] SESSION_SECRET no está configurado en las variables de entorno de producción.');
+  }
+  // Generate a random ephemeral secret per process run in dev if not explicitly set
+  SESSION_SECRET = crypto.randomBytes(32).toString('hex');
+  console.warn('[SEGURIDAD] SESSION_SECRET no definido en .env; generando clave efímera segura en memoria para desarrollo.');
+}
 
 export function issueUserToken(user) {
   const payload = {
@@ -168,6 +175,14 @@ export async function authenticateUser(req, res, next) {
   }
 
   req.user = null;
+  next();
+}
+
+// Require authenticated user (any role: OPERADOR, SUPERVISOR, ADMIN)
+export function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'No autorizado: debe iniciar sesión para realizar esta operación.' });
+  }
   next();
 }
 
@@ -373,9 +388,16 @@ app.post('/api/auth/entra/exchange', async (req, res) => {
   }
 });
 
-// Direct Login endpoint with token issuance (for testing/local login)
+// Direct Login endpoint with token issuance (Strictly restricted to local development / testing bypass)
 app.post('/api/auth/login', async (req, res) => {
   try {
+    // In production, direct unauthenticated passwordless login is completely forbidden
+    if (process.env.NODE_ENV === 'production' && process.env.DEV_AUTH_BYPASS !== '1') {
+      return res.status(403).json({
+        error: 'El inicio de sesión directo está deshabilitado en producción. Utilice Microsoft 365 (Entra ID).'
+      });
+    }
+
     const { userId, email } = req.body;
     let user = null;
     if (userId) {
@@ -402,8 +424,11 @@ app.get('/api/catalogs', async (req, res) => {
     const rutas = await db.prepare('SELECT * FROM rutas ORDER BY linea_id, id ASC').all();
     const tipoProcesos = await db.prepare('SELECT * FROM tipo_procesos ORDER BY id ASC').all();
     const estados = await db.prepare('SELECT * FROM estados ORDER BY orden ASC').all();
+
+    // Security: Only expose scanner operational fields to clients; never expose secret api_key in public catalogs
     const escaneres = await db.prepare(`
-      SELECT s.*, tp.nombre as tipo_proceso_nombre, tp.nombre as tipo_nombre, l.nombre as linea_nombre
+      SELECT s.id, s.codigo_estacion, s.tipo_proceso_id, s.linea_id, s.activo,
+             tp.nombre as tipo_proceso_nombre, tp.nombre as tipo_nombre, l.nombre as linea_nombre
       FROM escaneres s
       JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
       LEFT JOIN lineas l ON s.linea_id = l.id
@@ -954,11 +979,32 @@ app.delete('/api/catalogs/scanners/:id', requireAdminRole, async (req, res) => {
   }
 });
 
+// Admin-only: Get scanners with their secret api_keys (for Admin Panel hardware configuration)
+app.get('/api/admin/scanners', requireAdminRole, async (req, res) => {
+  try {
+    const escaneres = await db.prepare(`
+      SELECT s.*, tp.nombre as tipo_proceso_nombre, tp.nombre as tipo_nombre, l.nombre as linea_nombre
+      FROM escaneres s
+      JOIN tipo_procesos tp ON s.tipo_proceso_id = tp.id
+      LEFT JOIN lineas l ON s.linea_id = l.id
+      ORDER BY s.id ASC
+    `).all();
+    res.json(escaneres);
+  } catch (err) {
+    handleServerError(res, err, 500);
+  }
+});
+
 // 2h. Users & Roles Management
 app.get('/api/users', async (req, res) => {
   try {
+    // In production, user list requires authentication unless explicit dev bypass is active
+    if (!req.user && process.env.NODE_ENV === 'production' && process.env.DEV_AUTH_BYPASS !== '1') {
+      return res.status(401).json({ error: 'No autorizado: debe iniciar sesión para listar usuarios.' });
+    }
+
     const users = await db.prepare(`
-      SELECT u.*, l.nombre as linea_nombre
+      SELECT u.id, u.nombre, u.email, u.rol, u.linea_id, l.nombre as linea_nombre
       FROM usuarios u
       LEFT JOIN lineas l ON u.linea_id = l.id
       ORDER BY u.id ASC
@@ -1013,23 +1059,29 @@ app.delete('/api/users/:id', requireAdminRole, async (req, res) => {
 });
 
 // Endpoint for first-time line assignment by an operator whose linea_id is NULL
-app.post('/api/users/:id/initial-line', async (req, res) => {
+// Security: Protected by requireAuth and enforces IDOR check (only self or ADMIN)
+app.post('/api/users/:id/initial-line', requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
+    const targetUserId = parseInt(req.params.id, 10);
     const { lineaId } = req.body;
 
     if (!lineaId) {
       return res.status(400).json({ error: 'lineaId es requerido' });
     }
 
+    // IDOR Protection: User can only assign line to themselves unless they have ADMIN role
+    if (req.user.id !== targetUserId && req.user.rol !== 'ADMIN') {
+      return res.status(403).json({ error: 'Acceso denegado: solo puedes asignar la línea inicial de tu propia cuenta.' });
+    }
+
     // Verify current user state in DB
-    const existing = await db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    const existing = await db.prepare('SELECT * FROM usuarios WHERE id = ?').get(targetUserId);
     if (!existing) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
     // If user already has a line and is NOT admin, it cannot be changed via this self-service route
-    if (existing.linea_id !== null && existing.rol !== 'ADMIN') {
+    if (existing.linea_id !== null && req.user.rol !== 'ADMIN') {
       return res.status(403).json({ error: 'Tu línea ya está fijada. Solo un Administrador o Supervisor puede cambiarla.' });
     }
 
@@ -1038,19 +1090,19 @@ app.post('/api/users/:id/initial-line', async (req, res) => {
       return res.status(404).json({ error: 'Línea de producción no encontrada' });
     }
 
-    await db.prepare('UPDATE usuarios SET linea_id = ? WHERE id = ?').run(line.id, id);
+    await db.prepare('UPDATE usuarios SET linea_id = ? WHERE id = ?').run(line.id, targetUserId);
 
     const updatedUser = await db.prepare(`
-      SELECT u.*, l.nombre as linea_nombre
+      SELECT u.id, u.nombre, u.email, u.rol, u.linea_id, l.nombre as linea_nombre
       FROM usuarios u
       LEFT JOIN lineas l ON u.linea_id = l.id
       WHERE u.id = ?
-    `).get(id);
+    `).get(targetUserId);
 
     notifyDashboardUpdate();
     res.json({ success: true, user: updatedUser });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1097,7 +1149,7 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
-app.put('/api/config', async (req, res) => {
+app.put('/api/config', requireAdminRole, async (req, res) => {
   try {
     const { scanner_cooldown_segundos, auto_refresh_interval_segundos } = req.body;
 
@@ -1169,6 +1221,17 @@ app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
       || req.query?.token 
       || req.query?.apiKey 
       || null;
+
+    // Security check: Request must either come from an authenticated user (browser/tablet)
+    // OR specify a hardware scanner station with its valid apiKey/token
+    if (!req.user && !scannerToken && !codigoEstacion) {
+      return res.status(401).json({
+        success: false,
+        oled_message: 'NO AUTORIZADO',
+        tone: 'red',
+        reason: 'Solicitud de escaneo anónima no autorizada: requiere sesión de usuario o token de escáner.'
+      });
+    }
 
     const result = await StateEngine.handleScan({ 
       codigoEstacion, 
@@ -1248,10 +1311,11 @@ app.get('/api/jobs/check/:jobCode', async (req, res) => {
   }
 });
 
-// 4. Cutting Station (Fase 1): Create Job and Pieces
-app.post('/api/jobs', async (req, res) => {
+// 4. Cutting Station (Fase 1): Create Job and Pieces (Protected by requireAuth)
+app.post('/api/jobs', requireAuth, async (req, res) => {
   try {
-    const { jobCode, lineaId, rutaId, modelo, itemCode, specsRaw, cantidadPiezas, creadoPorUsuarioId } = req.body;
+    const { jobCode, lineaId, rutaId, modelo, itemCode, specsRaw, cantidadPiezas } = req.body;
+    const creadoPorUsuarioId = req.user?.id || req.body.creadoPorUsuarioId || null;
     const job = await StateEngine.createJob({
       jobCode,
       lineaId,
@@ -1276,10 +1340,11 @@ app.post('/api/jobs', async (req, res) => {
   }
 });
 
-// 5. Cutting Station: Close batch process (Modo LOTE)
-app.post('/api/cutting/batch-close', async (req, res) => {
+// 5. Cutting Station: Close batch process (Modo LOTE) (Protected by requireAuth)
+app.post('/api/cutting/batch-close', requireAuth, async (req, res) => {
   try {
-    let { jobId, jobCode, procesoId, usuarioId } = req.body;
+    let { jobId, jobCode, procesoId } = req.body;
+    const usuarioId = req.user?.id || req.body.usuarioId || null;
 
     if (!jobId && jobCode) {
       const cleanCode = String(jobCode).trim();
@@ -1416,7 +1481,7 @@ app.get('/api/jobs', async (req, res) => {
 
     res.json(jobs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1644,7 +1709,7 @@ app.get('/api/jobs/:id', async (req, res) => {
 
     res.json({ job, pieces: enrichedPieces, auditEvents, batchCloses: batchCloses || [] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1914,7 +1979,7 @@ app.get('/api/kanban', async (req, res) => {
       items
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1929,11 +1994,12 @@ app.get('/api/jobs/:id/audit-lote', async (req, res) => {
   }
 });
 
-// 5d. Close Final Batch with Reconciliation
-app.post('/api/jobs/:id/close-final-batch', async (req, res) => {
+// 5d. Close Final Batch with Reconciliation (Protected by requireAuth)
+app.post('/api/jobs/:id/close-final-batch', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { procesoId, usuarioId, notasCierre, tipoCierre } = req.body;
+    const { procesoId, notasCierre, tipoCierre } = req.body;
+    const usuarioId = req.user?.id || req.body.usuarioId || null;
     const result = await StateEngine.closeFinalBatchWithReconciliation({
       jobId: parseInt(id, 10),
       procesoId: procesoId ? parseInt(procesoId, 10) : null,
@@ -1948,11 +2014,12 @@ app.post('/api/jobs/:id/close-final-batch', async (req, res) => {
   }
 });
 
-// 5e. Reassign piece to another process (e.g. backward for rework/correction)
-app.post('/api/pieces/:id/reassign', async (req, res) => {
+// 5e. Reassign piece to another process (e.g. backward for rework/correction) (Protected by requireAuth)
+app.post('/api/pieces/:id/reassign', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { targetProcesoId, usuarioId, observacion } = req.body;
+    const { targetProcesoId, observacion } = req.body;
+    const usuarioId = req.user?.id || req.body.usuarioId || null;
     if (!targetProcesoId) {
       return res.status(400).json({ error: 'targetProcesoId es requerido' });
     }
@@ -1984,8 +2051,8 @@ app.get('/api/dashboard/summary', async (req, res) => {
   }
 });
 
-// 7. Seed demo order if empty
-app.post('/api/seed-demo', async (req, res) => {
+// 7. Seed demo order if empty (Admin protected)
+app.post('/api/seed-demo', requireAdminRole, async (req, res) => {
   try {
     const existingJobs = await db.prepare('SELECT COUNT(*) as count FROM jobs').get();
     if (parseInt(existingJobs.count, 10) === 0) {
