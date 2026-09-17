@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy, Search, ChevronDown } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -116,7 +117,7 @@ const SearchableProcessSelect: React.FC<SearchableProcessSelectProps> = ({
             })
           ) : (
             <div className="px-3 py-3 text-xs text-slate-400 text-center">
-              No se encontraron procesos que coincidan con "{query}"
+              No matching processes found for "{query}"
             </div>
           )}
         </div>
@@ -126,6 +127,7 @@ const SearchableProcessSelect: React.FC<SearchableProcessSelectProps> = ({
 };
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
+  const { t } = useTranslation();
   const [activeSubTab, setActiveSubTab] = useState<'LINES' | 'PROCESS_TYPES' | 'ROUTES' | 'STATES' | 'SCANNERS' | 'USERS' | 'SYSTEM_CONFIG'>('ROUTES');
   const [catalogs, setCatalogs] = useState<{
     lineas: any[];
@@ -386,10 +388,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleRequestCleanOperationalData = () => {
     askConfirmation({
-      title: '¿Limpiar Todo el Tablero y Dashboard?',
-      message: 'Esta acción eliminará de forma irreversible todos los Jobs, Piezas individuales, eventos de escaneo e historial operativo del Tracker y Dashboard. Los catálogos (Líneas, Rutas, Escáneres, Usuarios) permanecerán intactos. ¿Deseas continuar?',
-      confirmText: 'Sí, Limpiar Datos Operativos',
-      cancelText: 'Cancelar',
+      title: t('admin.dialog.cleanDataTitle'),
+      message: t('admin.dialog.cleanDataMsg'),
+      confirmText: t('admin.dialog.confirmCleanData'),
+      cancelText: t('admin.dialog.cancel'),
       type: 'danger',
       onConfirm: async () => {
         setCleaningData(true);
@@ -561,9 +563,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleDeleteRuta = (ruta: any) => {
     askConfirmation({
-      title: 'Eliminar Ruta de Proceso',
-      message: `¿Estás seguro de que deseas eliminar la ruta "${ruta.nombre}"? Esta acción eliminará permanentemente todas sus estaciones asignadas.`,
-      confirmText: 'Sí, Eliminar Ruta',
+      title: t('admin.dialog.deleteRouteTitle'),
+      message: t('admin.dialog.deleteRouteMsg', { name: ruta.nombre }),
+      confirmText: t('admin.dialog.confirmDeleteRoute'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/catalogs/rutas/${ruta.id}`, { method: 'DELETE' });
@@ -609,9 +612,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleDeleteTipo = (id: number, nombre: string) => {
     askConfirmation({
-      title: 'Eliminar Tipo de Proceso',
-      message: `¿Estás seguro de que deseas eliminar el tipo maestro "${nombre}"?`,
-      confirmText: 'Sí, Eliminar',
+      title: t('admin.dialog.deleteTipoTitle'),
+      message: t('admin.dialog.deleteTipoMsg', { name: nombre }),
+      confirmText: t('admin.dialog.confirmDeleteTipo'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/catalogs/tipo-procesos/${id}`, { method: 'DELETE' });
@@ -654,9 +658,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleDeleteLine = (id: number, nombre: string) => {
     askConfirmation({
-      title: 'Eliminar Línea de Producto',
-      message: `¿Estás seguro de que deseas eliminar la línea "${nombre}" y todas sus rutas y procesos configurados?`,
-      confirmText: 'Sí, Eliminar Línea',
+      title: t('admin.dialog.deleteLineTitle'),
+      message: t('admin.dialog.deleteLineMsg', { name: nombre }),
+      confirmText: t('admin.dialog.confirmDeleteLine'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/catalogs/lines/${id}`, { method: 'DELETE' });
@@ -796,9 +801,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleDeleteState = (id: number, nombre: string) => {
     askConfirmation({
-      title: 'Eliminar Estado de Proceso',
-      message: `¿Estás seguro de que deseas eliminar el estado de catálogo "${nombre}"?`,
-      confirmText: 'Sí, Eliminar Estado',
+      title: t('admin.dialog.deleteStateTitle'),
+      message: t('admin.dialog.deleteStateMsg', { name: nombre }),
+      confirmText: t('admin.dialog.confirmDeleteState'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/catalogs/estados/${id}`, { method: 'DELETE' });
@@ -872,9 +878,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleDeleteScanner = (id: number, code: string) => {
     askConfirmation({
-      title: 'Eliminar Dispositivo Escáner',
-      message: `¿Estás seguro de que deseas desvincular y eliminar el escáner "${code}"?`,
-      confirmText: 'Sí, Eliminar Escáner',
+      title: t('admin.dialog.deleteScannerTitle'),
+      message: t('admin.dialog.deleteScannerMsg', { code }),
+      confirmText: t('admin.dialog.confirmDeleteScanner'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/catalogs/scanners/${id}`, { method: 'DELETE' });
@@ -957,9 +964,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleDeleteUser = (userId: number, nombre?: string) => {
     askConfirmation({
-      title: 'Eliminar Usuario',
-      message: `¿Estás seguro de que deseas eliminar al usuario ${nombre ? `"${nombre}"` : ''}?`,
-      confirmText: 'Sí, Eliminar Usuario',
+      title: t('admin.dialog.deleteUserTitle'),
+      message: t('admin.dialog.deleteUserMsg', { name: nombre || '' }),
+      confirmText: t('admin.dialog.confirmDeleteUser'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
@@ -1260,9 +1268,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   // Delete Step
   const handleDeleteProcessStep = (procesoId: number) => {
     askConfirmation({
-      title: 'Eliminar Estación de la Ruta',
-      message: '¿Estás seguro de que deseas eliminar esta estación de la ruta? La secuencia de las estaciones restantes se reordenará automáticamente.',
-      confirmText: 'Sí, Eliminar Estación',
+      title: t('admin.dialog.deleteStationTitle'),
+      message: t('admin.dialog.deleteStationMsg'),
+      confirmText: t('admin.dialog.confirmDeleteStation'),
+      cancelText: t('admin.dialog.cancel'),
       onConfirm: async () => {
         try {
           const res = await fetch(`/api/catalogs/procesos/${procesoId}`, { method: 'DELETE' });
@@ -1325,10 +1334,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
             <Settings className="w-5 h-5 text-blue-600" />
-            <span>Panel de Administración y Configuración de Catálogos</span>
+            <span>{t('admin.title')}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Administración de Líneas, Catálogo Maestro de Procesos, Rutas con Secuencia, Estados con Banderas y Escáneres.
+            {t('admin.subtitle')}
           </p>
         </div>
       </div>
@@ -1342,7 +1351,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Rutas de Procesos por Línea</span>
+          <span>{t('admin.tabs.routes')}</span>
         </button>
 
         <button
@@ -1352,7 +1361,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>Líneas de Producto</span>
+          <span>{t('admin.tabs.lines')}</span>
         </button>
 
         <button
@@ -1362,7 +1371,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Settings className="w-4 h-4" />
-          <span>Catálogo Maestro TipoProceso</span>
+          <span>{t('admin.tabs.processTypes')}</span>
         </button>
 
         <button
@@ -1372,7 +1381,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Shield className="w-4 h-4" />
-          <span>Catálogo de Estados (Banderas)</span>
+          <span>{t('admin.tabs.states')}</span>
         </button>
 
         <button
@@ -1382,7 +1391,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Radio className="w-4 h-4" />
-          <span>Dispositivos Escáner Físicos</span>
+          <span>{t('admin.tabs.scanners')}</span>
         </button>
 
         <button
@@ -1392,7 +1401,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Gestión de Usuarios y Roles</span>
+          <span>{t('admin.tabs.users')}</span>
         </button>
 
         <button
@@ -1402,7 +1411,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           }`}
         >
           <Timer className="w-4 h-4 text-amber-500" />
-          <span>Parámetros del Sistema (Cooldown)</span>
+          <span>{t('admin.tabs.systemConfig')}</span>
         </button>
       </div>
 
@@ -1415,20 +1424,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <div className="space-y-0.5">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                    Secuencia de Procesos de la Línea
+                    {t('admin.routesSec.title')}
                   </h3>
                   {currentRuta && (
                     <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
                       <GitBranch className="w-3 h-3 text-blue-600" />
                       <span>{currentRuta.nombre}</span>
                       {currentRuta.es_default === 1 && (
-                        <span className="text-amber-600 font-bold ml-0.5" title="Ruta Principal por Defecto">★ Principal</span>
+                        <span className="text-amber-600 font-bold ml-0.5" title={t('admin.routesSec.mainStarTooltip')}>{t('admin.routesSec.mainStar')}</span>
                       )}
                     </span>
                   )}
                 </div>
                 <p className="text-xs text-slate-500">
-                  Define las estaciones que recorre cada pieza. Una línea puede tener múltiples variantes de ruta.
+                  {t('admin.routesSec.description')}
                 </p>
               </div>
 
@@ -1436,7 +1445,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <div className="flex flex-wrap items-center gap-2">
                 {/* Line Selector */}
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-xs font-semibold text-slate-500">Línea:</span>
+                  <span className="text-xs font-semibold text-slate-500">{t('admin.routesSec.lineLabel')}</span>
                   <select
                     value={selectedLineId || ''}
                     onChange={(e) => {
@@ -1457,7 +1466,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
                 {/* Route Selector */}
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-xs font-semibold text-slate-500">Ruta:</span>
+                  <span className="text-xs font-semibold text-slate-500">{t('admin.routesSec.routeLabel')}</span>
                   {editingRutaId === currentRuta?.id ? (
                     <div className="flex items-center space-x-1">
                       <input
@@ -1470,7 +1479,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         type="button"
                         onClick={handleSaveRutaEdit}
                         className="p-1.5 bg-amber-500 text-white rounded hover:bg-amber-600"
-                        title="Guardar nombre"
+                        title={t('admin.routesSec.saveName')}
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
@@ -1478,7 +1487,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         type="button"
                         onClick={handleCancelEditRuta}
                         className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
-                        title="Cancelar"
+                        title={t('admin.routesSec.cancel')}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1495,7 +1504,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     >
                       {lineRoutes.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.nombre} {r.es_default === 1 ? '★ (Principal)' : ''}
+                          {r.nombre} {r.es_default === 1 ? `★ (${t('admin.routesSec.mainStar').replace('★ ', '')})` : ''}
                         </option>
                       ))}
                     </select>
@@ -1507,7 +1516,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         type="button"
                         onClick={() => handleStartEditRuta(currentRuta)}
                         className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"
-                        title="Renombrar ruta seleccionada"
+                        title={t('admin.routesSec.renameTooltip')}
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -1519,7 +1528,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             ? 'text-amber-500 cursor-default'
                             : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'
                         }`}
-                        title={currentRuta.es_default === 1 ? 'Ruta principal por defecto' : 'Establecer como ruta principal'}
+                        title={currentRuta.es_default === 1 ? t('admin.routesSec.defaultRouteTooltip') : t('admin.routesSec.setAsDefaultTooltip')}
                       >
                         <Star className={`w-3.5 h-3.5 ${currentRuta.es_default === 1 ? 'fill-amber-400' : ''}`} />
                       </button>
@@ -1532,7 +1541,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             ? 'text-slate-200 cursor-not-allowed'
                             : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
                         }`}
-                        title={lineRoutes.length <= 1 ? 'No se puede eliminar la única ruta' : 'Eliminar esta ruta'}
+                        title={lineRoutes.length <= 1 ? t('admin.routesSec.cannotDeleteOnlyRoute') : t('admin.routesSec.deleteRouteTooltip')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1545,7 +1554,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Nueva Ruta</span>
+                    <span>{t('admin.routesSec.newRouteBtn')}</span>
                   </button>
                 </div>
               </div>
@@ -1556,11 +1565,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <form onSubmit={handleCreateRuta} className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-lg flex flex-wrap items-center gap-3 text-xs">
                 <div className="flex items-center space-x-1.5 font-bold text-blue-950">
                   <GitBranch className="w-4 h-4 text-blue-600" />
-                  <span>Nueva ruta para {currentLine?.nombre}:</span>
+                  <span>{t('admin.routesSec.newRouteFor', { line: currentLine?.nombre })}</span>
                 </div>
                 <input
                   type="text"
-                  placeholder="Ej: Ruta con Maquinado Especial"
+                  placeholder={t('admin.routesSec.newRoutePlaceholder')}
                   value={newRutaName}
                   onChange={(e) => setNewRutaName(e.target.value)}
                   className="flex-1 min-w-[200px] bg-white border border-blue-300 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
@@ -1573,13 +1582,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     onChange={(e) => setIsNewRutaDefault(e.target.checked)}
                     className="rounded text-blue-600 focus:ring-blue-500"
                   />
-                  <span>Ruta principal por defecto</span>
+                  <span>{t('admin.routesSec.defaultCheckbox')}</span>
                 </label>
                 <button
                   type="submit"
                   className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs transition-colors"
                 >
-                  Guardar Ruta
+                  {t('admin.routesSec.saveRouteBtn')}
                 </button>
                 <button
                   type="button"
@@ -1590,7 +1599,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   }}
                   className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-lg transition-colors"
                 >
-                  Cancelar
+                  {t('admin.routesSec.cancel')}
                 </button>
               </form>
             )}
@@ -1600,12 +1609,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="px-3 py-3 w-16 text-center">Orden</th>
-                    <th className="px-4 py-3">Estación (TipoProceso)</th>
-                    <th className="px-4 py-3 text-center">Modo de Trabajo</th>
-                    <th className="px-4 py-3 text-center">Tiempo de Demora</th>
-                    <th className="px-4 py-3 text-center">Cierre de Lote</th>
-                    <th className="px-4 py-3 text-right">Acciones</th>
+                    <th className="px-3 py-3 w-16 text-center">{t('admin.routesSec.tableOrder')}</th>
+                    <th className="px-4 py-3">{t('admin.routesSec.tableStation')}</th>
+                    <th className="px-4 py-3 text-center">{t('admin.routesSec.tableWorkMode')}</th>
+                    <th className="px-4 py-3 text-center">{t('admin.routesSec.tableDelay')}</th>
+                    <th className="px-4 py-3 text-center">{t('admin.routesSec.tableBatchClosure')}</th>
+                    <th className="px-4 py-3 text-right">{t('admin.routesSec.tableActions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -1629,7 +1638,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           </td>
                           <td className="px-4 py-3">
                             <div className="font-bold text-slate-900">{p.tipo_nombre}</div>
-                            <div className="text-[10px] text-slate-400 mono">ID Paso: {p.id} | TipoID: {p.tipo_proceso_id}</div>
+                            <div className="text-[10px] text-slate-400 mono">{t('admin.routesSec.stepId')}: {p.id} | {t('admin.routesSec.tipoId')}: {p.tipo_proceso_id}</div>
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -1637,16 +1646,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               onClick={() => handleToggleProcessModo(p.id)}
                               className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all shadow-xs border cursor-pointer ${
                                 p.modo_trabajo === 'LOTE'
-                                  ? 'bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100 hover:border-purple-400'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
+                                    ? 'bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100 hover:border-purple-400'
+                                    : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400'
                               }`}
                               title={
                                 p.modo_trabajo === 'LOTE'
-                                  ? 'Modo LOTE (Job Completo) - Haz clic para cambiar a EA (Por pieza)'
-                                  : 'Modo EA (Por pieza) - Haz clic para cambiar a LOTE'
+                                  ? t('admin.routesSec.loteModeTooltip')
+                                  : t('admin.routesSec.eaModeTooltip')
                               }
                             >
-                              <span>{p.modo_trabajo === 'LOTE' ? 'LOTE' : 'EA'}</span>
+                              <span>{p.modo_trabajo === 'LOTE' ? t('admin.routesSec.loteMode') : t('admin.routesSec.eaMode')}</span>
                             </button>
                           </td>
                           {/* Tiempo de Demora (Editable inline) */}
@@ -1667,13 +1676,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     }
                                   }}
                                   className="w-20 px-2 py-1 text-xs border border-blue-400 rounded-md font-mono text-center font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-                                  placeholder="Segundos"
+                                  placeholder={t('admin.routesSec.delaySecondsPlaceholder')}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleQuickSaveDelay(p.id, inlineDelayValue)}
                                   className="p-1 text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors"
-                                  title="Guardar"
+                                  title={t('admin.routesSec.save')}
                                 >
                                   <Check className="w-3.5 h-3.5" />
                                 </button>
@@ -1681,7 +1690,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                   type="button"
                                   onClick={() => setInlineDelayEditId(null)}
                                   className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
-                                  title="Cancelar"
+                                  title={t('admin.routesSec.cancel')}
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -1694,10 +1703,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                   setInlineDelayValue(String(delaySecs));
                                 }}
                                 className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-all text-xs font-mono font-bold text-slate-700 hover:text-blue-700 shadow-2xs group"
-                                title="Haz clic para editar el tiempo de demora estimado"
+                                title={t('admin.routesSec.editDelayTooltip')}
                               >
                                 <Timer className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600" />
-                                <span>{delaySecs} s</span>
+                                <span>{delaySecs} {t('admin.routesSec.seconds')}</span>
                                 <Pencil className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
                               </button>
                             )}
@@ -1713,17 +1722,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               }`}
                               title={
                                 p.es_proceso_cierre === 1
-                                  ? 'Estación designada de Cierre de Lote (Aplica reconciliación y cierre total)'
-                                  : 'Haz clic para designar esta estación como la de Cierre de Lote'
+                                  ? t('admin.routesSec.batchClosureActiveTooltip')
+                                  : t('admin.routesSec.markClosureTooltip')
                               }
                             >
                               {p.es_proceso_cierre === 1 ? (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                                  <span>Cierre Lote</span>
+                                  <span>{t('admin.routesSec.batchClosureActive')}</span>
                                 </>
                               ) : (
-                                <span>Marcar Cierre</span>
+                                <span>{t('admin.routesSec.markClosure')}</span>
                               )}
                             </button>
                           </td>
@@ -1738,7 +1747,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     ? 'text-slate-200 cursor-not-allowed'
                                     : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                                 }`}
-                                title={idx === 0 ? 'Primer paso' : 'Mover arriba'}
+                                title={idx === 0 ? t('admin.routesSec.firstStep') : t('admin.routesSec.moveUp')}
                               >
                                 <ArrowUp className="w-3.5 h-3.5" />
                               </button>
@@ -1751,7 +1760,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     ? 'text-slate-200 cursor-not-allowed'
                                     : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                                 }`}
-                                title={idx === lineProcesses.length - 1 ? 'Último paso' : 'Mover abajo'}
+                                title={idx === lineProcesses.length - 1 ? t('admin.routesSec.lastStep') : t('admin.routesSec.moveDown')}
                               >
                                 <ArrowDown className="w-3.5 h-3.5" />
                               </button>
@@ -1763,7 +1772,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     ? 'bg-amber-100 text-amber-700'
                                     : 'text-slate-500 hover:text-amber-600 hover:bg-amber-50'
                                 }`}
-                                title="Editar estación de la ruta"
+                                title={t('admin.routesSec.editStepTooltip')}
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
@@ -1771,7 +1780,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                 type="button"
                                 onClick={() => handleDeleteProcessStep(p.id)}
                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                title="Eliminar paso de la ruta"
+                                title={t('admin.routesSec.deleteStepTooltip')}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1782,8 +1791,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                        Esta ruta aún no tiene estaciones configuradas. Agrega estaciones en el formulario lateral.
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                        {t('admin.routesSec.emptyRoute')}
                       </td>
                     </tr>
                   )}
@@ -1799,7 +1808,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <div className="flex items-center justify-between pb-2 border-b border-amber-200">
                   <h3 className="text-sm font-bold text-amber-800 uppercase tracking-wide flex items-center space-x-1.5">
                     <Pencil className="w-4 h-4 text-amber-600" />
-                    <span>Editar Estación (Paso {editingProcessOrden})</span>
+                    <span>{t('admin.routesSec.editStationTitle', { order: editingProcessOrden })}</span>
                   </h3>
                   <button
                     type="button"
@@ -1807,20 +1816,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     className="text-xs text-slate-500 hover:text-slate-700 flex items-center space-x-1"
                   >
                     <X className="w-3.5 h-3.5" />
-                    <span>Cancelar</span>
+                    <span>{t('admin.routesSec.cancel')}</span>
                   </button>
                 </div>
 
                 <form onSubmit={handleSaveProcessEdit} className="space-y-4 text-xs">
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600">Estación (TipoProceso Global)</label>
+                    <label className="font-semibold text-slate-600">{t('admin.routesSec.stationGlobal')}</label>
                     <select
                       value={editingProcessTipoId}
                       onChange={(e) => setEditingProcessTipoId(Number(e.target.value))}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
                       required
                     >
-                      <option value="">Selecciona un tipo de proceso...</option>
+                      <option value="">{t('admin.routesSec.selectProcessPlaceholder')}</option>
                       {catalogs.tipoProcesos.map((tp) => (
                         <option key={tp.id} value={tp.id}>
                           {tp.nombre}
@@ -1830,7 +1839,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600">Posición / Número de Orden</label>
+                    <label className="font-semibold text-slate-600">{t('admin.routesSec.positionOrder')}</label>
                     <input
                       type="number"
                       min="1"
@@ -1842,14 +1851,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600">Modo de Trabajo</label>
+                    <label className="font-semibold text-slate-600">{t('admin.routesSec.workMode')}</label>
                     <select
                       value={editingProcessModo}
                       onChange={(e) => setEditingProcessModo(e.target.value as 'LOTE' | 'INDIVIDUAL')}
                       className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg p-2.5 font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
                     >
-                      <option value="INDIVIDUAL">EA (Pieza por pieza con escáner)</option>
-                      <option value="LOTE">LOTE (Todas las piezas del Job a la vez, ej. Corte)</option>
+                      <option value="INDIVIDUAL">{t('admin.routesSec.eaOption')}</option>
+                      <option value="LOTE">{t('admin.routesSec.loteOption')}</option>
                     </select>
                   </div>
 
@@ -1857,7 +1866,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   <div className="space-y-1.5">
                     <label className="font-semibold text-slate-600 flex items-center space-x-1.5">
                       <Timer className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Tiempo de Demora (Segundos)</span>
+                      <span>{t('admin.routesSec.delayTimeSeconds')}</span>
                     </label>
                     <input
                       type="number"
@@ -1865,11 +1874,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       value={editingProcessTiempoDemora}
                       onChange={(e) => setEditingProcessTiempoDemora(Math.max(0, parseInt(e.target.value, 10) || 0))}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 mono"
-                      placeholder="0 segundos"
+                      placeholder={t('admin.routesSec.delayZeroPlaceholder')}
                       required
                     />
                     <p className="text-[10px] text-slate-400">
-                      Tiempo estimado de procesamiento o permanencia por pieza/lote en esta estación.
+                      {t('admin.routesSec.delayEditHelp')}
                     </p>
                   </div>
 
@@ -1883,9 +1892,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mt-0.5"
                       />
                       <div>
-                        <span className="font-bold text-slate-800">Estación de Cierre de Lote</span>
+                        <span className="font-bold text-slate-800">{t('admin.routesSec.closureStationTitle')}</span>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Al cerrar esta estación, el sistema aplica la lógica de reconciliación de piezas y cierre de la orden (puede operar en modo EA o LOTE).
+                          {t('admin.routesSec.closureStationHelp')}
                         </p>
                       </div>
                     </label>
@@ -1897,14 +1906,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                     >
                       <Check className="w-4 h-4" />
-                      <span>Guardar Cambios</span>
+                      <span>{t('admin.routesSec.saveChanges')}</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleCancelEditProcess}
                       className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
                     >
-                      Cancelar
+                      {t('admin.routesSec.cancel')}
                     </button>
                   </div>
                 </form>
@@ -1914,30 +1923,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <div className="space-y-0.5">
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
                     <Plus className="w-4 h-4 text-blue-600" />
-                    <span>Agregar Estación a la Ruta</span>
+                    <span>{t('admin.routesSec.addStationTitle')}</span>
                   </h3>
                   {currentRuta && (
                     <p className="text-[11px] text-slate-500">
-                      Ruta activa: <strong className="text-slate-800">{currentRuta.nombre}</strong>
+                      {t('admin.routesSec.activeRouteLabel')} <strong className="text-slate-800">{currentRuta.nombre}</strong>
                     </p>
                   )}
                 </div>
 
                 <form onSubmit={handleAddProcessStep} className="space-y-4 text-xs">
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600">Estación (TipoProceso Global)</label>
+                    <label className="font-semibold text-slate-600">{t('admin.routesSec.stationGlobal')}</label>
                     <select
                       value={newStepTipoId}
                       onChange={(e) => setNewStepTipoId(Number(e.target.value))}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       required
                     >
-                      <option value="">Selecciona un tipo de proceso...</option>
+                      <option value="">{t('admin.routesSec.selectProcessPlaceholder')}</option>
                       {catalogs.tipoProcesos.map((tp) => {
                         const isAlreadyInRoute = lineProcesses.some((p) => p.tipo_proceso_id === tp.id);
                         return (
                           <option key={tp.id} value={tp.id} disabled={isAlreadyInRoute}>
-                            {tp.nombre} {isAlreadyInRoute ? '(Ya en la ruta)' : ''}
+                            {tp.nombre} {isAlreadyInRoute ? t('admin.routesSec.alreadyInRoute') : ''}
                           </option>
                         );
                       })}
@@ -1945,7 +1954,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600">Posición / Número de Orden</label>
+                    <label className="font-semibold text-slate-600">{t('admin.routesSec.positionOrder')}</label>
                     <input
                       type="number"
                       min="1"
@@ -1957,14 +1966,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600">Modo de Trabajo</label>
+                    <label className="font-semibold text-slate-600">{t('admin.routesSec.workMode')}</label>
                     <select
                       value={newStepModo}
                       onChange={(e) => setNewStepModo(e.target.value as 'LOTE' | 'INDIVIDUAL')}
                       className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg p-2.5 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="INDIVIDUAL">EA (Pieza por pieza con escáner)</option>
-                      <option value="LOTE">LOTE (Todas las piezas del Job a la vez, ej. Corte)</option>
+                      <option value="INDIVIDUAL">{t('admin.routesSec.eaOption')}</option>
+                      <option value="LOTE">{t('admin.routesSec.loteOption')}</option>
                     </select>
                   </div>
 
@@ -1972,7 +1981,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   <div className="space-y-1.5">
                     <label className="font-semibold text-slate-600 flex items-center space-x-1.5">
                       <Timer className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Tiempo de Demora (Segundos)</span>
+                      <span>{t('admin.routesSec.delayTimeSeconds')}</span>
                     </label>
                     <input
                       type="number"
@@ -1980,11 +1989,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       value={newStepTiempoDemora}
                       onChange={(e) => setNewStepTiempoDemora(Math.max(0, parseInt(e.target.value, 10) || 0))}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 mono"
-                      placeholder="0 segundos"
+                      placeholder={t('admin.routesSec.delayZeroPlaceholder')}
                       required
                     />
                     <p className="text-[10px] text-slate-400">
-                      Tiempo estimado de procesamiento o permanencia por pieza/lote (inicialmente 0 s).
+                      {t('admin.routesSec.delayAddHelp')}
                     </p>
                   </div>
 
@@ -1998,9 +2007,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 mt-0.5"
                       />
                       <div>
-                        <span className="font-bold text-slate-800">Marcar como Estación de Cierre</span>
+                        <span className="font-bold text-slate-800">{t('admin.routesSec.markAsClosureTitle')}</span>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Al alcanzar este paso, se habilitará el cierre de la orden y la reconciliación forense (puede operar en modo EA o LOTE).
+                          {t('admin.routesSec.markAsClosureHelp')}
                         </p>
                       </div>
                     </label>
@@ -2011,7 +2020,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Agregar a la Ruta</span>
+                    <span>{t('admin.routesSec.addToRoute')}</span>
                   </button>
                 </form>
               </>
@@ -2025,7 +2034,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-              Líneas de Producto Activas
+              {t('admin.linesSec.title')}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {catalogs.lineas.map((line) => {
@@ -2047,14 +2056,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         <button
                           onClick={() => handleSaveLineEdit(line.id)}
                           className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
-                          title="Guardar"
+                          title={t('admin.routesSec.save')}
                         >
                           <Check className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setEditingLineId(null)}
                           className="p-1.5 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
-                          title="Cancelar"
+                          title={t('admin.routesSec.cancel')}
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -2072,14 +2081,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               setEditingLineName(line.nombre);
                             }}
                             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Editar línea"
+                            title={t('admin.linesSec.editTooltip')}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteLine(line.id, line.nombre)}
                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Eliminar línea"
+                            title={t('admin.linesSec.deleteTooltip')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2095,14 +2104,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
               <Plus className="w-4 h-4 text-blue-600" />
-              <span>Crear Nueva Línea</span>
+              <span>{t('admin.linesSec.createTitle')}</span>
             </h3>
             <form onSubmit={handleCreateLine} className="space-y-4 text-xs">
               <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Nombre de la Línea</label>
+                <label className="font-semibold text-slate-600">{t('admin.linesSec.nameLabel')}</label>
                 <input
                   type="text"
-                  placeholder="ej. Pérgolas / Especiales"
+                  placeholder={t('admin.linesSec.namePlaceholder')}
                   value={newLineName}
                   onChange={(e) => setNewLineName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -2114,7 +2123,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
               >
                 <Plus className="w-4 h-4" />
-                <span>Crear Línea</span>
+                <span>{t('admin.linesSec.createBtn')}</span>
               </button>
             </form>
           </div>
@@ -2127,10 +2136,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                Catálogo Maestro TipoProceso (Global)
+                {t('admin.processTypesSec.title')}
               </h3>
               <p className="text-xs text-slate-500">
-                Tipos universales de estación que pueden asignarse a cualquier línea. Permite que un escáner atienda múltiples líneas.
+                {t('admin.processTypesSec.description')}
               </p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -2154,14 +2163,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           <button
                             onClick={() => handleSaveTipoEdit(tp.id)}
                             className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700"
-                            title="Guardar"
+                            title={t('admin.routesSec.save')}
                           >
                             <Check className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setEditingTipoId(null)}
                             className="p-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
-                            title="Cancelar"
+                            title={t('admin.routesSec.cancel')}
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -2180,14 +2189,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               setEditingTipoName(tp.nombre);
                             }}
                             className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Editar nombre"
+                            title={t('admin.processTypesSec.editTooltip')}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteTipo(tp.id, tp.nombre)}
                             className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Eliminar tipo de proceso"
+                            title={t('admin.processTypesSec.deleteTooltip')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2203,14 +2212,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
               <Plus className="w-4 h-4 text-blue-600" />
-              <span>Nuevo Tipo de Proceso</span>
+              <span>{t('admin.processTypesSec.createTitle')}</span>
             </h3>
             <form onSubmit={handleCreateTipoProceso} className="space-y-4 text-xs">
               <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Nombre de la Estación Global</label>
+                <label className="font-semibold text-slate-600">{t('admin.processTypesSec.nameLabel')}</label>
                 <input
                   type="text"
-                  placeholder="ej. PINTURA, SOLDADURA"
+                  placeholder={t('admin.processTypesSec.namePlaceholder')}
                   value={newTipoName}
                   onChange={(e) => setNewTipoName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase"
@@ -2222,7 +2231,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
               >
                 <Plus className="w-4 h-4" />
-                <span>Registrar TipoProceso</span>
+                <span>{t('admin.processTypesSec.registerBtn')}</span>
               </button>
             </form>
           </div>
@@ -2238,14 +2247,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                    Catálogo de Estados y Banderas de Comportamiento
+                    {t('admin.statesSec.title')}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    El motor evalúa estas banderas dinámicamente. Puedes hacer clic directamente en cualquier bandera (Visible, Escaneo, Disparo) para activarla o desactivarla al instante, o usar las flechas ↑ / ↓ para reordenar.
+                    {t('admin.statesSec.description')}
                   </p>
                 </div>
                 <div className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
-                  {sortedStates.length} estados
+                  {t('admin.statesSec.statesCount', { count: sortedStates.length })}
                 </div>
               </div>
 
@@ -2253,12 +2262,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="px-3 py-3 w-16 text-center">Orden</th>
-                      <th className="px-4 py-3">Nombre</th>
-                      <th className="px-3 py-3 text-center">Visible Operador</th>
-                      <th className="px-3 py-3 text-center">Permite Escaneo</th>
-                      <th className="px-3 py-3 text-center">Dispara Activación</th>
-                      <th className="px-4 py-3 text-right">Acciones</th>
+                      <th className="px-3 py-3 w-16 text-center">{t('admin.statesSec.tableOrder')}</th>
+                      <th className="px-4 py-3">{t('admin.statesSec.tableName')}</th>
+                      <th className="px-3 py-3 text-center">{t('admin.statesSec.tableVisible')}</th>
+                      <th className="px-3 py-3 text-center">{t('admin.statesSec.tableScan')}</th>
+                      <th className="px-3 py-3 text-center">{t('admin.statesSec.tableTrigger')}</th>
+                      <th className="px-4 py-3 text-right">{t('admin.statesSec.tableActions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2291,19 +2300,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               }`}
                               title={
                                 st.visible_para_operador
-                                  ? 'Visible para Operador (ACTIVO) - Clic para ocultar'
-                                  : 'Visible para Operador (OCULTO) - Clic para mostrar'
+                                  ? t('admin.statesSec.visibleActiveTooltip')
+                                  : t('admin.statesSec.visibleHiddenTooltip')
                               }
                             >
                               {st.visible_para_operador ? (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Visible</span>
+                                  <span>{t('admin.statesSec.visibleActive')}</span>
                                 </>
                               ) : (
                                 <>
                                   <XCircle className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Oculto</span>
+                                  <span>{t('admin.statesSec.visibleHidden')}</span>
                                 </>
                               )}
                             </button>
@@ -2319,19 +2328,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               }`}
                               title={
                                 st.permite_escaneo
-                                  ? 'Permite Escaneo (ACTIVO) - Clic para bloquear'
-                                  : 'Permite Escaneo (BLOQUEADO) - Clic para permitir'
+                                  ? t('admin.statesSec.scanAllowedTooltip')
+                                  : t('admin.statesSec.scanBlockedTooltip')
                               }
                             >
                               {st.permite_escaneo ? (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Permitido</span>
+                                  <span>{t('admin.statesSec.scanAllowed')}</span>
                                 </>
                               ) : (
                                 <>
                                   <XCircle className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Bloqueado</span>
+                                  <span>{t('admin.statesSec.scanBlocked')}</span>
                                 </>
                               )}
                             </button>
@@ -2347,19 +2356,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               }`}
                               title={
                                 st.dispara_activacion_siguiente
-                                  ? 'Dispara Siguiente Proceso (ACTIVO) - Clic para desactivar'
-                                  : 'Dispara Siguiente Proceso (INACTIVO) - Clic para activar'
+                                  ? t('admin.statesSec.triggerActiveTooltip')
+                                  : t('admin.statesSec.triggerInactiveTooltip')
                               }
                             >
                               {st.dispara_activacion_siguiente ? (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Dispara</span>
+                                  <span>{t('admin.statesSec.triggerActive')}</span>
                                 </>
                               ) : (
                                 <>
                                   <XCircle className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>No</span>
+                                  <span>{t('admin.statesSec.triggerInactive')}</span>
                                 </>
                               )}
                             </button>
@@ -2375,7 +2384,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     ? 'text-slate-200 cursor-not-allowed'
                                     : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                                 }`}
-                                title={idx === 0 ? 'Primer estado' : 'Mover arriba'}
+                                title={idx === 0 ? t('admin.statesSec.firstStatus') : t('admin.routesSec.moveUp')}
                               >
                                 <ArrowUp className="w-3.5 h-3.5" />
                               </button>
@@ -2388,7 +2397,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     ? 'text-slate-200 cursor-not-allowed'
                                     : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                                 }`}
-                                title={idx === sortedStates.length - 1 ? 'Último estado' : 'Mover abajo'}
+                                title={idx === sortedStates.length - 1 ? t('admin.statesSec.lastStatus') : t('admin.routesSec.moveDown')}
                               >
                                 <ArrowDown className="w-3.5 h-3.5" />
                               </button>
@@ -2400,7 +2409,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                     ? 'bg-amber-100 text-amber-700'
                                     : 'text-slate-500 hover:text-amber-600 hover:bg-amber-50'
                                 }`}
-                                title="Editar estado"
+                                title={t('admin.statesSec.editStatusTooltip')}
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
@@ -2409,7 +2418,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                   type="button"
                                   onClick={() => handleDeleteState(st.id, st.nombre)}
                                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Eliminar estado"
+                                  title={t('admin.statesSec.deleteStatusTooltip')}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -2430,7 +2439,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   <div className="flex items-center justify-between pb-2 border-b border-amber-200">
                     <h3 className="text-sm font-bold text-amber-800 uppercase tracking-wide flex items-center space-x-1.5">
                       <Pencil className="w-4 h-4 text-amber-600" />
-                      <span>Editar Estado (ID: {editingStateId})</span>
+                      <span>{t('admin.statesSec.editTitle', { id: editingStateId })}</span>
                     </h3>
                     <button
                       type="button"
@@ -2438,13 +2447,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       className="text-xs text-slate-500 hover:text-slate-700 flex items-center space-x-1"
                     >
                       <X className="w-3.5 h-3.5" />
-                      <span>Cancelar</span>
+                      <span>{t('admin.routesSec.cancel')}</span>
                     </button>
                   </div>
 
                   <form onSubmit={handleSaveStateEdit} className="space-y-4 text-xs">
                     <div className="space-y-1.5">
-                      <label className="font-semibold text-slate-600">Nombre del Estado</label>
+                      <label className="font-semibold text-slate-600">{t('admin.statesSec.nameLabel')}</label>
                       <input
                         type="text"
                         value={editingStateName}
@@ -2455,7 +2464,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="font-semibold text-slate-600">Orden Secuencial</label>
+                      <label className="font-semibold text-slate-600">{t('admin.statesSec.orderLabel')}</label>
                       <input
                         type="number"
                         value={editingStateOrden}
@@ -2474,7 +2483,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           onChange={(e) => setEditingStateVisible(e.target.checked)}
                           className="rounded text-amber-600 focus:ring-amber-500"
                         />
-                        <span className="font-medium text-slate-700">Visible para Operador</span>
+                        <span className="font-medium text-slate-700">{t('admin.statesSec.flagVisible')}</span>
                       </label>
 
                       <label className="flex items-center space-x-2 cursor-pointer">
@@ -2484,7 +2493,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           onChange={(e) => setEditingStatePermiteEscaneo(e.target.checked)}
                           className="rounded text-amber-600 focus:ring-amber-500"
                         />
-                        <span className="font-medium text-slate-700">Permite Escaneo (Abre/Cierra)</span>
+                        <span className="font-medium text-slate-700">{t('admin.statesSec.flagScan')}</span>
                       </label>
 
                       <label className="flex items-center space-x-2 cursor-pointer">
@@ -2494,7 +2503,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           onChange={(e) => setEditingStateDisparaActivacion(e.target.checked)}
                           className="rounded text-amber-600 focus:ring-amber-500"
                         />
-                        <span className="font-medium text-slate-700">Dispara Activación del Siguiente Proceso</span>
+                        <span className="font-medium text-slate-700">{t('admin.statesSec.flagTrigger')}</span>
                       </label>
                     </div>
 
@@ -2504,14 +2513,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                       >
                         <Check className="w-4 h-4" />
-                        <span>Guardar Cambios</span>
+                        <span>{t('admin.routesSec.saveChanges')}</span>
                       </button>
                       <button
                         type="button"
                         onClick={handleCancelEditState}
                         className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
                       >
-                        Cancelar
+                        {t('admin.routesSec.cancel')}
                       </button>
                     </div>
                   </form>
@@ -2520,14 +2529,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <>
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
                     <Plus className="w-4 h-4 text-blue-600" />
-                    <span>Crear Nuevo Estado</span>
+                    <span>{t('admin.statesSec.createTitle')}</span>
                   </h3>
                   <form onSubmit={handleCreateState} className="space-y-4 text-xs">
                     <div className="space-y-1.5">
-                      <label className="font-semibold text-slate-600">Nombre del Estado</label>
+                      <label className="font-semibold text-slate-600">{t('admin.statesSec.nameLabel')}</label>
                       <input
                         type="text"
-                        placeholder="ej. PAUSADA, RECHAZADA"
+                        placeholder={t('admin.statesSec.namePlaceholder')}
                         value={newStateName}
                         onChange={(e) => setNewStateName(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase"
@@ -2536,7 +2545,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="font-semibold text-slate-600">Orden Secuencial</label>
+                      <label className="font-semibold text-slate-600">{t('admin.statesSec.orderLabel')}</label>
                       <input
                         type="number"
                         value={newStateOrden}
@@ -2555,7 +2564,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           onChange={(e) => setNewStateVisible(e.target.checked)}
                           className="rounded text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="font-medium text-slate-700">Visible para Operador</span>
+                        <span className="font-medium text-slate-700">{t('admin.statesSec.flagVisible')}</span>
                       </label>
 
                       <label className="flex items-center space-x-2 cursor-pointer">
@@ -2565,7 +2574,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           onChange={(e) => setNewStatePermiteEscaneo(e.target.checked)}
                           className="rounded text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="font-medium text-slate-700">Permite Escaneo (Abre/Cierra)</span>
+                        <span className="font-medium text-slate-700">{t('admin.statesSec.flagScan')}</span>
                       </label>
 
                       <label className="flex items-center space-x-2 cursor-pointer">
@@ -2575,7 +2584,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           onChange={(e) => setNewStateDisparaActivacion(e.target.checked)}
                           className="rounded text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="font-medium text-slate-700">Dispara Activación del Siguiente Proceso</span>
+                        <span className="font-medium text-slate-700">{t('admin.statesSec.flagTrigger')}</span>
                       </label>
                     </div>
 
@@ -2584,7 +2593,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Registrar Estado</span>
+                      <span>{t('admin.statesSec.registerBtn')}</span>
                     </button>
                   </form>
                 </>
@@ -2601,32 +2610,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm space-y-3">
             <div className="flex items-center space-x-2 text-blue-900 font-bold text-sm">
               <Radio className="w-4 h-4 text-blue-600" />
-              <span>Configuración de Escáneres Físicos en Planta (Ruta API por Dispositivo)</span>
+              <span>{t('admin.scannersSec.guideTitle')}</span>
             </div>
             <p className="text-xs text-slate-700 leading-relaxed">
-              En planta, el operador únicamente apunta la pistola lectora al código de la pieza (ej. <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono font-bold text-blue-900">JOB0279087-01</code>). Para que el servidor reconozca automáticamente la estación sin que el operador tenga que elegir nada, <strong>a cada aparato físico se le graba su propia Ruta API fija</strong>:
+              {t('admin.scannersSec.guideDesc')}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs">
               <div className="bg-white/90 border border-blue-200 p-3 rounded-lg space-y-1.5 shadow-xs">
                 <div className="font-bold text-blue-900 flex items-center space-x-1 font-sans">
-                  <span>1. Endpoint dedicado por estación (en firmware/Wi-Fi):</span>
+                  <span>{t('admin.scannersSec.guideEndpointTitle')}</span>
                 </div>
                 <div className="text-blue-950 bg-blue-100/70 px-2.5 py-1.5 rounded font-bold">
                   POST http://&lt;IP_SERVIDOR&gt;:3001/api/scan/<span className="text-indigo-600">{'{CODIGO_ESTACION}'}</span>
                 </div>
                 <div className="text-[11px] text-slate-500 font-sans">
-                  Ejemplo para Fabricación: <code className="text-blue-700 font-bold">/api/scan/FABRICACION-01</code>
+                  {t('admin.scannersSec.guideEndpointExample')}
                 </div>
               </div>
               <div className="bg-white/90 border border-blue-200 p-3 rounded-lg space-y-1.5 shadow-xs">
                 <div className="font-bold text-emerald-900 flex items-center space-x-1 font-sans">
-                  <span>2. Payload enviado por el gatillo al disparar:</span>
+                  <span>{t('admin.scannersSec.guidePayloadTitle')}</span>
                 </div>
                 <div className="text-emerald-950 bg-emerald-100/70 px-2.5 py-1.5 rounded font-bold truncate">
                   {'{ "codigoQRUnico": "JOB0279087-01" }'}
                 </div>
                 <div className="text-[11px] text-slate-500 font-sans">
-                  El servidor valida si a esa pieza le correspondía entrar o salir de esa estación.
+                  {t('admin.scannersSec.guidePayloadDesc')}
                 </div>
               </div>
             </div>
@@ -2636,10 +2645,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                  Dispositivos Escáner Físicos Registrados
+                  {t('admin.scannersSec.listTitle')}
                 </h3>
                 <span className="text-xs text-slate-400 font-mono">
-                  {catalogs.escaneres.length} dispositivo(s)
+                  {t('admin.scannersSec.devicesCount', { count: catalogs.escaneres.length })}
                 </span>
               </div>
 
@@ -2658,41 +2667,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         <div className="text-xs font-bold text-blue-900 flex items-center justify-between pb-1 border-b border-blue-200">
                           <span className="flex items-center space-x-1.5">
                             <Pencil className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Editar Dispositivo Escáner</span>
+                            <span>{t('admin.scannersSec.editTitle')}</span>
                           </span>
                           <span className="text-[10px] text-slate-500 font-mono">ID: {s.id}</span>
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-semibold text-slate-700">Código de Estación Fija</label>
+                          <label className="text-[10px] font-semibold text-slate-700">{t('admin.scannersSec.fixedStationCode')}</label>
                           <input
                             type="text"
                             value={editingScannerCode}
                             onChange={(e) => setEditingScannerCode(e.target.value)}
                             className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold font-mono text-xs uppercase text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="ej. FABRICACION-01"
+                            placeholder={t('admin.scannersSec.codePlaceholder')}
                             autoFocus
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-semibold text-slate-700">Tipo de Proceso que Atiende</label>
+                          <label className="text-[10px] font-semibold text-slate-700">{t('admin.scannersSec.processTypeServed')}</label>
                           <SearchableProcessSelect
                             tipoProcesos={catalogs.tipoProcesos}
                             selectedId={editingScannerTipoId}
                             onChange={(id) => setEditingScannerTipoId(id)}
-                            placeholder="Escribe para buscar proceso (ej. CORTE, ENSAMBLE)..."
+                            placeholder={t('admin.scannersSec.searchProcessPlaceholder')}
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-semibold text-slate-700">Línea de Producción Asignada</label>
+                          <label className="text-[10px] font-semibold text-slate-700">{t('admin.scannersSec.assignedLine')}</label>
                           <select
                             value={editingScannerLineaId}
                             onChange={(e) => setEditingScannerLineaId(e.target.value ? Number(e.target.value) : '')}
                             className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
-                            <option value="">Todas las Líneas (Global / Sin restricción)</option>
+                            <option value="">{t('admin.scannersSec.allLinesGlobal')}</option>
                             {catalogs.lineas.map((l) => (
                               <option key={l.id} value={l.id}>
                                 {l.nombre}
@@ -2702,13 +2711,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-semibold text-slate-700">Token / API Key <span className="text-slate-400 font-normal">(Opcional)</span></label>
+                          <label className="text-[10px] font-semibold text-slate-700">{t('admin.scannersSec.tokenLabel')} <span className="text-slate-400 font-normal">{t('admin.scannersSec.tokenOptional')}</span></label>
                           <input
                             type="text"
                             value={editingScannerApiKey}
                             onChange={(e) => setEditingScannerApiKey(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                            placeholder="Dejar vacío para generar uno automático"
+                            placeholder={t('admin.scannersSec.tokenPlaceholder')}
                           />
                         </div>
 
@@ -2719,7 +2728,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             className="px-2.5 py-1 rounded text-xs text-slate-600 hover:bg-slate-200 border border-slate-300 transition-colors flex items-center space-x-1"
                           >
                             <X className="w-3 h-3" />
-                            <span>Cancelar</span>
+                            <span>{t('admin.routesSec.cancel')}</span>
                           </button>
                           <button
                             type="button"
@@ -2727,7 +2736,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             className="px-3 py-1 rounded text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-colors flex items-center space-x-1"
                           >
                             <Check className="w-3 h-3" />
-                            <span>Guardar Cambios</span>
+                            <span>{t('admin.scannersSec.saveChanges')}</span>
                           </button>
                         </div>
                       </div>
@@ -2740,28 +2749,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               <span>{s.codigo_estacion}</span>
                             </div>
                             <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center flex-wrap gap-1.5">
-                              <span>Estación: <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong></span>
+                              <span>{t('admin.scannersSec.stationPrefix')} <strong className="text-slate-800">{s.tipo_proceso_nombre || s.tipo_nombre}</strong></span>
                               <span className="text-slate-300">•</span>
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
-                                {s.linea_nombre || 'Todas las Líneas'}
+                                {s.linea_nombre || t('admin.scannersSec.allLinesGlobal')}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center space-x-1.5">
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              ACTIVO
+                              {t('admin.scannersSec.activeBadge')}
                             </span>
                             <button
                               onClick={() => handleStartEditScanner(s)}
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="Editar estación o código de escáner"
+                              title={t('admin.scannersSec.editScannerTooltip')}
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteScanner(s.id, s.codigo_estacion)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Eliminar escáner"
+                              title={t('admin.scannersSec.deleteScannerTooltip')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2771,7 +2780,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         {/* Dedicated API Endpoint Box */}
                         <div className="bg-slate-900 rounded-lg p-2.5 space-y-1.5 text-slate-100">
                           <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
-                            <span>Ruta API del Dispositivo:</span>
+                            <span>{t('admin.scannersSec.apiRouteLabel')}</span>
                             <span className="text-emerald-400 font-mono font-bold">POST</span>
                           </div>
                           <div className="flex items-center justify-between font-mono text-[11px] bg-slate-950/80 px-2 py-1 rounded border border-slate-800">
@@ -2780,17 +2789,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               type="button"
                               onClick={() => handleCopyScannerUrl(s.codigo_estacion)}
                               className="ml-2 px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center space-x-1 transition-colors flex-shrink-0"
-                              title="Copiar URL completa para el firmware"
+                              title={t('admin.scannersSec.copyUrlTooltip')}
                             >
                               {copiedStation === s.codigo_estacion ? (
                                 <>
                                   <Check className="w-3 h-3 text-emerald-300" />
-                                  <span className="text-emerald-300">¡Copiado!</span>
+                                  <span className="text-emerald-300">{t('admin.scannersSec.copied')}</span>
                                 </>
                               ) : (
                                 <>
                                   <Copy className="w-3 h-3" />
-                                  <span>Copiar URL</span>
+                                  <span>{t('admin.scannersSec.copyUrl')}</span>
                                 </>
                               )}
                             </button>
@@ -2811,23 +2820,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                                   type="button"
                                   onClick={() => handleCopyScannerToken(s.api_key!, s.codigo_estacion)}
                                   className="ml-1 px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-amber-600 hover:bg-amber-500 text-white flex items-center space-x-1 transition-colors flex-shrink-0"
-                                  title="Copiar token para programar el firmware del escáner"
+                                  title={t('admin.scannersSec.copyTokenTooltip')}
                                 >
                                   {copiedToken === s.codigo_estacion ? (
                                     <>
                                       <Check className="w-3 h-3 text-emerald-300" />
-                                      <span className="text-emerald-300">¡Copiado!</span>
+                                      <span className="text-emerald-300">{t('admin.scannersSec.copied')}</span>
                                     </>
                                   ) : (
                                     <>
                                       <Copy className="w-3 h-3" />
-                                      <span>Copiar Token</span>
+                                      <span>{t('admin.scannersSec.copyToken')}</span>
                                     </>
                                   )}
                                 </button>
                               </div>
                               <p className="text-[9px] text-slate-500 mt-0.5">
-                                Configura este token en el header <code className="text-amber-400">X-Scanner-Token</code> del firmware.
+                                {t('admin.scannersSec.tokenFirmwareHelp')}
                               </p>
                             </div>
                           )}
@@ -2842,45 +2851,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
                 <Plus className="w-4 h-4 text-blue-600" />
-                <span>Registrar Nuevo Escáner</span>
+                <span>{t('admin.scannersSec.registerTitle')}</span>
               </h3>
               <p className="text-xs text-slate-500">
-                Al registrarlo, se generará su ruta API única automáticamente para configurar el aparato físico.
+                {t('admin.scannersSec.registerSubtitle')}
               </p>
               <form onSubmit={handleCreateScanner} className="space-y-4 text-xs">
                 <div className="space-y-1.5">
-                  <label className="font-semibold text-slate-600">Código de Estación Fija</label>
+                  <label className="font-semibold text-slate-600">{t('admin.scannersSec.fixedStationCode')}</label>
                   <input
                     type="text"
-                    placeholder="ej. FABRICACION-02"
+                    placeholder={t('admin.scannersSec.codePlaceholder')}
                     value={newScannerCode}
                     onChange={(e) => setNewScannerCode(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase mono"
                     required
                   />
                   <span className="text-[10px] text-slate-400">
-                    Se usará en la URL: <code>/api/scan/{newScannerCode || 'NOMBRE'}</code>
+                    {t('admin.scannersSec.urlPreviewHelp', { code: newScannerCode || 'NOMBRE' })}
                   </span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="font-semibold text-slate-600">Tipo de Proceso que Atiende</label>
+                  <label className="font-semibold text-slate-600">{t('admin.scannersSec.processTypeServed')}</label>
                   <SearchableProcessSelect
                     tipoProcesos={catalogs.tipoProcesos}
                     selectedId={newScannerTipoId}
                     onChange={(id) => setNewScannerTipoId(id)}
-                    placeholder="Escribe para buscar proceso (ej. CORTE, ENSAMBLE)..."
+                    placeholder={t('admin.scannersSec.searchProcessPlaceholder')}
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="font-semibold text-slate-600">Línea de Producción Asignada</label>
+                  <label className="font-semibold text-slate-600">{t('admin.scannersSec.assignedLine')}</label>
                   <select
                     value={newScannerLineaId}
                     onChange={(e) => setNewScannerLineaId(e.target.value ? Number(e.target.value) : '')}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="">Todas las Líneas (Global / Sin restricción)</option>
+                    <option value="">{t('admin.scannersSec.allLinesGlobal')}</option>
                     {catalogs.lineas.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.nombre}
@@ -2888,23 +2897,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     ))}
                   </select>
                   <span className="text-[10px] text-slate-400">
-                    Los supervisores y operadores solo verán los escáneres de su línea asignada.
+                    {t('admin.scannersSec.lineAccessHelp')}
                   </span>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="font-semibold text-slate-600">
-                    Token / API Key <span className="text-slate-400 font-normal">(Opcional)</span>
+                    {t('admin.scannersSec.tokenLabel')} <span className="text-slate-400 font-normal">{t('admin.scannersSec.tokenOptional')}</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="Se genera automáticamente si se deja vacío"
+                    placeholder={t('admin.scannersSec.tokenPlaceholder')}
                     value={newScannerApiKey}
                     onChange={(e) => setNewScannerApiKey(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500 text-[11px]"
                   />
                   <span className="text-[10px] text-slate-400">
-                    Se enviará como header <code className="text-amber-600">X-Scanner-Token</code> desde el firmware del aparato.
+                    {t('admin.scannersSec.tokenHeaderHelp')}
                   </span>
                 </div>
 
@@ -2913,7 +2922,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Registrar Dispositivo</span>
+                  <span>{t('admin.scannersSec.registerBtn')}</span>
                 </button>
               </form>
             </div>
@@ -2927,10 +2936,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                Usuarios Registrados en el Sistema
+                {t('admin.usersSec.title')}
               </h3>
               <p className="text-xs text-slate-500">
-                Identidades corporativas (Microsoft SSO) con su Rol y Línea asignada por el Administrador.
+                {t('admin.usersSec.subtitle')}
               </p>
             </div>
 
@@ -2938,11 +2947,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3">Nombre</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Rol</th>
-                    <th className="px-4 py-3">Línea Asignada</th>
-                    <th className="px-4 py-3 text-right">Acción</th>
+                    <th className="px-4 py-3">{t('admin.usersSec.tableName')}</th>
+                    <th className="px-4 py-3">{t('admin.usersSec.tableEmail')}</th>
+                    <th className="px-4 py-3">{t('admin.usersSec.tableRole')}</th>
+                    <th className="px-4 py-3">{t('admin.usersSec.tableAssignedLine')}</th>
+                    <th className="px-4 py-3 text-right">{t('admin.usersSec.tableAction')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2965,7 +2974,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-semibold text-slate-800">
-                          {u.linea_nombre || (u.rol === 'ADMIN' ? 'Sin filtro (Todas)' : 'Sin asignar')}
+                          {u.linea_nombre || (u.rol === 'ADMIN' ? t('admin.usersSec.noFilterAll') : t('admin.usersSec.unassigned'))}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -2973,7 +2982,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           <button
                             onClick={() => handleStartEditUser(u)}
                             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Editar usuario"
+                            title={t('admin.usersSec.editUserTooltip')}
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -2981,7 +2990,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                             <button
                               onClick={() => handleDeleteUser(u.id)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Eliminar usuario"
+                              title={t('admin.usersSec.deleteUserTooltip')}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -2998,15 +3007,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
               {editingUserId ? <Pencil className="w-4 h-4 text-blue-600" /> : <Plus className="w-4 h-4 text-blue-600" />}
-              <span>{editingUserId ? 'Editar Usuario' : 'Registrar Nuevo Usuario'}</span>
+              <span>{editingUserId ? t('admin.usersSec.editTitle') : t('admin.usersSec.registerTitle')}</span>
             </h3>
 
             <form onSubmit={editingUserId ? (e) => { e.preventDefault(); handleSaveUserEdit(); } : handleCreateUser} className="space-y-4 text-xs">
               <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Nombre Completo</label>
+                <label className="font-semibold text-slate-600">{t('admin.usersSec.fullName')}</label>
                 <input
                   type="text"
-                  placeholder="ej. Pedro Ramirez"
+                  placeholder={t('admin.usersSec.fullNamePlaceholder')}
                   value={editingUserId ? editingUserName : newUserName}
                   onChange={(e) => editingUserId ? setEditingUserName(e.target.value) : setNewUserName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -3015,10 +3024,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Email Corporativo</label>
+                <label className="font-semibold text-slate-600">{t('admin.usersSec.corpEmail')}</label>
                 <input
                   type="email"
-                  placeholder="ej. pramirez@tuuci.com"
+                  placeholder={t('admin.usersSec.emailPlaceholder')}
                   value={editingUserId ? editingUserEmail : newUserEmail}
                   onChange={(e) => editingUserId ? setEditingUserEmail(e.target.value) : setNewUserEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -3028,10 +3037,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
               {!editingUserId && (
                 <div className="space-y-1.5">
-                  <label className="font-semibold text-slate-600">Microsoft SSO ID (Opcional)</label>
+                  <label className="font-semibold text-slate-600">{t('admin.usersSec.msSsoId')}</label>
                   <input
                     type="text"
-                    placeholder="ej. ms-op-002"
+                    placeholder={t('admin.usersSec.ssoPlaceholder')}
                     value={newUserMsId}
                     onChange={(e) => setNewUserMsId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 mono"
@@ -3040,28 +3049,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               )}
 
               <div className="space-y-1.5">
-                <label className="font-semibold text-slate-600">Rol del Usuario</label>
+                <label className="font-semibold text-slate-600">{t('admin.usersSec.userRole')}</label>
                 <select
                   value={editingUserId ? editingUserRol : newUserRol}
                   onChange={(e) => editingUserId ? setEditingUserRol(e.target.value as any) : setNewUserRol(e.target.value as any)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                  <option value="OPERADOR">OPERADOR (Escanea y ve solo estados visibles)</option>
-                  <option value="SUPERVISOR">SUPERVISOR (Ve todos los estados de su línea)</option>
-                  <option value="ADMIN">ADMIN (Acceso total sin filtro y gestión)</option>
+                  <option value="OPERADOR">{t('admin.usersSec.roleOperadorDesc')}</option>
+                  <option value="SUPERVISOR">{t('admin.usersSec.roleSupervisorDesc')}</option>
+                  <option value="ADMIN">{t('admin.usersSec.roleAdminDesc')}</option>
                 </select>
               </div>
 
               {(editingUserId ? editingUserRol : newUserRol) !== 'ADMIN' && (
                 <div className="space-y-1.5">
-                  <label className="font-semibold text-slate-600">Línea Asignada</label>
+                  <label className="font-semibold text-slate-600">{t('admin.usersSec.assignedLine')}</label>
                   <select
                     value={editingUserId ? editingUserLineaId : newUserLineaId}
                     onChange={(e) => editingUserId ? setEditingUserLineaId(Number(e.target.value)) : setNewUserLineaId(Number(e.target.value))}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     required
                   >
-                    <option value="">Selecciona una línea de producto...</option>
+                    <option value="">{t('admin.usersSec.selectLinePlaceholder')}</option>
                     {catalogs.lineas.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.nombre}
@@ -3077,7 +3086,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center justify-center space-x-1"
                 >
                   {editingUserId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                  <span>{editingUserId ? 'Actualizar Usuario' : 'Guardar Usuario'}</span>
+                  <span>{editingUserId ? t('admin.usersSec.updateUserBtn') : t('admin.usersSec.saveUserBtn')}</span>
                 </button>
                 {editingUserId && (
                   <button
@@ -3085,7 +3094,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     onClick={() => setEditingUserId(null)}
                     className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-colors"
                   >
-                    Cancelar
+                    {t('admin.usersSec.cancel')}
                   </button>
                 )}
               </div>
@@ -3104,10 +3113,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                  Control de Escaneo y Antirrebote (Cooldown)
+                  {t('admin.systemSec.title')}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Ajusta los tiempos de espera para prevenir disparos duplicados en las terminales físicas y pantallas OLED.
+                  {t('admin.systemSec.subtitle')}
                 </p>
               </div>
             </div>
@@ -3118,14 +3127,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
                     <Radio className="w-4 h-4 text-emerald-600" />
-                    <span>Tiempo de Espera entre Escaneos (Cooldown)</span>
+                    <span>{t('admin.systemSec.cooldownLabel')}</span>
                   </label>
                   <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                    {systemCooldownSecs} segundos
+                    {t('admin.systemSec.cooldownSecs', { count: systemCooldownSecs })}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Cuando un operario escanea un código QR de pieza, la terminal y la API rechazarán cualquier nuevo escaneo de esa misma pieza durante este intervalo, mostrando <code className="bg-slate-200 px-1 rounded text-slate-800 font-mono">ESPERE Xs</code> en la pantalla OLED.
+                  {t('admin.systemSec.cooldownDesc')}
                 </p>
 
                 <div className="pt-2 flex items-center space-x-4">
@@ -3147,13 +3156,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       onChange={(e) => setSystemCooldownSecs(Math.max(0, parseInt(e.target.value, 10) || 0))}
                       className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
-                    <span className="text-xs text-slate-500 font-medium">seg</span>
+                    <span className="text-xs text-slate-500 font-medium">{t('admin.systemSec.secondsUnit')}</span>
                   </div>
                 </div>
 
                 {/* Quick preset buttons */}
                 <div className="flex flex-wrap gap-1.5 pt-2">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 self-center">Preajustes:</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 self-center">{t('admin.systemSec.presets')}</span>
                   {[0, 3, 5, 8, 10, 15].map((val) => (
                     <button
                       key={val}
@@ -3165,7 +3174,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                           : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
-                      {val === 0 ? 'Desactivado (0s)' : `${val}s`}
+                      {val === 0 ? t('admin.systemSec.disabledZero') : `${val}s`}
                     </button>
                   ))}
                 </div>
@@ -3176,14 +3185,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
                     <RefreshCw className="w-4 h-4 text-blue-600" />
-                    <span>Intervalo de Ticker del Tablero Kanban</span>
+                    <span>{t('admin.systemSec.tickerLabel')}</span>
                   </label>
                   <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-blue-100 text-blue-900 border border-blue-300">
-                    {systemRefreshSecs} segundos
+                    {t('admin.systemSec.tickerSecs', { count: systemRefreshSecs })}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Frecuencia de sincronización periódica en segundo plano para mantener los contadores de tiempo en estación siempre actualizados.
+                  {t('admin.systemSec.tickerDesc')}
                 </p>
 
                 <div className="pt-2 flex items-center space-x-4">
@@ -3205,7 +3214,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       onChange={(e) => setSystemRefreshSecs(Math.max(2, parseInt(e.target.value, 10) || 2))}
                       className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <span className="text-xs text-slate-500 font-medium">seg</span>
+                    <span className="text-xs text-slate-500 font-medium">{t('admin.systemSec.secondsUnit')}</span>
                   </div>
                 </div>
               </div>
@@ -3217,7 +3226,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-2 disabled:opacity-50"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{savingConfig ? 'Guardando...' : 'Guardar Parámetros'}</span>
+                  <span>{savingConfig ? t('admin.systemSec.saving') : t('admin.systemSec.saveParams')}</span>
                 </button>
               </div>
             </form>
@@ -3228,17 +3237,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl border border-slate-700 shadow-lg space-y-4">
               <div className="flex items-center space-x-2 text-emerald-400">
                 <Shield className="w-5 h-5" />
-                <h4 className="text-xs font-bold uppercase tracking-wider">Mecanismo de Protección en Planta</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider">{t('admin.systemSec.protectionTitle')}</h4>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                En operaciones industriales con lectores Wi-Fi / Bluetooth, los operarios pueden accionar involuntariamente el gatillo varias veces sobre la misma etiqueta.
+                {t('admin.systemSec.protectionDesc')}
               </p>
               <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2 text-xs">
-                <div className="font-bold text-slate-200">Comportamiento en Hardware:</div>
+                <div className="font-bold text-slate-200">{t('admin.systemSec.hardwareBehavior')}</div>
                 <ul className="list-disc list-inside text-slate-400 space-y-1 text-[11px]">
-                  <li><strong>1er Disparo:</strong> Procesa la apertura o cierre con confirmación verde y zumbador.</li>
-                  <li><strong>Disparos repetidos (&lt; {systemCooldownSecs}s):</strong> Bloqueo inmediato con alerta OLED <code className="text-amber-400 font-mono">ESPERE Xs</code> y tono sonoro corto.</li>
-                  <li><strong>Persistencia:</strong> Los cambios se guardan en la base de datos y se propagan inmediatamente por WebSockets a todas las terminales activas.</li>
+                  <li>{t('admin.systemSec.behavior1')}</li>
+                  <li>{t('admin.systemSec.behavior2', { count: systemCooldownSecs })}</li>
+                  <li>{t('admin.systemSec.behavior3')}</li>
                 </ul>
               </div>
             </div>
@@ -3248,23 +3257,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               <div className="flex items-center space-x-2.5 text-rose-700">
                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-sm font-bold text-rose-900">Zona de Peligro: Limpieza de Datos Operativos</h4>
-                  <p className="text-[11px] text-rose-700 mt-0.5">Reinicio de Tracker, Dashboard y Trazabilidad</p>
+                  <h4 className="text-sm font-bold text-rose-900">{t('admin.systemSec.dangerTitle')}</h4>
+                  <p className="text-[11px] text-rose-700 mt-0.5">{t('admin.systemSec.dangerSubtitle')}</p>
                 </div>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
-                Permite dejar en blanco el <strong>Tablero Kanban (Tracker)</strong> y los indicadores en tiempo real del <strong>Dashboard</strong>. 
-                Elimina todos los Jobs activos, piezas individuales, escaneos e historial de tiempos.
+                {t('admin.systemSec.dangerDesc')}
               </p>
 
               <div className="p-3 bg-white rounded-xl border border-rose-200 text-[11px] text-slate-600 space-y-1">
                 <div className="font-bold text-rose-800 flex items-center space-x-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Se preservan intactos:</span>
+                  <span>{t('admin.systemSec.preservedTitle')}</span>
                 </div>
                 <p className="text-slate-500 pl-5">
-                  Líneas de producto, Rutas, Tipos de proceso, Estaciones / Escáneres, Estados y Cuentas de usuarios.
+                  {t('admin.systemSec.preservedDesc')}
                 </p>
               </div>
 
@@ -3278,12 +3286,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   {cleaningData ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Limpiando Base de Datos...</span>
+                      <span>{t('admin.systemSec.cleaning')}</span>
                     </>
                   ) : (
                     <>
                       <Trash2 className="w-4 h-4" />
-                      <span>Limpiar Todo el Tracker y Dashboard</span>
+                      <span>{t('admin.systemSec.cleanBtn')}</span>
                     </>
                   )}
                 </button>
@@ -3312,7 +3320,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">{confirmDialog.title}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5 font-medium">Confirmación Requerida</p>
+                  <p className="text-xs text-slate-400 mt-0.5 font-medium">{t('admin.dialog.confirmationRequired')}</p>
                 </div>
               </div>
 
@@ -3326,7 +3334,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
                   className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors"
                 >
-                  {confirmDialog.cancelText || 'Cancelar'}
+                  {confirmDialog.cancelText || t('admin.dialog.cancel')}
                 </button>
                 <button
                   type="button"
@@ -3338,7 +3346,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   }`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>{confirmDialog.confirmText || 'Confirmar'}</span>
+                  <span>{confirmDialog.confirmText || t('admin.dialog.confirm')}</span>
                 </button>
               </div>
             </div>
