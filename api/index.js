@@ -167,7 +167,7 @@ export async function authenticateUser(req, res, next) {
   }
 
   if (process.env.DEV_AUTH_BYPASS === '1' && process.env.NODE_ENV !== 'production') {
-    const defaultAdmin = await db.prepare('SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE rol = "ADMIN" LIMIT 1').get();
+    const defaultAdmin = await db.prepare("SELECT u.*, l.nombre as linea_nombre FROM usuarios u LEFT JOIN lineas l ON u.linea_id = l.id WHERE rol = 'ADMIN' LIMIT 1").get();
     if (defaultAdmin) {
       req.user = defaultAdmin;
       return next();
@@ -327,7 +327,7 @@ app.post('/api/auth/entra/exchange', async (req, res) => {
           oid: req.body.oid || `ms-dev-${Date.now()}`
         };
       } else {
-        const defaultAdmin = await db.prepare('SELECT * FROM usuarios WHERE rol = "ADMIN" LIMIT 1').get();
+        const defaultAdmin = await db.prepare("SELECT * FROM usuarios WHERE rol = 'ADMIN' LIMIT 1").get();
         if (defaultAdmin) {
           msUser = {
             email: defaultAdmin.email,
