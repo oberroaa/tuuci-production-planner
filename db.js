@@ -5,11 +5,27 @@ dotenv.config();
 
 const { Pool } = pg;
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+// In production, forbid reliance on hardcoded fallback credentials
+if (isProduction) {
+  const missing = [];
+  if (!process.env.PGHOST && !process.env.DATABASE_URL) missing.push('PGHOST');
+  if (!process.env.PGPASSWORD && !process.env.DATABASE_URL) missing.push('PGPASSWORD');
+  if (missing.length > 0) {
+    throw new Error(
+      `[SEGURIDAD] Configuración de PostgreSQL incompleta en entorno de PRODUCCIÓN. ` +
+      `Las variables de entorno obligatorias no están definidas: ${missing.join(', ')}. ` +
+      `No se permite arrancar con credenciales por defecto.`
+    );
+  }
+}
+
 export const pool = new Pool({
   host: process.env.PGHOST || 'localhost',
   port: parseInt(process.env.PGPORT || '5432', 10),
   user: process.env.PGUSER || 'tuuci',
-  password: process.env.PGPASSWORD || 'tuuci123',
+  password: process.env.PGPASSWORD || (isProduction ? undefined : 'tuuci123'),
   database: process.env.PGDATABASE || 'tuuci_production',
   max: 20,
   idleTimeoutMillis: 30000,

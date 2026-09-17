@@ -42,16 +42,68 @@ try {
   console.warn('Reconciliation cleanup note:', cleanupErr.message);
 }
 
+// CORS configuration: Restrict to explicit allowed origins, local machine, and company intranet
+const explicitAllowed = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  // Allow non-browser requests (hardware ESP32 scanners, curl, backend scripts)
+  if (!origin) return true;
+
+  // Allow explicit origins from .env
+  if (explicitAllowed.includes(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+
+    // Allow localhost and loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+
+    // Allow internal company / factory network (Private IPv4 ranges)
+    // 10.0.0.0 - 10.255.255.255
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    // 172.16.0.0 - 172.31.255.255
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    // 192.168.0.0 - 192.168.255.255
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+
+    // Allow official TUUCI intranet domains
+    if (hostname.endsWith('.tuuci.com') || hostname === 'tuuci.com') return true;
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS bloqueado por política de seguridad'));
+      }
+    },
     methods: ['GET', 'POST']
   }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS bloqueado por política de seguridad'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // Security & Signed Session Tokens
@@ -127,6 +179,19 @@ export function requireAdminRole(req, res, next) {
 }
 
 app.use(authenticateUser);
+
+// Safe error response helper (shields internal SQL/DB traces in production)
+export function handleServerError(res, err, defaultStatus = 500) {
+  console.error('[SERVER ERROR]', err);
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(defaultStatus).json({
+      error: defaultStatus === 500
+        ? 'Error interno del servidor. Por favor, contacte al administrador del sistema.'
+        : (err.message || 'Error en la solicitud')
+    });
+  }
+  return res.status(defaultStatus).json({ error: err.message || 'Error en la solicitud' });
+}
 
 // Broadcast helper
 function notifyDashboardUpdate() {
@@ -326,7 +391,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = issueUserToken(user);
     res.json({ ...user, token });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -354,7 +419,7 @@ app.get('/api/catalogs', async (req, res) => {
 
     res.json({ lineas, rutas, tipoProcesos, estados, escaneres, procesos });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -900,7 +965,7 @@ app.get('/api/users', async (req, res) => {
     `).all();
     res.json(users);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1915,7 +1980,7 @@ app.get('/api/dashboard/summary', async (req, res) => {
     });
     res.json(summary);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1937,7 +2002,7 @@ app.post('/api/seed-demo', async (req, res) => {
     }
     res.json({ seeded: false, message: 'Jobs already exist' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
 });
 
@@ -1955,8 +2020,13 @@ app.post('/api/admin/clean-jobs', requireAdminRole, async (req, res) => {
     io.emit('scan:event', { cleaned: true });
     res.json({ success: true, message: 'Todos los jobs y procesos operativos han sido limpiados exitosamente' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleServerError(res, err, 500);
   }
+});
+
+// Centralized Express Error-Handling Middleware (catches synchronous and unhandled exceptions)
+app.use((err, req, res, next) => {
+  handleServerError(res, err, err.status || 500);
 });
 
 io.on('connection', (socket) => {
