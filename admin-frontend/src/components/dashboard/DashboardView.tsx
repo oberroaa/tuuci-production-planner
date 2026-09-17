@@ -319,7 +319,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               onClick={onRefresh}
               className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors"
-              title="Actualizar métricas"
+              title={t('common.refresh')}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -334,10 +334,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">TOTAL JOBS</span>
+              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">{t('dashboard.totalJobs')}</span>
             </div>
             <div className="mt-2 text-3xl font-extrabold text-slate-900 tracking-tight mono">{totalJobs}</div>
-            <div className="text-xs text-slate-400 mt-0.5">{totalJobsDone} done</div>
+            <div className="text-xs text-slate-400 mt-0.5">{totalJobsDone} {t('dashboard.done')}</div>
           </div>
           {/* Subtle bottom indicator */}
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
@@ -353,10 +353,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">ACTIVE WIDGETS</span>
+              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">{t('dashboard.activeWidgets')}</span>
             </div>
             <div className="mt-2 text-3xl font-extrabold text-slate-900 tracking-tight mono">{activeWidgets}</div>
-            <div className="text-xs text-slate-400 mt-0.5">of {totalWidgets} total</div>
+            <div className="text-xs text-slate-400 mt-0.5">{t('dashboard.ofTotal', { total: totalWidgets })}</div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
             <div
@@ -372,7 +372,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">COMPLETED</span>
+                <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">{t('dashboard.completed')}</span>
               </div>
               <div className="mt-2 text-2xl font-bold text-slate-900 mono">
                 {completedDone} <span className="text-slate-400 text-lg font-normal">/ {completedTotal}</span>
@@ -412,10 +412,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">AVG CYCLE TIME</span>
+              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">{t('dashboard.avgCycleTime')}</span>
             </div>
             <div className="mt-2 text-3xl font-extrabold text-slate-900 tracking-tight mono">{avgCycleTime}</div>
-            <div className="text-xs text-slate-400 mt-0.5">per widget</div>
+            <div className="text-xs text-slate-400 mt-0.5">{t('dashboard.perWidget')}</div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
             <div
@@ -430,10 +430,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">THROUGHPUT</span>
+              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">{t('dashboard.throughput')}</span>
             </div>
             <div className="mt-2 text-3xl font-extrabold text-slate-900 tracking-tight mono">{throughput}</div>
-            <div className="text-xs text-slate-400 mt-0.5">widgets/hr</div>
+            <div className="text-xs text-slate-400 mt-0.5">{t('dashboard.widgetsPerHr')}</div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
             <div
@@ -448,7 +448,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">LONGEST WAIT</span>
+              <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">{t('dashboard.longestWait')}</span>
             </div>
             <div className="mt-2 text-2xl font-extrabold text-rose-600 tracking-tight mono">{longestWaitDuration}</div>
             <div className="text-[11px] text-slate-500 truncate mt-0.5 mono" title={longestWaitDetail}>
@@ -467,7 +467,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* STATION OVERVIEW */}
       <div className="space-y-3">
         <div className="flex items-center space-x-2 border-l-4 border-blue-600 pl-2">
-          <h2 className="text-xs font-bold tracking-wider text-slate-700 uppercase">STATION OVERVIEW</h2>
+          <h2 className="text-xs font-bold tracking-wider text-slate-700 uppercase">{t('dashboard.stationOverview')}</h2>
         </div>
 
         <div
@@ -518,7 +518,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </span>
                   {st.hasDelayed && (
                     <div className="text-[10px] font-bold text-rose-600 uppercase tracking-tight">
-                      {st.delayedCount} {st.delayedCount === 1 ? 'demorada' : 'demoradas'}
+                      {st.delayedCount} {st.delayedCount === 1 ? t('dashboard.delayedSingle') : t('dashboard.delayed')}
                     </div>
                   )}
                 </div>
@@ -534,22 +534,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                 {/* Footer Times */}
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                  <div className="flex items-center space-x-1" title={`Tiempo promedio: ${st.avgTimeMinutes || 0} min | Límite configurado: ${st.tiempoDemoraTexto || '0s'}`}>
+                  <div className="flex items-center space-x-1" title={t('dashboard.avgTimeLimitTooltip', { avg: st.avgTimeMinutes || 0, limit: st.tiempoDemoraTexto || '0s' })}>
                     <Clock className="w-3 h-3 text-slate-400" />
                     <span>
                       {st.avgTimeMinutes > 0
-                        ? `${Math.floor(st.avgTimeMinutes / 60) > 0 ? `${Math.floor(st.avgTimeMinutes / 60)}h ` : ''}${st.avgTimeMinutes % 60}m avg`
-                        : '0m avg'}
+                        ? `${Math.floor(st.avgTimeMinutes / 60) > 0 ? `${Math.floor(st.avgTimeMinutes / 60)}h ` : ''}${st.avgTimeMinutes % 60}m ${t('dashboard.avg')}`
+                        : `0m ${t('dashboard.avg')}`}
                     </span>
                     {st.tiempoDemoraSegundos > 0 && (
-                      <span className="text-[9px] px-1 py-0.2 bg-slate-100 text-slate-500 rounded font-mono" title="Tiempo de demora estándar configurado">
-                        max {st.tiempoDemoraTexto}
+                      <span className="text-[9px] px-1 py-0.2 bg-slate-100 text-slate-500 rounded font-mono" title={t('dashboard.delayLimitConfigured')}>
+                        {t('dashboard.max')} {st.tiempoDemoraTexto}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center space-x-0.5 font-medium text-slate-500">
                     <TrendingUp className="w-3 h-3 text-slate-400" />
-                    <span>{st.done} done</span>
+                    <span>{st.done} {t('dashboard.done')}</span>
                   </div>
                 </div>
               </div>
@@ -564,10 +564,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="bg-white rounded-lg border border-slate-200/80 p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold tracking-wider text-slate-600 uppercase">
-              THROUGHPUT — LAST 12 HOURS
+              {t('dashboard.throughput12Hours')}
             </span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800 mono">
-              {totalThroughput12h} {totalThroughput12h === 1 ? 'pieza' : 'piezas'}
+              {totalThroughput12h} {totalThroughput12h === 1 ? t('common.piece') : t('common.pieces')}
             </span>
           </div>
 
@@ -577,7 +577,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="h-full flex items-end justify-between gap-1.5 pt-4 pb-1">
                 {throughput12Hours.map((val, idx) => {
                   const pct = Math.max(Math.round((val / maxThroughputHour) * 100), val > 0 ? 12 : 2);
-                  const hourLabel = idx === 11 ? 'Ahora' : `-${11 - idx}h`;
+                  const hourLabel = idx === 11 ? t('dashboard.now') : `-${11 - idx}h`;
                   return (
                     <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                       <div
@@ -587,7 +587,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             : 'bg-slate-100'
                         }`}
                         style={{ height: `${pct}%` }}
-                        title={`${hourLabel}: ${val} piezas completadas`}
+                        title={t('dashboard.piecesCompletedTooltip', { hour: hourLabel, count: val })}
                       ></div>
                       <span className="text-[9px] text-slate-400 mt-1 mono">{hourLabel}</span>
                     </div>
@@ -598,7 +598,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="h-full flex flex-col items-center justify-center text-center space-y-1.5">
                 <Clock className="w-5 h-5 text-slate-300" />
                 <span className="text-xs text-slate-400 font-medium">
-                  Sin piezas finalizadas en las últimas 12 horas para este filtro
+                  {t('dashboard.noThroughput12h')}
                 </span>
               </div>
             )}
@@ -608,7 +608,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* 2. TIME ALERTS */}
         <div className="bg-white rounded-lg border border-slate-200/80 p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wider text-slate-600 uppercase">TIME ALERTS</span>
+            <span className="text-xs font-bold tracking-wider text-slate-600 uppercase">{t('dashboard.timeAlerts')}</span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold mono ${
               timeAlerts.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
             }`}>
@@ -632,13 +632,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold text-white uppercase tracking-wider ${
                       alert.critical ? 'bg-rose-600' : 'bg-amber-500'
                     }`}>
-                      {alert.critical ? 'DEMORADA' : 'EN CURSO'}
+                      {alert.critical ? t('dashboard.delayedUpper') : t('dashboard.inProgress')}
                     </span>
                     <span className="text-sm font-bold text-slate-900 mono">{alert.pieceCode}</span>
                     <span className="text-xs text-slate-500 font-medium">{alert.jobCode} — {alert.station}</span>
                     {alert.expectedSeconds > 0 && (
                       <span className="text-[10px] text-slate-400 font-mono">
-                        (Límite: {alert.expectedDuration})
+                        ({t('dashboard.limit')} {alert.expectedDuration})
                       </span>
                     )}
                   </div>
@@ -655,9 +655,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ))
             ) : (
               <div className="p-6 rounded-lg bg-emerald-50/40 border border-emerald-200/60 text-center flex flex-col items-center justify-center space-y-1">
-                <span className="text-xs font-bold text-emerald-800">✓ Todo en orden</span>
+                <span className="text-xs font-bold text-emerald-800">{t('dashboard.allGood')}</span>
                 <span className="text-[11px] text-emerald-600">
-                  No se registran piezas demoradas para la línea o ruta seleccionada
+                  {t('dashboard.noDelayedPieces')}
                 </span>
               </div>
             )}

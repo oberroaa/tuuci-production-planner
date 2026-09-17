@@ -179,10 +179,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </button>
 
-        {/* Theme icon */}
-        <button className="text-slate-400 hover:text-white transition-colors" title={t('navbar.themeTitle')}>
-          <Sun className="w-4 h-4" />
-        </button>
+       
 
         {/* User profile */}
         <button

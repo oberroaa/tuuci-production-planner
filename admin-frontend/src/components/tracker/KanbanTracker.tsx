@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import {
   Layers,
@@ -54,6 +55,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   onSelectJobCode,
   refreshTrigger
 }) => {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<'KANBAN' | 'JOBS'>('KANBAN');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -587,6 +589,33 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
     return hasValidTime ? formatDurationFromMs(totalMs) : '—';
   };
 
+  // Helper to translate status badges dynamically according to selected language
+  const formatStatus = (status: string | null | undefined): string => {
+    if (!status) return '—';
+    const s = String(status).trim().toUpperCase();
+    switch (s) {
+      case 'EN PROCESO':
+      case 'EN_PROCESO':
+        return t('tracker.inProcessStatus');
+      case 'ESPERANDO':
+        return t('tracker.waitingStatus');
+      case 'TERMINADA':
+      case 'TERMINADO':
+        return t('tracker.finishedStatus');
+      case 'INACTIVA':
+      case 'INACTIVO':
+        return t('tracker.inactiveStatus');
+      case 'PARCIAL':
+        return t('tracker.partialStatus');
+      case 'COMPLETADO':
+        return t('tracker.completedStatus');
+      case 'COMPLETADO_CON_INCIDENCIAS':
+        return t('tracker.completedWithIssues', { count: '' }).replace(/\s*\(\s*\)/, '');
+      default:
+        return status;
+    }
+  };
+
   // Render an individual station/process Kanban column
   const renderColumn = (col: any, idx: number, allCols: any[], itemsList: any[]) => {
     const colKey = col.column_key || col.id;
@@ -670,7 +699,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           <div className="flex items-center space-x-1">
             {isClosureColumn && (
               <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-blue-600 text-white tracking-wider" title="Estación designada de Cierre de Lote">
-                CIERRE
+                {t('tracker.closureStation')}
               </span>
             )}
             <button
@@ -691,7 +720,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
         {/* Column Sub-badge with Count */}
         <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 bg-white">
-          <span>{isLoteColumn ? 'Jobs activos:' : 'Piezas (EA):'}</span>
+          <span>{isLoteColumn ? t('tracker.activeJobsHeader') : t('tracker.piecesHeader')}</span>
           <span className="font-bold text-slate-800 font-mono">
             {isLoteColumn
               ? `${groupedLoteItems.length} jobs (${columnItems.length} EA)`
@@ -744,7 +773,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           )}
                           {hasTargetPiece && (
                             <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase bg-purple-600 text-white tracking-wider">
-                              FOCO
+                              {t('tracker.focusBadge')}
                             </span>
                           )}
                         </div>
@@ -777,7 +806,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {group.estado_nombre}
+                        {formatStatus(group.estado_nombre)}
                       </span>
                     </div>
 
@@ -789,7 +818,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           className="w-full py-1 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center justify-center space-x-1 shadow-sm"
                         >
                           <Package className="w-3 h-3" />
-                          <span>Cerrar Job Final</span>
+                          <span>{t('tracker.closeFinalJob')}</span>
                         </button>
                       </div>
                     )}
@@ -808,7 +837,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               })
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-[11px] text-slate-400 py-12 text-center">
-                <span>Sin jobs en esta estación</span>
+                <span>{t('tracker.noJobsInStation')}</span>
               </div>
             )
           ) : (
@@ -845,7 +874,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         )}
                         {isTargetPiece && (
                           <span className="px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase bg-blue-600 text-white tracking-wider flex-shrink-0">
-                            FOCO
+                            {t('tracker.focusBadge')}
                           </span>
                         )}
                       </div>
@@ -859,7 +888,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             title="Mover o regresar pieza a otro proceso (reproceso o corrección)"
                           >
                             <RotateCcw className="w-3 h-3 text-amber-600" />
-                            <span>Mover</span>
+                            <span>{t('tracker.movePiece')}</span>
                           </button>
                         )}
 
@@ -868,10 +897,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             type="button"
                             onClick={() => setClosingJobId(item.job_id)}
                             className="py-0.5 px-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors flex items-center space-x-1 shadow-xs"
-                            title="Cerrar Job Final"
+                            title={t('tracker.closeFinalJob')}
                           >
                             <Package className="w-3 h-3" />
-                            <span>Cerrar</span>
+                            <span>{t('tracker.closePiece')}</span>
                           </button>
                         )}
                       </div>
@@ -898,7 +927,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {item.estado_nombre}
+                        {formatStatus(item.estado_nombre)}
                       </span>
                     </div>
 
@@ -916,7 +945,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               })
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-[11px] text-slate-400 py-12 text-center">
-                <span>Sin piezas en esta estación</span>
+                <span>{t('tracker.noPiecesInStation')}</span>
               </div>
             )
           )}
@@ -929,7 +958,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
     return (
       <div className="p-12 text-center space-y-3">
         <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        <div className="text-xs text-slate-500 font-semibold">Cargando Tablero de Trazabilidad...</div>
+        <div className="text-xs text-slate-500 font-semibold">{t('tracker.loading')}</div>
       </div>
     );
   }
@@ -945,21 +974,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           </div>
           <div>
             <h1 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-              <span>Trazabilidad Operativa — {isAllLines ? 'Todas las Líneas' : currentLineObj?.nombre}</span>
+              <span>{t('tracker.title', { line: isAllLines ? t('tracker.allLinesTitle') : currentLineObj?.nombre })}</span>
               {isAllLines ? (
                 <span className="text-[10px] normal-case font-medium bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full">
-                  Vista Global ({lines.length} líneas • {rutas.length} rutas)
+                  {t('tracker.globalView', { lines: lines.length, routes: rutas.length })}
                 </span>
               ) : rutas.length > 1 && (
                 <span className="text-[10px] normal-case font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                  Multi-Ruta ({rutas.length})
+                  {t('tracker.multiRoute', { count: rutas.length })}
                 </span>
               )}
             </h1>
             <p className="text-xs text-slate-500">
               {isAllLines
-                ? 'Monitoreo consolidado de todas las líneas de producción y flujo simultáneo de estaciones'
-                : 'Monitoreo en tiempo real de piezas, flujo por estaciones y cierre reconciliado de jobs'}
+                ? t('tracker.allLinesSubtitle')
+                : t('tracker.singleLineSubtitle')}
             </p>
           </div>
         </div>
@@ -970,7 +999,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           <div className="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-xs">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
               <GitFork className="w-3.5 h-3.5 text-blue-600" />
-              <span>Ruta:</span>
+              <span>{t('tracker.routeLabel')}</span>
             </span>
             <select
               value={selectedRutaId}
@@ -995,13 +1024,13 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               aria-label="Seleccionar ruta de proceso"
               className="bg-white border border-slate-300 text-xs font-bold text-slate-800 rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs"
             >
-              <option value="ALL">🌐 Ver Todo ({rutas.length} {rutas.length === 1 ? 'ruta' : 'rutas'})</option>
+              <option value="ALL">{t('tracker.allRoutes', { count: rutas.length, unit: rutas.length === 1 ? 'ruta' : 'rutas' })}</option>
               {rutas.map((r) => {
                 const lineName = lines.find((l) => l.id === r.linea_id)?.nombre || r.linea_nombre;
                 return (
                   <option key={r.id} value={r.id}>
                     {isAllLines && lineName ? `${lineName} — ` : ''}{r.nombre}
-                    {r.es_default === 1 && !r.nombre.toLowerCase().includes('principal') ? ' (Principal)' : ''}
+                    {r.es_default === 1 && !r.nombre.toLowerCase().includes('principal') ? ` (${t('tracker.mainRoute')})` : ''}
                   </option>
                 );
               })}
@@ -1019,7 +1048,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               }`}
             >
               <FolderKanban className="w-3.5 h-3.5" />
-              <span>Tablero Kanban</span>
+              <span>{t('tracker.kanbanTab')}</span>
             </button>
             <button
               onClick={() => setViewMode('JOBS')}
@@ -1030,7 +1059,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Jobs ({routeJobs.length})</span>
+              <span>{t('tracker.jobsTab', { count: routeJobs.length })}</span>
             </button>
           </div>
 
@@ -1039,7 +1068,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             onClick={fetchKanbanAndJobs}
             disabled={refreshing}
             className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors border border-slate-200"
-            title="Actualizar datos"
+            title={t('tracker.refreshData')}
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
           </button>
@@ -1056,7 +1085,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             <div className="flex items-center space-x-2">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center space-x-1">
                 <Search className="w-3.5 h-3.5 text-blue-600" />
-                <span>Buscar Job:</span>
+                <span>{t('tracker.searchJobLabel')}</span>
               </span>
 
               <div className="relative min-w-[260px] max-w-[320px]">
@@ -1103,7 +1132,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     }
                   }}
                   onFocus={() => setIsJobDropdownOpen(true)}
-                  placeholder="Buscar por Job, Item o Pieza (ej: 1015498, JOB0284112)..."
+                  placeholder={t('tracker.searchJobPlaceholder')}
                   className={`w-full bg-white border text-xs rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:ring-2 shadow-xs transition-all ${
                     selectedJobCode || selectedItemCode
                       ? 'border-blue-500 font-mono text-blue-900 font-bold focus:ring-blue-500 bg-blue-50/30'
@@ -1123,7 +1152,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       setIsJobDropdownOpen(false);
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded transition-colors"
-                    title="Borrar búsqueda"
+                    title={t('tracker.clearSearch')}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1137,8 +1166,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
                   <span>
                     {jobSearchQuery.trim()
-                      ? `Resultados (${matchingJobs.length + matchingPieces.length + matchingItems.length})`
-                      : 'Jobs sugeridos en proceso'}
+                      ? t('tracker.searchResults', { count: matchingJobs.length + matchingPieces.length + matchingItems.length })
+                      : t('tracker.suggestedJobs')}
                   </span>
                   {(selectedJobCode || selectedPieceCode || selectedItemCode) && (
                     <button
@@ -1151,7 +1180,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       }}
                       className="text-rose-600 hover:underline capitalize"
                     >
-                      Limpiar
+                      {t('tracker.clearFilter')}
                     </button>
                   )}
                 </div>
@@ -1161,7 +1190,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   <div className="mt-1">
                     <div className="px-2 py-1 text-[9px] font-extrabold text-amber-700 uppercase tracking-wider bg-amber-50 rounded flex items-center gap-1">
                       <QrCode className="w-3 h-3 text-amber-600" />
-                      <span>Items coincidentes ({matchingItems.length})</span>
+                      <span>{t('tracker.matchingItems', { count: matchingItems.length })}</span>
                     </div>
                     <div className="divide-y divide-slate-50 mt-1">
                       {matchingItems.map((itemGroup) => {
@@ -1187,13 +1216,13 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                                   Item: {itemGroup.item_code}
                                 </span>
                                 <span className="text-[10px] font-bold text-slate-600">
-                                  {itemGroup.jobs.length} {itemGroup.jobs.length === 1 ? 'Job asociado' : 'Jobs asociados'}
+                                  {t('tracker.jobsAssociated', { count: itemGroup.jobs.length })}
                                 </span>
                               </div>
                               <div className="text-[11px] text-slate-500 truncate mt-0.5">{itemGroup.modelo}</div>
                             </div>
                             <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                              Filtrar todos ➔
+                              {t('tracker.filterAll')}
                             </span>
                           </button>
                         );
@@ -1207,7 +1236,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   <div className="mt-1">
                     <div className="px-2 py-1 text-[9px] font-extrabold text-indigo-500 uppercase tracking-wider bg-indigo-50/60 rounded flex items-center gap-1">
                       <Target className="w-3 h-3 text-indigo-500" />
-                      <span>Piezas coincidentes ({matchingPieces.length})</span>
+                      <span>{t('tracker.matchingPieces', { count: matchingPieces.length })}</span>
                     </div>
                     <div className="divide-y divide-slate-50 mt-1">
                       {matchingPieces.map((p) => {
@@ -1230,7 +1259,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                               <div className="flex items-center space-x-2">
                                 <span className="font-mono font-bold text-xs text-indigo-700">{p.pieceQr}</span>
                                 <span className="text-[8px] font-bold bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded">
-                                  Pieza #{p.pieceNumber}
+                                  {t('tracker.pieceNumber', { num: p.pieceNumber })}
                                 </span>
                                 {p.procesoNombre && (
                                   <span className="text-[8px] font-bold bg-slate-100 text-slate-700 px-1 py-0.2 rounded">
@@ -1245,7 +1274,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             <div className="text-right flex-shrink-0">
                               {p.estadoNombre ? (
                                 <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 block">
-                                  {p.estadoNombre}
+                                  {formatStatus(p.estadoNombre)}
                                 </span>
                               ) : (
                                 <span className="text-[9px] text-slate-400 font-mono block">
@@ -1310,7 +1339,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                                       : 'bg-amber-100 text-amber-800'
                                   }`}
                                 >
-                                  {j.estado_cierre}
+                                  {formatStatus(j.estado_cierre)}
                                 </span>
                               </div>
                               <div className="text-[11px] text-slate-600 truncate mt-0.5">{j.modelo}</div>
@@ -1330,8 +1359,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       })
                     ) : matchingPieces.length === 0 ? (
                       <div className="p-4 text-center text-xs text-slate-400">
-                        No se encontraron jobs ni piezas que coincidan con{' '}
-                        <strong className="text-slate-600 font-mono">"{jobSearchQuery}"</strong>
+                        {t('tracker.noMatchPrompt', { query: jobSearchQuery })}
                       </div>
                     ) : null}
                   </div>
@@ -1345,7 +1373,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             <div className="flex flex-wrap items-center gap-1.5 animate-in fade-in duration-200">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center space-x-1 mr-1">
                 <Target className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Pieza:</span>
+                <span>{t('tracker.pieceLabel')}</span>
               </span>
 
               {/* Quick Pills for pieces if <= 8 */}
@@ -1360,7 +1388,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    📦 Todo ({selectedJobPieces.length})
+                    {t('tracker.allPieces', { count: selectedJobPieces.length })}
                   </button>
                   {selectedJobPieces.map((p) => {
                     const isSelected = selectedPieceCode === p.codigo_qr_unico;
@@ -1370,7 +1398,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         key={p.id}
                         type="button"
                         onClick={() => setSelectedPieceCode(isSelected ? '' : p.codigo_qr_unico)}
-                        title={`${p.codigo_qr_unico} — Estación: ${p.estacion_actual || 'Finalizada'}`}
+                        title={`${p.codigo_qr_unico} — Estación: ${p.estacion_actual || t('tracker.productionFinished')}`}
                         className={`px-2 py-1 rounded-md text-xs font-bold font-mono transition-all flex items-center space-x-1 ${
                           isSelected
                             ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300'
@@ -1400,11 +1428,11 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   className="bg-white border border-indigo-300 text-xs font-bold text-indigo-950 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs max-w-[280px] truncate"
                 >
                   <option value="">
-                    📦 Todo el Job Completo ({selectedJobPieces.length || currentSelectedJob?.cantidad_piezas || 'todas'} piezas)
+                    {t('tracker.allPiecesOption', { count: selectedJobPieces.length || currentSelectedJob?.cantidad_piezas || '' })}
                   </option>
                   {selectedJobPieces.map((p) => (
                     <option key={p.id} value={p.codigo_qr_unico}>
-                      🎯 {p.codigo_qr_unico} {p.estacion_actual ? `— En ${p.estacion_actual}` : p.es_finalizada ? '— (Finalizada)' : ''} ({p.duracion_texto || '—'})
+                      🎯 {p.codigo_qr_unico} {p.estacion_actual ? `— En ${p.estacion_actual}` : p.es_finalizada ? `— (${t('tracker.finishedStatus')})` : ''} ({p.duracion_texto || '—'})
                     </option>
                   ))}
                 </select>
@@ -1412,7 +1440,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
               {loadingJobPieces && (
                 <span className="text-[10px] text-indigo-500 font-semibold animate-pulse ml-1">
-                  Cargando piezas...
+                  {t('tracker.loadingPieces')}
                 </span>
               )}
             </div>
@@ -1430,7 +1458,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               className="text-xs text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 bg-rose-50 hover:bg-rose-100 px-2.5 py-1.5 rounded-lg border border-rose-200 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
-              <span>Limpiar Filtro</span>
+              <span>{t('tracker.clearFilter')}</span>
             </button>
           )}
 
@@ -1443,10 +1471,10 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 transition cursor-pointer"
             />
             <span className="flex items-center space-x-1.5">
-              <span>Mostrar piezas terminadas</span>
+              <span>{t('tracker.showFinished')}</span>
               {showTerminadas && (
                 <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
-                  ACTIVO
+                  {t('tracker.activeBadge')}
                 </span>
               )}
             </span>
@@ -1466,7 +1494,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Agrupado por Proceso</span>
+                <span>{t('tracker.groupByProcess')}</span>
               </button>
               <button
                 type="button"
@@ -1479,7 +1507,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 }`}
               >
                 <SplitSquareVertical className="w-3.5 h-3.5" />
-                <span>Por Rutas</span>
+                <span>{t('tracker.byRoutes')}</span>
               </button>
             </div>
           )}
@@ -1489,21 +1517,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         <div className="text-xs">
           {selectedPieceCode ? (
             <span className="inline-flex items-center space-x-1.5 bg-indigo-100 text-indigo-900 px-3 py-1 rounded-full font-bold">
-              <span>Rastreando pieza:</span>
+              <span>{t('tracker.trackingPiece')}</span>
               <code className="font-mono text-indigo-950 bg-white/80 px-1.5 py-0.5 rounded shadow-2xs">
                 {selectedPieceCode}
               </code>
             </span>
           ) : selectedJobCode ? (
             <span className="inline-flex items-center space-x-1.5 bg-blue-100 text-blue-900 px-3 py-1 rounded-full font-bold">
-              <span>Mostrando job completo:</span>
+              <span>{t('tracker.showingFullJob')}</span>
               <code className="font-mono text-blue-950 bg-white/80 px-1.5 py-0.5 rounded shadow-2xs">
                 {selectedJobCode}
               </code>
             </span>
           ) : selectedItemCode ? (
             <span className="inline-flex items-center space-x-1.5 bg-amber-100 text-amber-900 px-3 py-1 rounded-full font-bold border border-amber-300">
-              <span>Mostrando todos los jobs del Item:</span>
+              <span>{t('tracker.showingItemJobs')}</span>
               <code className="font-mono text-amber-950 bg-white/90 px-1.5 py-0.5 rounded shadow-2xs">
                 {selectedItemCode}
               </code>
@@ -1514,7 +1542,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   setJobSearchQuery('');
                 }}
                 className="ml-1 text-amber-700 hover:text-amber-950 p-0.5"
-                title="Quitar filtro de Item"
+                title={t('tracker.clearItemFilter')}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -1522,8 +1550,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           ) : (
             <span className="text-slate-400">
               {isAllLines
-                ? 'Vista global (todas las líneas y órdenes activas)'
-                : `Sin filtro de Job activo (mostrando todas las piezas de ${currentLineObj?.nombre})`}
+                ? t('tracker.globalViewHint')
+                : t('tracker.lineViewHint', { line: currentLineObj?.nombre })}
             </span>
           )}
         </div>
@@ -1538,7 +1566,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-slate-500 uppercase">Rastreo Individual:</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">{t('tracker.individualTrackingTitle')}</span>
                 <span className="text-sm font-extrabold font-mono text-indigo-900">
                   {activePieceData.codigo_qr_unico}
                 </span>
@@ -1553,22 +1581,22 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               </div>
               <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
                 <span>
-                  Estación:{' '}
+                  {t('tracker.stationPrefix')}{' '}
                   <strong className="text-slate-900">
-                    {activePieceData.estacion_actual || activePieceData.proceso_nombre || (activePieceData.es_finalizada ? '✓ Producción Finalizada' : 'En cola')}
+                    {activePieceData.estacion_actual || activePieceData.proceso_nombre || (activePieceData.es_finalizada ? t('tracker.productionFinished') : t('tracker.inQueue'))}
                   </strong>
                 </span>
                 <span>•</span>
                 <span>
-                  Estado:{' '}
+                  {t('tracker.statusPrefix')}{' '}
                   <strong className="text-amber-700 font-semibold">
-                    {activePieceData.estado_actual || activePieceData.estado_nombre || '—'}
+                    {formatStatus(activePieceData.estado_actual || activePieceData.estado_nombre)}
                   </strong>
                 </span>
                 <span>•</span>
                 <span className="flex items-center space-x-1 font-mono text-blue-700 font-bold">
                   <Clock className="w-3 h-3" />
-                  <span>Tiempo acumulado: {activePieceData.duracion_texto || activePieceData.tiempo_estacion_texto || '—'}</span>
+                  <span>{t('tracker.timeElapsed')} {activePieceData.duracion_texto || activePieceData.tiempo_estacion_texto || '—'}</span>
                 </span>
               </div>
             </div>
@@ -1578,7 +1606,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               onClick={() => setSelectedPieceCode('')}
               className="text-xs bg-white hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs transition-colors"
             >
-              Ver todo el Job
+              {t('tracker.viewWholeJob')}
             </button>
           </div>
         </div>
@@ -1593,7 +1621,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-slate-500 uppercase">Job Filtrado:</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">{t('tracker.focusJobTitle')}</span>
                 <span className="text-sm font-extrabold font-mono text-blue-800">
                   {currentSelectedJob.job_code}
                 </span>
@@ -1607,18 +1635,18 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 </span>
                 {currentSelectedJob.linea_nombre && (
                   <span className="text-xs text-slate-600 font-bold bg-white px-2 py-0.5 rounded border border-blue-200">
-                    Línea: {currentSelectedJob.linea_nombre}
+                    {t('common.line')} {currentSelectedJob.linea_nombre}
                   </span>
                 )}
               </div>
               <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
-                <span>Total piezas: <strong className="text-slate-900 font-mono">{currentSelectedJob.cantidad_piezas} uds</strong></span>
+                <span>{t('tracker.totalPieces')} <strong className="text-slate-900 font-mono">{currentSelectedJob.cantidad_piezas} uds</strong></span>
                 <span>•</span>
-                <span>En estaciones: <strong className="text-blue-700 font-mono">{visibleItems.length} activas</strong></span>
+                <span>{t('tracker.inStations')} <strong className="text-blue-700 font-mono">{t('tracker.activePiecesCount', { count: visibleItems.length })}</strong></span>
                 <span>•</span>
                 <span className="flex items-center space-x-1 font-mono text-slate-700 font-bold">
                   <Clock className="w-3 h-3 text-slate-400" />
-                  <span>Tiempo Job: {currentSelectedJob.duracion_texto || '—'}</span>
+                  <span>{t('tracker.jobTime')} {currentSelectedJob.duracion_texto || '—'}</span>
                 </span>
                 <span>•</span>
                 <span className={`text-[11px] font-extrabold uppercase px-2 py-0.5 rounded ${
@@ -1628,7 +1656,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     ? 'bg-emerald-100 text-emerald-800'
                     : 'bg-blue-100 text-blue-800'
                 }`}>
-                  {currentSelectedJob.estado_cierre === 'PARCIAL' ? 'PARCIAL (EN CURSO)' : currentSelectedJob.estado_cierre}
+                  {currentSelectedJob.estado_cierre === 'PARCIAL' ? t('tracker.partialInProgressStatus') : formatStatus(currentSelectedJob.estado_cierre)}
                 </span>
               </div>
             </div>
@@ -1640,14 +1668,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
               title="Imprimir etiquetas térmicas del Job enfocado"
             >
               <Printer className="w-3.5 h-3.5 text-blue-600" />
-              <span>Imprimir QR</span>
+              <span>{t('tracker.reprintQr')}</span>
             </button>
             <button
               onClick={() => setAuditJobId(currentSelectedJob.id)}
               className="text-xs bg-white hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs transition-colors flex items-center space-x-1"
             >
               <History className="w-3.5 h-3.5 text-slate-400" />
-              <span>Auditoría</span>
+              <span>{t('tracker.audit')}</span>
             </button>
             {(currentSelectedJob.estado_cierre === 'EN_PROCESO' || currentSelectedJob.estado_cierre === 'PARCIAL') && (
               <button
@@ -1655,7 +1683,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-xs transition-colors flex items-center space-x-1"
               >
                 <Package className="w-3.5 h-3.5" />
-                <span>Cerrar Job Final</span>
+                <span>{t('tracker.closeFinalJob')}</span>
               </button>
             )}
           </div>
@@ -1678,7 +1706,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         >
           <div>
             <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`}>
-              Total Jobs
+              {t('tracker.kpiTotalJobs')}
             </span>
             <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'ALL' ? 'text-white' : 'text-slate-800'}`}>
               {totalJobsCount}
@@ -1701,7 +1729,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         >
           <div>
             <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'EN_PROCESO' ? 'text-blue-100' : 'text-blue-500'}`}>
-              En Proceso
+              {t('tracker.kpiInProgress')}
             </span>
             <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'EN_PROCESO' ? 'text-white' : 'text-blue-700'}`}>
               {inProgressJobsCount}
@@ -1724,7 +1752,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         >
           <div>
             <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'PARCIAL' ? 'text-indigo-100' : 'text-indigo-500'}`}>
-              Parcial
+              {t('tracker.kpiPartial')}
             </span>
             <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'PARCIAL' ? 'text-white' : 'text-indigo-700'}`}>
               {partialJobsCount}
@@ -1747,7 +1775,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         >
           <div>
             <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO' ? 'text-emerald-100' : 'text-emerald-600'}`}>
-              Completados
+              {t('tracker.kpiCompleted')}
             </span>
             <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO' ? 'text-white' : 'text-emerald-700'}`}>
               {cleanCompletedJobsCount}
@@ -1770,7 +1798,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
         >
           <div>
             <span className={`text-[10px] font-bold uppercase block ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO_CON_INCIDENCIAS' ? 'text-amber-100' : 'text-amber-600'}`}>
-              Con Incidencias
+              {t('tracker.kpiExceptions')}
             </span>
             <span className={`text-xl font-extrabold font-mono ${viewMode === 'JOBS' && jobFilter === 'COMPLETADO_CON_INCIDENCIAS' ? 'text-white' : 'text-amber-700'}`}>
               {exceptionJobsCount}
@@ -1852,16 +1880,16 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <div className="flex items-center space-x-2 flex-wrap">
                         <span className="font-bold text-slate-800 flex items-center space-x-1.5">
                           <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Vista Consolidada por Proceso:</span>
+                          <span>{t('tracker.consolidatedViewTitle')}</span>
                           <span className="text-blue-600 font-extrabold">
                             {rutas.map((r) => r.nombre).join(' + ')}
                           </span>
                         </span>
                         <span className="text-slate-300">•</span>
-                        <span>{consolidatedCols.length} estaciones unificadas</span>
+                        <span>{t('tracker.unifiedStations', { count: consolidatedCols.length })}</span>
                         <span className="text-slate-300">•</span>
                         <span className="font-semibold text-slate-700">
-                          {visibleItems.length} piezas activas
+                          {t('tracker.activePieces', { count: visibleItems.length })}
                         </span>
                       </div>
                       <button
@@ -1870,7 +1898,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         className="text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline flex items-center space-x-1"
                       >
                         <SplitSquareVertical className="w-3.5 h-3.5" />
-                        <span>Ver carriles por Ruta</span>
+                        <span>{t('tracker.viewLanesByRoute')}</span>
                       </button>
                     </div>
 
@@ -1910,21 +1938,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           <div>
                             <div className="flex items-center space-x-2">
                               <h2 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-                                Ruta: {ruta.nombre}
+                                {t('tracker.routePrefix')} {ruta.nombre}
                               </h2>
                               {isAllLines && lineName && (
                                 <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
-                                  Línea: {lineName}
+                                  {t('common.line')} {lineName}
                                 </span>
                               )}
                               {ruta.es_default === 1 && (
                                 <span className="text-[9px] font-extrabold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full uppercase">
-                                  Principal
+                                  {t('tracker.mainRoute')}
                                 </span>
                               )}
                             </div>
                             <p className="text-[11px] text-slate-400">
-                              {routeProcesos.length} estaciones en secuencia • {routeItems.length} piezas visibles en esta ruta
+                              {t('tracker.stationsInSequence', { count: routeProcesos.length })} • {t('tracker.visiblePiecesInRoute', { count: routeItems.length })}
                             </p>
                           </div>
                         </div>
@@ -1932,7 +1960,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           onClick={() => setSelectedRutaId(ruta.id)}
                           className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors flex items-center space-x-1 self-start sm:self-auto"
                         >
-                          <span>Aislar esta ruta</span>
+                          <span>{t('tracker.isolateRoute')}</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1972,16 +2000,16 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 bg-white px-4 py-2.5 rounded-xl border border-slate-200/80 shadow-xs">
                     <div className="flex items-center space-x-2">
                       <span className="font-bold text-slate-800">
-                        Ruta Activa:{' '}
+                        {t('tracker.routePrefix')}{' '}
                         <span className="text-blue-600 font-extrabold">
                           {activeRuta?.nombre || 'Ruta Estándar'}
                         </span>
                       </span>
                       <span className="text-slate-300">•</span>
-                      <span>{focusedProcesos.length} estaciones en secuencia</span>
+                      <span>{t('tracker.stationsInSequence', { count: focusedProcesos.length })}</span>
                       <span className="text-slate-300">•</span>
                       <span className="font-semibold text-slate-700">
-                        {focusedItems.length} piezas visibles
+                        {t('tracker.visiblePiecesInRoute', { count: focusedItems.length })}
                       </span>
                     </div>
                     {rutas.length > 1 && selectedRutaId !== 'ALL' && (
@@ -1989,7 +2017,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         onClick={() => setSelectedRutaId('ALL')}
                         className="text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline"
                       >
-                        ← Volver a Ver Todas las Rutas
+                        {t('tracker.backToAllRoutes')}
                       </button>
                     )}
                   </div>
@@ -2018,7 +2046,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div className="flex items-center space-x-2">
               <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-bold text-slate-700 uppercase">Filtrar por Estado:</span>
+              <span className="text-xs font-bold text-slate-700 uppercase">{t('tracker.filterByStatus')}</span>
               <div className="flex items-center space-x-1">
                 {(['ALL', 'EN_PROCESO', 'PARCIAL', 'COMPLETADO', 'COMPLETADO_CON_INCIDENCIAS'] as const).map((st) => (
                   <button
@@ -2031,14 +2059,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                     }`}
                   >
                     {st === 'ALL'
-                      ? 'Todos'
+                      ? t('tracker.statusAll')
                       : st === 'EN_PROCESO'
-                      ? 'En Proceso'
+                      ? t('tracker.statusInProgress')
                       : st === 'PARCIAL'
-                      ? 'Parcial'
+                      ? t('tracker.statusPartial')
                       : st === 'COMPLETADO'
-                      ? 'Completados'
-                      : 'Con Incidencias'}
+                      ? t('tracker.statusCompleted')
+                      : t('tracker.statusExceptions')}
                   </button>
                 ))}
               </div>
@@ -2046,7 +2074,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
 
             <div className="flex items-center space-x-2 text-xs">
               <span className="text-slate-500">
-                Mostrando <strong>{filteredJobs.length}</strong> de {jobs.length} jobs
+                {t('tracker.showingJobsCount', { filtered: filteredJobs.length, total: jobs.length })}
               </span>
               {selectedJobCode && (
                 <span className="inline-flex items-center space-x-1 bg-blue-50 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200 font-mono font-bold">
@@ -2059,7 +2087,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       setSelectedPieceCode('');
                     }}
                     className="hover:text-rose-600 ml-0.5 p-0.5"
-                    title="Quitar filtro de Job"
+                    title={t('tracker.clearFilter')}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -2073,15 +2101,15 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
                 <tr>
-                  <th className="py-3 px-4">Job / Orden</th>
-                  {isAllLines && <th className="py-3 px-4">Línea</th>}
-                  <th className="py-3 px-4">Modelo & Specs</th>
-                  <th className="py-3 px-4">Ruta</th>
-                  <th className="py-3 px-4 text-center">Piezas</th>
-                  <th className="py-3 px-4">Duración / Tiempo</th>
-                  <th className="py-3 px-4">Estado de Cierre</th>
-                  <th className="py-3 px-4">Fecha Creación</th>
-                  <th className="py-3 px-4 text-right">Acciones</th>
+                  <th className="py-3 px-4">{t('tracker.thJobOrder')}</th>
+                  {isAllLines && <th className="py-3 px-4">{t('tracker.thLine')}</th>}
+                  <th className="py-3 px-4">{t('tracker.thModelSpecs')}</th>
+                  <th className="py-3 px-4">{t('tracker.thRoute')}</th>
+                  <th className="py-3 px-4 text-center">{t('tracker.thPieces')}</th>
+                  <th className="py-3 px-4">{t('tracker.thDuration')}</th>
+                  <th className="py-3 px-4">{t('tracker.thClosureStatus')}</th>
+                  <th className="py-3 px-4">{t('tracker.thCreatedDate')}</th>
+                  <th className="py-3 px-4 text-right">{t('tracker.thActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2091,7 +2119,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <td className="py-3 px-4">
                         <span className="font-mono font-bold text-blue-700 text-sm">{j.job_code}</span>
                         {j.creado_por_nombre && (
-                          <span className="block text-[10px] text-slate-400 mt-0.5">Por: {j.creado_por_nombre}</span>
+                          <span className="block text-[10px] text-slate-400 mt-0.5">{t('tracker.createdBy', { name: j.creado_por_nombre })}</span>
                         )}
                       </td>
                       {isAllLines && (
@@ -2121,7 +2149,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         <span className="font-bold text-slate-800 font-mono">{j.cantidad_piezas} uds</span>
                         {j.piezas_con_excepcion > 0 && (
                           <span className="block text-[10px] text-rose-600 font-bold">
-                            {j.piezas_con_excepcion} rezagada(s)
+                            {t('tracker.laggingCount', { count: j.piezas_con_excepcion })}
                           </span>
                         )}
                       </td>
@@ -2133,7 +2161,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           >
                             <Clock className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
                             <span>{j.duracion_texto || '—'}</span>
-                            <span className="text-[10px] text-blue-500 font-medium">(en curso)</span>
+                            <span className="text-[10px] text-blue-500 font-medium">{t('tracker.inProgressActive')}</span>
                           </span>
                         ) : (
                           <span
@@ -2149,22 +2177,22 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                         {j.estado_cierre === 'COMPLETADO' ? (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>COMPLETADO</span>
+                            <span>{t('tracker.completedStatus')}</span>
                           </span>
                         ) : j.estado_cierre === 'COMPLETADO_CON_INCIDENCIAS' ? (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900" title={j.notas_cierre}>
                             <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                            <span>CON INCIDENCIAS ({j.piezas_con_excepcion})</span>
+                            <span>{t('tracker.completedWithIssues', { count: j.piezas_con_excepcion })}</span>
                           </span>
                         ) : j.estado_cierre === 'PARCIAL' ? (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
                             <Layers className="w-3.5 h-3.5 text-blue-600" />
-                            <span>PARCIAL (EN CURSO)</span>
+                            <span>{t('tracker.partialInProgressStatus')}</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                             <Clock className="w-3.5 h-3.5 text-blue-600" />
-                            <span>EN PROCESO</span>
+                            <span>{t('tracker.inProcessStatus')}</span>
                           </span>
                         )}
                       </td>
@@ -2179,7 +2207,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           title="Imprimir o reimprimir etiquetas QR para este Job"
                         >
                           <Printer className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Imprimir QR</span>
+                          <span>{t('tracker.reprintQr')}</span>
                         </button>
 
                         {/* If in process or partial, show "Cerrar Lote Final" */}
@@ -2189,7 +2217,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                             className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-sm inline-flex items-center space-x-1"
                           >
                             <Package className="w-3.5 h-3.5" />
-                            <span>Cerrar Job Final</span>
+                            <span>{t('tracker.closeFinalJob')}</span>
                           </button>
                         )}
 
@@ -2200,7 +2228,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           title="Ver trazabilidad y bitácora de eventos"
                         >
                           <History className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Auditoría</span>
+                          <span>{t('tracker.audit')}</span>
                         </button>
                       </td>
                     </tr>
@@ -2208,7 +2236,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 ) : (
                   <tr>
                     <td colSpan={isAllLines ? 9 : 8} className="py-8 text-center text-slate-400">
-                      No se encontraron jobs con el filtro seleccionado.
+                      {t('tracker.noJobsFoundTable')}
                     </td>
                   </tr>
                 )}
