@@ -149,9 +149,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="p-3 sm:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-6">
       {/* Subheader: DASHBOARD LIVE status bar with Route Filter & Searchable Job */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center space-x-2 sm:space-x-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-wrap gap-y-1 flex-shrink-0">
             <span className="text-xs font-extrabold tracking-wider text-slate-800 uppercase">{t('navbar.tabs.dashboard')}</span>
             <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -165,14 +165,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Searchable Job Input / Autocomplete */}
-          <div className="relative w-full sm:w-auto sm:pl-3 sm:border-l sm:border-slate-200" ref={jobDropdownRef}>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center space-x-1">
+          <div className="relative w-full sm:w-auto flex-1 max-w-full sm:max-w-md sm:pl-3 sm:border-l sm:border-slate-200" ref={jobDropdownRef}>
+            <div className="flex items-center space-x-2 w-full">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center space-x-1 flex-shrink-0">
                 <Search className="w-3.5 h-3.5 text-blue-600" />
-                <span>{t('dashboard.headerJob')}</span>
+                <span>{t('dashboard.headerJob')}:</span>
               </span>
 
-              <div className="relative flex-1 min-w-[170px] sm:min-w-[210px] max-w-full sm:max-w-[280px]">
+              <div className="relative flex-1 min-w-0">
                 <input
                   type="text"
                   value={jobSearchQuery}
@@ -194,7 +194,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   }}
                   onFocus={() => setIsJobDropdownOpen(true)}
                   placeholder={t('dashboard.searchJobPlaceholder')}
-                  className={`w-full bg-white border text-xs rounded-lg pl-7 pr-7 py-1 focus:outline-none focus:ring-2 shadow-xs transition-all ${
+                  className={`w-full bg-white border text-xs rounded-lg pl-7 pr-7 py-1.5 focus:outline-none focus:ring-2 shadow-xs transition-all ${
                     selectedJobCode
                       ? 'border-blue-500 font-mono text-blue-900 font-bold focus:ring-blue-500 bg-blue-50/30 ring-1 ring-blue-400'
                       : 'border-slate-300 text-slate-800 font-medium focus:ring-blue-500'
@@ -215,7 +215,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
 
               {selectedJobCode && (
-                <span className="text-[10px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded-full border border-blue-200">
+                <span className="text-[10px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded-full border border-blue-200 flex-shrink-0">
                   {t('dashboard.activeFilter')}
                 </span>
               )}
@@ -292,17 +292,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Route Filter Dropdown & Quick Select */}
-        <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-2.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
           <div className="flex items-center space-x-1.5 bg-slate-100 px-2 sm:px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-xs flex-1 sm:flex-initial min-w-0">
             <span className="text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center space-x-1 flex-shrink-0">
               <GitFork className="w-3.5 h-3.5 text-blue-600" />
-              <span>{t('dashboard.routeFilter')}</span>
+              <span>{t('dashboard.routeFilter')}:</span>
             </span>
             <select
               value={selectedRutaId}
               onChange={(e) => onSelectRutaId && onSelectRutaId(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
               aria-label="Filter Dashboard by route"
-              className="bg-white border border-slate-300 text-[11px] sm:text-xs font-bold text-slate-800 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs max-w-[150px] sm:max-w-none truncate"
+              className="bg-white border border-slate-300 text-[11px] sm:text-xs font-bold text-slate-800 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs flex-1 sm:flex-initial min-w-0 max-w-[170px] sm:max-w-none truncate"
             >
               <option value="ALL">{t('dashboard.allRoutes', { count: rutas.length, unit: rutas.length === 1 ? 'route' : 'routes' })}</option>
               {rutas.map((r) => {
@@ -319,7 +319,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Clock & Status */}
-          <div className="flex items-center space-x-2 text-xs text-slate-400 mono pl-2 sm:border-l sm:border-slate-200">
+          <div className="flex items-center space-x-2 text-xs text-slate-400 mono pl-2 border-l border-slate-200 flex-shrink-0">
             <span className="text-sky-600 font-semibold">{currentClock}</span>
             <button
               onClick={onRefresh}
@@ -626,13 +626,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               timeAlerts.map((alert: any, idx: number) => (
                 <div
                   key={idx}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border gap-2 transition-colors ${
                     alert.critical
                       ? 'bg-rose-50/70 border-rose-200/80 hover:bg-rose-50'
                       : 'bg-amber-50/50 border-amber-200/70 hover:bg-amber-50'
                   }`}
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <AlertTriangle className={`w-4 h-4 flex-shrink-0 ${alert.critical ? 'text-rose-600' : 'text-amber-600'}`} />
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold text-white uppercase tracking-wider ${
                       alert.critical ? 'bg-rose-600' : 'bg-amber-500'
@@ -648,7 +648,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 self-end sm:self-auto">
                     {alert.delayDiffTexto && (
                       <span className="text-[11px] font-bold text-rose-600 font-mono bg-rose-100 px-2 py-0.5 rounded">
                         {alert.delayDiffTexto}

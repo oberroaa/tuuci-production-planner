@@ -37,13 +37,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   return (
-    <header className="bg-[#121417] text-white border-b border-[#23272d] px-3 sm:px-6 py-2.5">
-      <div className="flex items-center justify-between gap-2">
+    <header className="bg-[#121417] text-white border-b border-[#23272d] px-2.5 sm:px-6 py-2.5">
+      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
         {/* Brand & Line Selector */}
-        <div className="flex items-center space-x-3 sm:space-x-6 min-w-0">
-          <div className="flex items-center space-x-2 flex-shrink-0">
+        <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+          <div className="flex items-center space-x-1.5 flex-shrink-0">
             {/* TUUCI Stylized SVG Brand */}
-            <svg className="h-5 sm:h-6 w-auto text-white" viewBox="0 0 120 28" fill="currentColor">
+            <svg className="h-4 sm:h-6 w-auto text-white flex-shrink-0" viewBox="0 0 120 28" fill="currentColor">
               <path d="M10 2 Q25 14 45 2 Q30 18 10 2 Z" opacity="0.9" />
               <text x="50" y="20" fontFamily="sans-serif" fontWeight="bold" fontSize="18" fill="white" letterSpacing="3">TUUCI</text>
             </svg>
@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Line Switcher */}
-          <div className="relative flex-shrink-0">
+          <div className="relative min-w-0 flex-shrink">
             {(() => {
               const hasAssignedLine = Boolean(currentUser?.linea_id || currentUser?.linea_nombre);
               const isNonAdmin = currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'OPERADOR';
@@ -68,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                   disabled={isFixedLine}
                   aria-label="Select production line"
-                  className={`appearance-none text-white text-[10px] sm:text-xs font-medium px-2 sm:px-3 py-1 sm:py-1.5 pr-6 sm:pr-8 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed max-w-[95px] xs:max-w-[130px] sm:max-w-[200px] truncate ${
+                  className={`appearance-none text-white text-[11px] sm:text-xs font-medium pl-2 sm:pl-3 pr-5 sm:pr-8 py-1 sm:py-1.5 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed max-w-[120px] xs:max-w-[150px] sm:max-w-[200px] truncate ${
                     needsToPickLine
                       ? 'bg-amber-950/80 border-amber-500 text-amber-200 animate-pulse'
                       : 'bg-[#1d2127] border-[#2f353e] hover:border-slate-500'
@@ -96,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </select>
               );
             })()}
-            <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
           {/* Desktop Navigation Tabs */}
