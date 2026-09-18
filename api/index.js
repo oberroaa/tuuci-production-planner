@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import db, { initDb, updatePoolConfig } from '../db-compat.js';
 import { StateEngine } from '../services/state-engine.js';
 import { DashboardService } from '../services/dashboard-service.js';
+import { validateSchema, schemas } from './validators.js';
 
 const env = process.env.NODE_ENV;
 dotenv.config();
@@ -14,32 +15,37 @@ if (env) {
   process.env.NODE_ENV = env;
 }
 
-// Ensure DB tables & catalogs exist
-await initDb();
+// Application bootstrap function - initializes DB tables, runs reconciliation, and loads configs.
+// Designed to be called explicitly on server startup, keeping module imports side-effect free.
+export async function initApp() {
+  await initDb();
 
-// One-time reconciliation cleanup:
-// If a piece has multiple active (ESPERANDO / EN PROCESO) steps because it was moved forward earlier,
-// mark previous steps before its highest active step as TERMINADA so it doesn't appear duplicated.
-try {
-  await db.prepare(`
-    UPDATE pieza_procesos
-    SET estado_id = (SELECT id FROM estados WHERE nombre = 'TERMINADA'),
-        fecha_fin = COALESCE(fecha_fin, NOW())
-    WHERE id IN (
-      SELECT pp_prev.id
-      FROM pieza_procesos pp_prev
-      JOIN procesos pr_prev ON pp_prev.proceso_id = pr_prev.id
-      JOIN pieza_procesos pp_act ON pp_prev.pieza_id = pp_act.pieza_id
-      JOIN procesos pr_act ON pp_act.proceso_id = pr_act.id
-      JOIN estados e_act ON pp_act.estado_id = e_act.id
-      JOIN estados e_prev ON pp_prev.estado_id = e_prev.id
-      WHERE e_act.nombre IN ('EN PROCESO', 'ESPERANDO')
-        AND e_prev.nombre IN ('EN PROCESO', 'ESPERANDO')
-        AND pr_prev.orden < pr_act.orden
-    )
-  `).run();
-} catch (cleanupErr) {
-  console.warn('Reconciliation cleanup note:', cleanupErr.message);
+  // One-time reconciliation cleanup:
+  // If a piece has multiple active (ESPERANDO / EN PROCESO) steps because it was moved forward earlier,
+  // mark previous steps before its highest active step as TERMINADA so it doesn't appear duplicated.
+  try {
+    await db.prepare(`
+      UPDATE pieza_procesos
+      SET estado_id = (SELECT id FROM estados WHERE nombre = 'TERMINADA'),
+          fecha_fin = COALESCE(fecha_fin, NOW())
+      WHERE id IN (
+        SELECT pp_prev.id
+        FROM pieza_procesos pp_prev
+        JOIN procesos pr_prev ON pp_prev.proceso_id = pr_prev.id
+        JOIN pieza_procesos pp_act ON pp_prev.pieza_id = pp_act.pieza_id
+        JOIN procesos pr_act ON pp_act.proceso_id = pr_act.id
+        JOIN estados e_act ON pp_act.estado_id = e_act.id
+        JOIN estados e_prev ON pp_prev.estado_id = e_prev.id
+        WHERE e_act.nombre IN ('EN PROCESO', 'ESPERANDO')
+          AND e_prev.nombre IN ('EN PROCESO', 'ESPERANDO')
+          AND pr_prev.orden < pr_act.orden
+      )
+    `).run();
+  } catch (cleanupErr) {
+    console.warn('Reconciliation cleanup note:', cleanupErr.message);
+  }
+
+  await loadSystemConfigs();
 }
 
 // CORS configuration: Restrict to explicit allowed origins, local machine, and company intranet
@@ -1216,8 +1222,6 @@ async function loadSystemConfigs() {
   }
 }
 
-await loadSystemConfigs();
-
 // Config API endpoints
 app.get('/api/config', async (req, res) => {
   try {
@@ -1513,8 +1517,8 @@ app.get('/api/jobs/check/:jobCode', async (req, res) => {
   }
 });
 
-// 4. Cutting Station (Fase 1): Create Job and Pieces (Protected by requireAuth)
-app.post('/api/jobs', requireAuth, async (req, res) => {
+// 4. Cutting Station (Fase 1): Create Job and Pieces (Protected by requireAuth and Schema Validation)
+app.post('/api/jobs', requireAuth, validateSchema(schemas.createJob), async (req, res) => {
   try {
     const { jobCode, lineaId, rutaId, modelo, itemCode, specsRaw, cantidadPiezas } = req.body;
     const creadoPorUsuarioId = req.user?.id || req.body.creadoPorUsuarioId || null;
@@ -1542,8 +1546,8 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
   }
 });
 
-// 5. Cutting Station: Close batch process (Modo LOTE) (Protected by requireAuth)
-app.post('/api/cutting/batch-close', requireAuth, async (req, res) => {
+// 5. Cutting Station: Close batch process (Modo LOTE) (Protected by requireAuth and Schema Validation)
+app.post('/api/cutting/batch-close', requireAuth, validateSchema(schemas.batchClose), async (req, res) => {
   try {
     let { jobId, jobCode, procesoId } = req.body;
     const usuarioId = req.user?.id || req.body.usuarioId || null;
@@ -2311,7 +2315,13 @@ import { fileURLToPath } from 'url';
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isMain && process.env.NODE_ENV !== 'test') {
-  server.listen(PORT, () => {
-    console.log(`[TUUCI Production Planner API] listening on port ${PORT} (PostgreSQL 17)`);
-  });
+  try {
+    await initApp();
+    server.listen(PORT, () => {
+      console.log(`[TUUCI Production Planner API] listening on port ${PORT} (PostgreSQL 17)`);
+    });
+  } catch (startupErr) {
+    console.error('[TUUCI Production Planner API] Fatal initialization error:', startupErr);
+    process.exit(1);
+  }
 }

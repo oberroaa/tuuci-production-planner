@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { app } from '../api/index.js';
-import db, { initDb } from '../db-compat.js';
+import { app, initApp } from '../api/index.js';
+import db from '../db-compat.js';
 
 describe('TUUCI Production Planner - API Integration Tests', () => {
   let lineMueble;
 
   beforeAll(async () => {
-    await initDb();
+    await initApp();
     lineMueble = await db.prepare("SELECT id FROM lineas WHERE nombre = 'Mueble'").get();
   });
 
@@ -103,6 +103,31 @@ describe('TUUCI Production Planner - API Integration Tests', () => {
         expect(res.body.success).toBe(false);
         expect(res.body.oled_message).toBe('NO AUTORIZADO');
       }
+    });
+  });
+
+  describe('Input Validation Constraints', () => {
+    it('POST /api/jobs rejects invalid or missing fields with 400 Bad Request', async () => {
+      // 1. Missing jobCode
+      const res1 = await request(app)
+        .post('/api/jobs')
+        .send({ lineaId: lineMueble.id, cantidadPiezas: 5 });
+      expect(res1.status).toBe(400);
+      expect(res1.body.success).toBe(false);
+
+      // 2. Invalid cantidadPiezas (negative or 0)
+      const res2 = await request(app)
+        .post('/api/jobs')
+        .send({ jobCode: 'JOB_INVALID_QTY', lineaId: lineMueble.id, cantidadPiezas: -3 });
+      expect(res2.status).toBe(400);
+      expect(res2.body.success).toBe(false);
+
+      // 3. Invalid cantidadPiezas (exceeds max 5000)
+      const res3 = await request(app)
+        .post('/api/jobs')
+        .send({ jobCode: 'JOB_OVERSIZED', lineaId: lineMueble.id, cantidadPiezas: 999999 });
+      expect(res3.status).toBe(400);
+      expect(res3.body.success).toBe(false);
     });
   });
 

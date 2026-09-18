@@ -1,7 +1,7 @@
 process.env.NODE_ENV = 'test';
 import http from 'http';
-import { app } from '../api/index.js';
-import db, { initDb, pool } from '../db-compat.js';
+import { app, initApp } from '../api/index.js';
+import db, { pool } from '../db-compat.js';
 
 /**
  * Production boot verification test following Brian's AGENTS.md security guidelines.
@@ -11,7 +11,7 @@ async function runProdBootVerification() {
   console.log('Running TUUCI Production Planner boot verification checks against PostgreSQL 17...');
   let checksPassed = 0;
 
-  await initDb();
+  await initApp();
 
   // Check 1: PostgreSQL Connection pool is active
   const poolCheck = await pool.query('SELECT 1 as connected');
