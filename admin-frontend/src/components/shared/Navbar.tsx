@@ -211,7 +211,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Sign Out / Logout */}
           <button
-            onClick={onLogout || (() => setActiveTab('SETTINGS'))}
+            onClick={onLogout}
             className="hidden sm:flex items-center space-x-1 text-slate-400 hover:text-red-400 transition-colors p-1 sm:px-2 sm:py-1 flex-shrink-0"
             title={t('navbar.logoutTitle')}
           >
@@ -338,7 +338,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => {
                 setMobileMenuOpen(false);
                 if (onLogout) onLogout();
-                else setActiveTab('SETTINGS');
               }}
               className="text-red-400 hover:text-red-300 text-xs font-bold flex items-center space-x-1"
             >

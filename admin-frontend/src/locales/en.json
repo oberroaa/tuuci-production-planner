@@ -29,9 +29,9 @@
       "admin": "ADMIN"
     },
     "temp": "(temp)",
-    "changeUser": "Change",
-    "profileTitle": "View profile and session settings",
-    "logoutTitle": "Sign out or change user",
+    "changeUser": "Logout",
+    "profileTitle": "View profile and settings",
+    "logoutTitle": "Sign out",
     "themeTitle": "Toggle theme",
     "langTitle": "Change language (Current: English)"
   },

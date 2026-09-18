@@ -29,9 +29,9 @@
       "admin": "ADMIN"
     },
     "temp": "(temp)",
-    "changeUser": "Cambiar",
-    "profileTitle": "Ver configuración de perfil y sesión",
-    "logoutTitle": "Cerrar sesión o cambiar de usuario",
+    "changeUser": "Salir",
+    "profileTitle": "Ver perfil y configuración",
+    "logoutTitle": "Cerrar sesión",
     "themeTitle": "Cambiar tema",
     "langTitle": "Cambiar idioma (Actual: Español)"
   },
