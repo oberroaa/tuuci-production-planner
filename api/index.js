@@ -1065,15 +1065,61 @@ app.post('/api/users', requireAdminRole, async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', requireAdminRole, async (req, res) => {
+app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, email, rol, lineaId } = req.body;
+
+    if (!req.user) {
+      return res.status(401).json({ error: 'No autorizado: debe iniciar sesión para editar usuarios.' });
+    }
+
+    const targetUser = await db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    // Authorization checks:
+    // ADMIN can edit anything
+    // SUPERVISOR can only edit operators/terminals of their own line, or assign newly registered users (without assigned line) to their line
+    if (req.user.rol !== 'ADMIN') {
+      if (req.user.rol !== 'SUPERVISOR') {
+        return res.status(403).json({ error: 'Acceso denegado: solo Administradores o Supervisores pueden modificar usuarios.' });
+      }
+
+      // Supervisor cannot modify an ADMIN or another SUPERVISOR
+      if (targetUser.rol === 'ADMIN' || (targetUser.rol === 'SUPERVISOR' && targetUser.id !== req.user.id)) {
+        return res.status(403).json({ error: 'Acceso denegado: un Supervisor no puede modificar las credenciales de otro Supervisor o Administrador.' });
+      }
+
+      // Supervisor cannot promote anyone to ADMIN
+      if (rol === 'ADMIN') {
+        return res.status(403).json({ error: 'Acceso denegado: un Supervisor no puede asignar el rol ADMIN.' });
+      }
+
+      // If target user already has a line, it must match the supervisor's line
+      if (targetUser.linea_id !== null && req.user.linea_id !== null && targetUser.linea_id !== req.user.linea_id) {
+        return res.status(403).json({ error: 'Acceso denegado: solo puedes gestionar usuarios asignados a tu línea de producción.' });
+      }
+
+      // Supervisor cannot transfer a user to a different line than their own
+      if (lineaId && req.user.linea_id && Number(lineaId) !== Number(req.user.linea_id)) {
+        return res.status(403).json({ error: 'Acceso denegado: solo puedes asignar usuarios a tu propia línea.' });
+      }
+    }
+
+    const finalNombre = nombre ? nombre.trim() : targetUser.nombre;
+    const finalEmail = email ? email.trim() : targetUser.email;
+    const finalRol = rol || targetUser.rol;
+    const finalLineaId = finalRol === 'ADMIN' ? null : (lineaId !== undefined ? (lineaId || null) : targetUser.linea_id);
+
     await db.prepare(`
       UPDATE usuarios
       SET nombre = ?, email = ?, rol = ?, linea_id = ?
       WHERE id = ?
-    `).run(nombre.trim(), email.trim(), rol, rol === 'ADMIN' ? null : (lineaId || null), id);
+    `).run(finalNombre, finalEmail, finalRol, finalLineaId, id);
+
+    notifyDashboardUpdate();
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Sliders, Shield, AlertCircle, RefreshCw, Volume2, LogOut, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sliders, Shield, AlertCircle, RefreshCw, Volume2, LogOut, UserCheck, Users, Check, Pencil, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface SettingsViewProps {
@@ -22,9 +22,100 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState('3s');
 
+  // Team users state for Supervisor and Admin
+  const [lineUsers, setLineUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [selectedNewRole, setSelectedNewRole] = useState<string>('');
+  const [updatingUser, setUpdatingUser] = useState(false);
+  const [userSuccessMsg, setUserSuccessMsg] = useState<string | null>(null);
+  const [userErrorMsg, setUserErrorMsg] = useState<string | null>(null);
+
   const isOperator = currentUser?.rol === 'OPERADOR';
+  const isTerminal = currentUser?.rol === 'TERMINAL';
   const isSupervisor = currentUser?.rol === 'SUPERVISOR';
   const isAdmin = currentUser?.rol === 'ADMIN';
+
+  const canManageLineUsers = isSupervisor || isAdmin;
+
+  // Load team users for supervisor's line
+  const fetchLineUsers = async () => {
+    if (!canManageLineUsers) return;
+    setLoadingUsers(true);
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const all = await res.json();
+        if (Array.isArray(all)) {
+          // If supervisor, show users from their assigned line + newly registered users with no line assigned yet
+          if (isSupervisor) {
+            const supervisorLineId = currentUser?.linea_id;
+            const filtered = all.filter((u: any) => 
+              (supervisorLineId && u.linea_id === supervisorLineId) ||
+              (u.linea_id === null && u.rol !== 'ADMIN' && u.rol !== 'SUPERVISOR')
+            );
+            setLineUsers(filtered);
+          } else {
+            // Admin sees all
+            setLineUsers(all);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando usuarios de línea:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLineUsers();
+  }, [currentUser?.linea_id, currentUser?.rol]);
+
+  const handleStartEditUser = (user: any) => {
+    setEditingUserId(user.id);
+    setSelectedNewRole(user.rol);
+    setUserSuccessMsg(null);
+    setUserErrorMsg(null);
+  };
+
+  const handleSaveUserRole = async (user: any) => {
+    if (!selectedNewRole || selectedNewRole === user.rol) {
+      setEditingUserId(null);
+      return;
+    }
+    setUpdatingUser(true);
+    setUserSuccessMsg(null);
+    setUserErrorMsg(null);
+
+    try {
+      const payload: any = { rol: selectedNewRole };
+      // If the user had no line yet (e.g. newly signed in via Microsoft SSO), assign to supervisor's line
+      if (!user.linea_id && currentUser?.linea_id) {
+        payload.lineaId = currentUser.linea_id;
+      }
+
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUserSuccessMsg(`Rol de ${user.nombre} actualizado a ${selectedNewRole} con éxito.`);
+        setEditingUserId(null);
+        await fetchLineUsers();
+        setTimeout(() => setUserSuccessMsg(null), 4000);
+      } else {
+        setUserErrorMsg(data.error || 'No se pudo actualizar el rol del usuario.');
+      }
+    } catch (err: any) {
+      setUserErrorMsg('Error de conexión al actualizar rol.');
+    } finally {
+      setUpdatingUser(false);
+    }
+  };
 
   // Check if current active line differs from default assigned line
   const isTemporaryLine = (isOperator || isSupervisor) && activeLine !== (currentUser?.linea_nombre || 'Mueble');
@@ -143,7 +234,183 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Card 2: Environment Preferences */}
+          {/* Card 2: Team Members & Role Management (Supervisor & Admin) */}
+          {canManageLineUsers && (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    <span>Gestión de Equipo — Línea {currentUser?.linea_nombre || 'Clásica'}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {isSupervisor
+                      ? `Como Supervisor de ${currentUser?.linea_nombre || 'Clásica'}, puedes asignar y modificar los roles de los operadores de tu línea.`
+                      : 'Administración de usuarios de planta y asignación de roles operativos.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchLineUsers}
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 text-xs font-semibold flex items-center space-x-1"
+                  title="Recargar usuarios de la línea"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {userSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-medium flex items-center space-x-2">
+                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>{userSuccessMsg}</span>
+                </div>
+              )}
+
+              {userErrorMsg && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs font-medium flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <span>{userErrorMsg}</span>
+                </div>
+              )}
+
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-bold uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3.5 py-2.5">Operador / Usuario</th>
+                      <th className="px-3.5 py-2.5">Correo</th>
+                      <th className="px-3.5 py-2.5">Línea Asignada</th>
+                      <th className="px-3.5 py-2.5">Rol en Planta</th>
+                      <th className="px-3.5 py-2.5 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingUsers ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-6 text-slate-400">
+                          <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-1" />
+                          Cargando operadores...
+                        </td>
+                      </tr>
+                    ) : lineUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-6 text-slate-400">
+                          No hay usuarios registrados en esta línea de producción.
+                        </td>
+                      </tr>
+                    ) : (
+                      lineUsers.map((user) => {
+                        const isEditing = editingUserId === user.id;
+                        const isSelf = user.id === currentUser?.id;
+                        const isUserAdmin = user.rol === 'ADMIN';
+
+                        return (
+                          <tr key={user.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-3.5 py-3 font-bold text-slate-800">
+                              <div className="flex items-center space-x-2">
+                                <span>{user.nombre}</span>
+                                {isSelf && (
+                                  <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded font-bold">
+                                    TÚ
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3.5 py-3 text-slate-500">{user.email}</td>
+                            <td className="px-3.5 py-3">
+                              {user.linea_nombre ? (
+                                <span className="font-semibold text-slate-700">{user.linea_nombre}</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  Sin línea (Nuevo SSO)
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-3">
+                              {isEditing ? (
+                                <select
+                                  value={selectedNewRole}
+                                  onChange={(e) => setSelectedNewRole(e.target.value)}
+                                  disabled={updatingUser}
+                                  className="bg-white border border-blue-400 rounded px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                  <option value="OPERADOR">OPERADOR (Escáner de piso)</option>
+                                  <option value="TERMINAL">TERMINAL (Corte / PDFs)</option>
+                                  {isAdmin && <option value="SUPERVISOR">SUPERVISOR</option>}
+                                  {isAdmin && <option value="ADMIN">ADMIN</option>}
+                                </select>
+                              ) : (
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                    user.rol === 'ADMIN'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : user.rol === 'SUPERVISOR'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : user.rol === 'TERMINAL'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-emerald-100 text-emerald-800'
+                                  }`}
+                                >
+                                  {user.rol}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-3 text-right">
+                              {isEditing ? (
+                                <div className="flex items-center justify-end space-x-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveUserRole(user)}
+                                    disabled={updatingUser}
+                                    className="p-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold flex items-center space-x-1 transition-colors disabled:opacity-50"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Guardar</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingUserId(null)}
+                                    disabled={updatingUser}
+                                    className="p-1 px-1.5 border border-slate-300 hover:bg-slate-100 text-slate-600 rounded text-xs transition-colors"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                !isUserAdmin && (!isSupervisor || user.rol !== 'SUPERVISOR' || isSelf) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditUser(user)}
+                                    className="p-1 px-2.5 rounded border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-700 text-xs font-semibold flex items-center space-x-1 ml-auto transition-colors"
+                                    title="Cambiar rol operativo"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                    <span>Cambiar Rol</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic">Protegido</span>
+                                )
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-3 rounded-lg bg-blue-50/60 border border-blue-200/80 text-[11px] text-blue-900 flex items-start space-x-2">
+                <Shield className="w-4 h-4 flex-shrink-0 text-blue-600 mt-0.5" />
+                <span>
+                  <strong>Políticas de Acceso TUUCI:</strong> Todo usuario que inicia sesión por primera vez con Microsoft 365 entra con el rol <strong>OPERADOR</strong> por defecto. El Supervisor puede ascenderlo a <strong>TERMINAL</strong> para autorizarle el corte y carga de planos PDF en su línea.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Card 3: Environment Preferences */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               {t('settings.boardPreferences')}
