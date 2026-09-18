@@ -23,7 +23,9 @@ import {
   Barcode,
   GitMerge,
   LayoutGrid,
-  SplitSquareVertical
+  SplitSquareVertical,
+  Copy,
+  Check
 } from 'lucide-react';
 import { BatchCloseModal } from './BatchCloseModal';
 import { JobAuditModal } from './JobAuditModal';
@@ -132,6 +134,17 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   const [printingJob, setPrintingJob] = useState<any | null>(null);
   const [loadingPrintJob, setLoadingPrintJob] = useState<boolean>(false);
   const [jobFilter, setJobFilter] = useState<'ALL' | 'EN_PROCESO' | 'PARCIAL' | 'COMPLETADO' | 'COMPLETADO_CON_INCIDENCIAS'>('ALL');
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => {
+      setCopiedCode((prev) => (prev === code ? null : prev));
+    }, 2000);
+  };
 
   // Trigger thermal ticket print modal for a job from tracker
   const handleOpenPrintJob = async (jobItem: any) => {
@@ -752,9 +765,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                           <Layers className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
-                          <span className="text-xs font-black text-purple-900 font-mono tracking-wide whitespace-nowrap">
-                            {group.codigo_job}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyCode(group.codigo_job, e)}
+                            className="group/code inline-flex items-center space-x-1 hover:bg-purple-50 px-1 py-0.5 rounded transition-all select-all"
+                            title="Haz clic para copiar el código del Job"
+                          >
+                            <span className="text-xs font-black text-purple-900 font-mono tracking-wide whitespace-nowrap">
+                              {group.codigo_job}
+                            </span>
+                            {copiedCode === group.codigo_job ? (
+                              <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-slate-400 group-hover/code:text-purple-600 opacity-0 group-hover/code:opacity-100 transition-opacity flex-shrink-0" />
+                            )}
+                          </button>
                           {group.item_code && (
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-extrabold font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap shadow-2xs"
@@ -860,10 +885,22 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   >
                     {/* Header: Piece QR Code & Mover Action Button */}
                     <div className="flex items-center justify-between gap-1">
-                      <div className="flex items-center space-x-1.5 min-w-0">
-                        <span className="text-[11px] font-bold text-blue-700 font-mono truncate">
-                          {item.codigo_qr_unico}
-                        </span>
+                      <div className="flex items-center space-x-1 flex-wrap min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyCode(item.codigo_qr_unico, e)}
+                          className="group/piece inline-flex items-center space-x-1 hover:bg-blue-50 px-1 py-0.5 rounded transition-all select-all text-left"
+                          title="Haz clic para copiar el código completo de la pieza / Job"
+                        >
+                          <span className="text-[11px] font-bold text-blue-700 font-mono tracking-tight break-all">
+                            {item.codigo_qr_unico}
+                          </span>
+                          {copiedCode === item.codigo_qr_unico ? (
+                            <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-slate-400 group-hover/piece:text-blue-600 opacity-0 group-hover/piece:opacity-100 transition-opacity flex-shrink-0" />
+                          )}
+                        </button>
                         {rutas.length > 1 && (item.job_ruta_id || item.proceso_ruta_id) && (
                           <span
                             className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[80px]"
@@ -1566,11 +1603,36 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-bold text-slate-500 uppercase">{t('tracker.individualTrackingTitle')}</span>
-                <span className="text-sm font-extrabold font-mono text-indigo-900">
-                  {activePieceData.codigo_qr_unico}
-                </span>
-                <span className="text-xs text-slate-400">
-                  • Job: <strong className="text-slate-700 font-mono">{selectedJobCode}</strong>
+                <button
+                  type="button"
+                  onClick={(e) => handleCopyCode(activePieceData.codigo_qr_unico, e)}
+                  className="group/bannerpiece inline-flex items-center space-x-1 hover:bg-indigo-100/70 px-1 py-0.5 rounded transition-all select-all text-left"
+                  title="Haz clic para copiar el código de la pieza"
+                >
+                  <span className="text-sm font-extrabold font-mono text-indigo-900">
+                    {activePieceData.codigo_qr_unico}
+                  </span>
+                  {copiedCode === activePieceData.codigo_qr_unico ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  ) : (
+                    <Copy className="w-3 h-3 text-indigo-400 group-hover/bannerpiece:text-indigo-700 opacity-0 group-hover/bannerpiece:opacity-100 transition-opacity flex-shrink-0" />
+                  )}
+                </button>
+                <span className="text-xs text-slate-400 flex items-center space-x-1">
+                  <span>• Job:</span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyCode(selectedJobCode, e)}
+                    className="group/bannerjob inline-flex items-center space-x-1 hover:bg-indigo-100/70 px-1 py-0.5 rounded transition-all select-all"
+                    title="Haz clic para copiar el código del Job"
+                  >
+                    <strong className="text-slate-700 font-mono">{selectedJobCode}</strong>
+                    {copiedCode === selectedJobCode ? (
+                      <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-slate-400 group-hover/bannerjob:text-slate-700 opacity-0 group-hover/bannerjob:opacity-100 transition-opacity flex-shrink-0" />
+                    )}
+                  </button>
                 </span>
                 {activePieceData.linea_nombre && (
                   <span className="text-xs text-slate-500 font-semibold">
@@ -2116,7 +2178,19 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   filteredJobs.map((j) => (
                     <tr key={j.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-4">
-                        <span className="font-mono font-bold text-blue-700 text-sm">{j.job_code}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyCode(j.job_code, e)}
+                          className="group/jobtable inline-flex items-center space-x-1.5 hover:bg-blue-50 px-1 py-0.5 rounded transition-all select-all text-left"
+                          title="Haz clic para copiar el código del Job"
+                        >
+                          <span className="font-mono font-bold text-blue-700 text-sm whitespace-nowrap">{j.job_code}</span>
+                          {copiedCode === j.job_code ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-slate-400 group-hover/jobtable:text-blue-600 opacity-0 group-hover/jobtable:opacity-100 transition-opacity flex-shrink-0" />
+                          )}
+                        </button>
                         {j.creado_por_nombre && (
                           <span className="block text-[10px] text-slate-400 mt-0.5">{t('tracker.createdBy', { name: j.creado_por_nombre })}</span>
                         )}
