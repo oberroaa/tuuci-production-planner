@@ -1341,12 +1341,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
     .sort((a, b) => a.orden - b.orden);
 
   return (
-    <div className="p-6 max-w-[1500px] mx-auto space-y-6">
+    <div className="p-3 sm:p-6 max-w-[1500px] mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-slate-200 gap-2">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
-            <Settings className="w-5 h-5 text-blue-600" />
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center space-x-2">
+            <Settings className="w-5 h-5 text-blue-600 flex-shrink-0" />
             <span>{t('admin.title')}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -1355,84 +1355,84 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         </div>
       </div>
 
-      {/* Sub-navigation tabs */}
-      <div className="flex space-x-2 border-b border-slate-200 pb-2">
+      {/* Sub-navigation tabs (Responsive Scrollable Bar) */}
+      <div className="flex items-center space-x-1.5 sm:space-x-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar scroll-smooth">
         <button
           onClick={() => setActiveSubTab('ROUTES')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'ROUTES' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Layers className="w-4 h-4" />
+          <Layers className="w-4 h-4 flex-shrink-0" />
           <span>{t('admin.tabs.routes')}</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('LINES')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'LINES' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Sliders className="w-4 h-4" />
+          <Sliders className="w-4 h-4 flex-shrink-0" />
           <span>{t('admin.tabs.lines')}</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('PROCESS_TYPES')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'PROCESS_TYPES' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-4 h-4 flex-shrink-0" />
           <span>{t('admin.tabs.processTypes')}</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('STATES')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'STATES' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Shield className="w-4 h-4" />
+          <Shield className="w-4 h-4 flex-shrink-0" />
           <span>{t('admin.tabs.states')}</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('SCANNERS')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'SCANNERS' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Radio className="w-4 h-4" />
+          <Radio className="w-4 h-4 flex-shrink-0" />
           <span>{t('admin.tabs.scanners')}</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('USERS')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'USERS' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Users className="w-4 h-4" />
+          <Users className="w-4 h-4 flex-shrink-0" />
           <span>{t('admin.tabs.users')}</span>
         </button>
 
         <button
           onClick={() => setActiveSubTab('SYSTEM_CONFIG')}
-          className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+          className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
             activeSubTab === 'SYSTEM_CONFIG' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Timer className="w-4 h-4 text-amber-500" />
+          <Timer className="w-4 h-4 text-amber-500 flex-shrink-0" />
           <span>{t('admin.tabs.systemConfig')}</span>
         </button>
       </div>
 
       {/* 1. SECTION: PROCESS ROUTES BY LINE */}
       {activeSubTab === 'ROUTES' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Left: Line Process Sequence */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="space-y-0.5">
                 <div className="flex items-center space-x-2">
@@ -1457,7 +1457,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               {/* Line & Route Selectors */}
               <div className="flex flex-wrap items-center gap-2">
                 {/* Line Selector */}
-                <div className="flex items-center space-x-1.5">
+                <div className="flex items-center space-x-1.5 flex-wrap sm:flex-nowrap">
                   <span className="text-xs font-semibold text-slate-500">{t('admin.routesSec.lineLabel')}</span>
                   <select
                     value={selectedLineId || ''}
@@ -1467,7 +1467,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       handleCancelEditRuta();
                       setIsCreatingRuta(false);
                     }}
-                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[160px] sm:max-w-none"
                   >
                     {catalogs.lineas.map((l) => (
                       <option key={l.id} value={l.id}>
@@ -1815,7 +1815,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           </div>
 
           {/* Right: Add or Edit Step to Route Form */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             {editingProcessId ? (
               <>
                 <div className="flex items-center justify-between pb-2 border-b border-amber-200">
@@ -2044,8 +2044,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
       {/* 2. SECTION: PRODUCT LINES */}
       {activeSubTab === 'LINES' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
               {t('admin.linesSec.title')}
             </h3>
@@ -2083,9 +2083,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                       </div>
                     ) : (
                       <>
-                        <div className="space-y-0.5">
-                          <div className="text-sm font-bold text-slate-800">{line.nombre}</div>
-                          <div className="text-[10px] text-slate-500 mono">ID: {line.id}</div>
+                        <div className="flex items-center space-x-2">
+                          <Sliders className="w-4 h-4 text-slate-400" />
+                          <span className="text-xs font-bold text-slate-800">{line.nombre}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <button
@@ -2093,15 +2093,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               setEditingLineId(line.id);
                               setEditingLineName(line.nombre);
                             }}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title={t('admin.linesSec.editTooltip')}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                            title={t('admin.linesSec.editLineTooltip')}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteLine(line.id, line.nombre)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title={t('admin.linesSec.deleteTooltip')}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title={t('admin.linesSec.deleteLineTooltip')}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2114,7 +2114,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
               <Plus className="w-4 h-4 text-blue-600" />
               <span>{t('admin.linesSec.createTitle')}</span>
@@ -2145,8 +2145,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
       {/* 3. SECTION: GLOBAL MASTER TIPO_PROCESO */}
       {activeSubTab === 'PROCESS_TYPES' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                 {t('admin.processTypesSec.title')}
@@ -2155,7 +2155,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 {t('admin.processTypesSec.description')}
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {[...catalogs.tipoProcesos].sort((a, b) => Number(a.id) - Number(b.id)).map((tp) => {
                 const isEditing = editingTipoId === tp.id;
                 return (
@@ -2222,7 +2222,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
               <Plus className="w-4 h-4 text-blue-600" />
               <span>{t('admin.processTypesSec.createTitle')}</span>
@@ -2255,9 +2255,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
       {activeSubTab === 'STATES' && (() => {
         const sortedStates = [...catalogs.estados].sort((a, b) => a.orden - b.orden);
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                     {t('admin.statesSec.title')}
@@ -2266,7 +2266,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     {t('admin.statesSec.description')}
                   </p>
                 </div>
-                <div className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                <div className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full self-start sm:self-auto">
                   {t('admin.statesSec.statesCount', { count: sortedStates.length })}
                 </div>
               </div>
@@ -2446,7 +2446,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
               {editingStateId ? (
                 <>
                   <div className="flex items-center justify-between pb-2 border-b border-amber-200">
@@ -2618,9 +2618,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
       {/* 5. SECTION: PHYSICAL SCANNERS */}
       {activeSubTab === 'SCANNERS' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Guía Explicativa de Arquitectura de Hardware */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-5 shadow-sm space-y-3">
             <div className="flex items-center space-x-2 text-blue-900 font-bold text-sm">
               <Radio className="w-4 h-4 text-blue-600" />
               <span>{t('admin.scannersSec.guideTitle')}</span>
@@ -2633,7 +2633,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <div className="font-bold text-blue-900 flex items-center space-x-1 font-sans">
                   <span>{t('admin.scannersSec.guideEndpointTitle')}</span>
                 </div>
-                <div className="text-blue-950 bg-blue-100/70 px-2.5 py-1.5 rounded font-bold">
+                <div className="text-blue-950 bg-blue-100/70 px-2.5 py-1.5 rounded font-bold break-all text-[11px] sm:text-xs">
                   POST http://&lt;IP_SERVIDOR&gt;:3001/api/scan/<span className="text-indigo-600">{'{CODIGO_ESTACION}'}</span>
                 </div>
                 <div className="text-[11px] text-slate-500 font-sans">
@@ -2644,7 +2644,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                 <div className="font-bold text-emerald-900 flex items-center space-x-1 font-sans">
                   <span>{t('admin.scannersSec.guidePayloadTitle')}</span>
                 </div>
-                <div className="text-emerald-950 bg-emerald-100/70 px-2.5 py-1.5 rounded font-bold truncate">
+                <div className="text-emerald-950 bg-emerald-100/70 px-2.5 py-1.5 rounded font-bold truncate text-[11px] sm:text-xs">
                   {'{ "codigoQRUnico": "JOB0279087-01" }'}
                 </div>
                 <div className="text-[11px] text-slate-500 font-sans">
@@ -2654,8 +2654,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
+            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                   {t('admin.scannersSec.listTitle')}
@@ -2861,7 +2861,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
                 <Plus className="w-4 h-4 text-blue-600" />
                 <span>{t('admin.scannersSec.registerTitle')}</span>
@@ -2945,8 +2945,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
       {/* 6. SECTION: USERS & ROLES */}
       {activeSubTab === 'USERS' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                 {t('admin.usersSec.title')}
@@ -3019,7 +3019,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center space-x-1.5">
               {editingUserId ? <Pencil className="w-4 h-4 text-blue-600" /> : <Plus className="w-4 h-4 text-blue-600" />}
               <span>{editingUserId ? t('admin.usersSec.editTitle') : t('admin.usersSec.registerTitle')}</span>
@@ -3121,8 +3121,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
       {/* 6. SECTION: SYSTEM CONFIGURATION (COOLDOWN & DEBOUNCE) */}
       {activeSubTab === 'SYSTEM_CONFIG' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-6">
             <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
               <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
                 <Timer className="w-5 h-5" />
@@ -3382,8 +3382,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           </div>
 
           {/* Info Card / Guidelines & Danger Zone */}
-          <div className="space-y-6">
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl border border-slate-700 shadow-lg space-y-4">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg space-y-4">
               <div className="flex items-center space-x-2 text-emerald-400">
                 <Shield className="w-5 h-5" />
                 <h4 className="text-xs font-bold uppercase tracking-wider">{t('admin.systemSec.protectionTitle')}</h4>
@@ -3402,7 +3402,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
             </div>
 
             {/* Danger Zone: Reset Tracker & Dashboard */}
-            <div className="bg-rose-50/70 border-2 border-rose-200 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="bg-rose-50/70 border-2 border-rose-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
               <div className="flex items-center space-x-2.5 text-rose-700">
                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                 <div>
