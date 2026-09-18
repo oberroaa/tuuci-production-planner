@@ -10,7 +10,37 @@ import { SettingsView } from './components/settings/SettingsView';
 import { Login } from './components/auth/Login';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<string>('DASHBOARD');
+  // Restore last active tab or default to role's primary landing view
+  const [activeTab, setActiveTabState] = useState<string>(() => {
+    try {
+      const savedUser = localStorage.getItem('tuuci_user');
+      const u = savedUser ? JSON.parse(savedUser) : null;
+      const savedTab = localStorage.getItem('tuuci_active_tab');
+
+      // Valid tab per role check
+      if (u) {
+        if (u.rol === 'OPERADOR') return 'SCANNER';
+        if (u.rol === 'TERMINAL') {
+          return (savedTab === 'SCANNER' || savedTab === 'CUTTING' || savedTab === 'SETTINGS') ? savedTab : 'CUTTING';
+        }
+        if (u.rol === 'SUPERVISOR') {
+          return (savedTab && savedTab !== 'ADMIN') ? savedTab : 'TRACKER';
+        }
+      }
+      if (savedTab) return savedTab;
+      return 'DASHBOARD';
+    } catch {
+      return 'DASHBOARD';
+    }
+  });
+
+  const setActiveTab = useCallback((tab: string) => {
+    setActiveTabState(tab);
+    try {
+      localStorage.setItem('tuuci_active_tab', tab);
+    } catch { /* ignore */ }
+  }, []);
+
   const [activeLine, setActiveLine] = useState<string>('TODAS');
   const [lines, setLines] = useState<Array<{ id: number; nombre: string }>>([]);
   const [summaryData, setSummaryData] = useState<any>(null);
@@ -26,12 +56,29 @@ export function App() {
     }
   });
 
-  // Guard activeTab against unauthorized roles (e.g. non-admin accessing ADMIN panel)
+  // Guard activeTab against unauthorized roles
   useEffect(() => {
-    if (currentUser && currentUser.rol !== 'ADMIN' && activeTab === 'ADMIN') {
-      setActiveTab('DASHBOARD');
+    if (!currentUser) return;
+    const rol = currentUser.rol;
+
+    if (rol === 'OPERADOR') {
+      if (activeTab !== 'SCANNER' && activeTab !== 'SETTINGS') {
+        setActiveTab('SCANNER');
+      }
+    } else if (rol === 'TERMINAL') {
+      if (activeTab !== 'CUTTING' && activeTab !== 'SCANNER' && activeTab !== 'SETTINGS') {
+        setActiveTab('CUTTING');
+      }
+    } else if (rol === 'SUPERVISOR') {
+      if (activeTab === 'ADMIN') {
+        setActiveTab('TRACKER');
+      }
+    } else if (rol !== 'ADMIN') {
+      if (activeTab === 'ADMIN') {
+        setActiveTab('DASHBOARD');
+      }
     }
-  }, [currentUser, activeTab]);
+  }, [currentUser, activeTab, setActiveTab]);
 
   // DEV_AUTH_BYPASS: If enabled in .env (VITE_DEV_AUTH_BYPASS=1 or DEV_AUTH_BYPASS=1), automatically sign in default admin user
   const metaEnv = (import.meta as any).env || {};
@@ -119,6 +166,17 @@ export function App() {
       localStorage.setItem('tuuci_user', JSON.stringify(user));
       sessionStorage.removeItem('tuuci_logged_out');
     } catch { /* ignore */ }
+
+    // Instant landing routing per user role
+    if (user.rol === 'OPERADOR') {
+      setActiveTab('SCANNER');
+    } else if (user.rol === 'TERMINAL') {
+      setActiveTab('CUTTING');
+    } else if (user.rol === 'SUPERVISOR') {
+      setActiveTab('TRACKER');
+    } else if (user.rol === 'ADMIN') {
+      setActiveTab('DASHBOARD');
+    }
 
     if (user.linea_nombre) {
       setActiveLine(user.linea_nombre);
@@ -259,9 +317,9 @@ export function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  // If user is OPERADOR or SUPERVISOR and does NOT have a line assigned yet, show required line selection modal
+  // If user is OPERADOR, TERMINAL or SUPERVISOR and does NOT have a line assigned yet, show required line selection modal
   const needsLineSelection =
-    (currentUser.rol === 'OPERADOR' || currentUser.rol === 'SUPERVISOR') &&
+    (currentUser.rol === 'OPERADOR' || currentUser.rol === 'TERMINAL' || currentUser.rol === 'SUPERVISOR') &&
     !currentUser.linea_id &&
     !currentUser.linea_nombre;
 

@@ -139,7 +139,8 @@ export function verifyUserToken(token) {
   if (signature !== expectedSig) return null;
   try {
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    if (Date.now() - payload.timestamp > 7 * 24 * 60 * 60 * 1000) return null;
+    // 365 days session lifespan for industrial floor devices (prevents unexpected logouts during active factory shifts)
+    if (Date.now() - payload.timestamp > 365 * 24 * 60 * 60 * 1000) return null;
     return payload;
   } catch {
     return null;

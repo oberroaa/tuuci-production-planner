@@ -23,8 +23,8 @@
     "tabs": {
       "tracker": "TRACKER",
       "dashboard": "DASHBOARD",
-      "cutting": "CUTTING (PC)",
-      "scanner": "SCANNER (OLED)",
+      "cutting": "CUTTING",
+      "scanner": "SCANNER",
       "settings": "SETTINGS",
       "admin": "ADMIN"
     },
@@ -518,8 +518,9 @@
       "msSsoId": "Microsoft SSO ID (Opcional)",
       "ssoPlaceholder": "ej. ms-op-002",
       "userRole": "Rol del Usuario",
-      "roleOperadorDesc": "OPERADOR (Escanea y ve solo estados visibles)",
-      "roleSupervisorDesc": "SUPERVISOR (Ve todos los estados de su línea)",
+      "roleOperadorDesc": "OPERADOR (Móvil de piso: escaneo exclusivo de piezas)",
+      "roleTerminalDesc": "TERMINAL (Puesto fijo: carga de PDF, corte y escáner)",
+      "roleSupervisorDesc": "SUPERVISOR (Seguimiento, Tracker y Dashboard de línea)",
       "roleAdminDesc": "ADMIN (Acceso total sin filtro y gestión)",
       "assignedLine": "Línea Asignada",
       "selectLinePlaceholder": "Selecciona una línea de producto...",

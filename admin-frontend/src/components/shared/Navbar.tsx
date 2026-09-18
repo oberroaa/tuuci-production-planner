@@ -38,23 +38,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="bg-[#121417] text-white border-b border-[#23272d] px-2.5 sm:px-6 py-2.5">
-      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand & Line Selector */}
-        <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+        <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
           <div className="flex items-center space-x-1.5 flex-shrink-0">
             {/* TUUCI Stylized SVG Brand */}
-            <svg className="h-4 sm:h-6 w-auto text-white flex-shrink-0" viewBox="0 0 120 28" fill="currentColor">
+            <svg className="h-4 sm:h-5 md:h-6 w-auto text-white flex-shrink-0" viewBox="0 0 120 28" fill="currentColor">
               <path d="M10 2 Q25 14 45 2 Q30 18 10 2 Z" opacity="0.9" />
               <text x="50" y="20" fontFamily="sans-serif" fontWeight="bold" fontSize="18" fill="white" letterSpacing="3">TUUCI</text>
             </svg>
-            <span className="hidden md:inline text-xs font-normal text-slate-400 pl-1">{t('navbar.title')}</span>
+            <span className="hidden 2xl:inline text-xs font-normal text-slate-400 pl-1">{t('navbar.title')}</span>
           </div>
 
           {/* Line Switcher */}
-          <div className="relative min-w-0 flex-shrink">
+          <div className="relative flex-shrink-0">
             {(() => {
               const hasAssignedLine = Boolean(currentUser?.linea_id || currentUser?.linea_nombre);
-              const isNonAdmin = currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'OPERADOR';
+              const isNonAdmin = currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'OPERADOR' || currentUser?.rol === 'TERMINAL';
               const isFixedLine = isNonAdmin && hasAssignedLine;
               const needsToPickLine = isNonAdmin && !hasAssignedLine;
 
@@ -68,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                   disabled={isFixedLine}
                   aria-label="Select production line"
-                  className={`appearance-none text-white text-[11px] sm:text-xs font-medium pl-2 sm:pl-3 pr-5 sm:pr-8 py-1 sm:py-1.5 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed max-w-[120px] xs:max-w-[150px] sm:max-w-[200px] truncate ${
+                  className={`appearance-none text-white text-[11px] sm:text-xs font-medium pl-2 sm:pl-2.5 pr-6 sm:pr-7 py-1 sm:py-1.5 rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed max-w-[130px] sm:max-w-[170px] lg:max-w-[190px] truncate ${
                     needsToPickLine
                       ? 'bg-amber-950/80 border-amber-500 text-amber-200 animate-pulse'
                       : 'bg-[#1d2127] border-[#2f353e] hover:border-slate-500'
@@ -96,68 +96,85 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </select>
               );
             })()}
-            <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
+        </div>
 
-          {/* Desktop Navigation Tabs */}
-          <nav className="hidden xl:flex items-center space-x-1 pl-2">
+        {/* Center / Desktop Navigation Tabs */}
+        <nav className="hidden xl:flex items-center space-x-1 flex-shrink-0">
+          {/* TRACKER: ADMIN, SUPERVISOR */}
+          {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR') && (
             <button
               onClick={() => setActiveTab('TRACKER')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
                 activeTab === 'TRACKER' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
               }`}
             >
               {t('navbar.tabs.tracker')}
             </button>
+          )}
+
+          {/* DASHBOARD: ADMIN, SUPERVISOR */}
+          {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR') && (
             <button
               onClick={() => setActiveTab('DASHBOARD')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
                 activeTab === 'DASHBOARD' ? 'bg-[#1a73e8] text-white shadow-sm' : 'text-slate-300 hover:text-white'
               }`}
             >
               {t('navbar.tabs.dashboard')}
             </button>
+          )}
+
+          {/* CUTTING: ADMIN, SUPERVISOR, TERMINAL */}
+          {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'TERMINAL') && (
             <button
               onClick={() => setActiveTab('CUTTING')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
                 activeTab === 'CUTTING' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               {t('navbar.tabs.cutting')}
             </button>
+          )}
+
+          {/* SCANNER: Available to all roles (OPERADOR, TERMINAL, SUPERVISOR, ADMIN) */}
+          <button
+            onClick={() => setActiveTab('SCANNER')}
+            className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
+              activeTab === 'SCANNER' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {t('navbar.tabs.scanner')}
+          </button>
+
+          {/* SETTINGS: Available to all roles */}
+          <button
+            onClick={() => setActiveTab('SETTINGS')}
+            className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
+              activeTab === 'SETTINGS' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {t('navbar.tabs.settings')}
+          </button>
+
+          {/* ADMIN: ADMIN only */}
+          {currentUser?.rol === 'ADMIN' && (
             <button
-              onClick={() => setActiveTab('SCANNER')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
-                activeTab === 'SCANNER' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveTab('ADMIN')}
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
+                activeTab === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              {t('navbar.tabs.scanner')}
+              {t('navbar.tabs.admin')}
             </button>
-            <button
-              onClick={() => setActiveTab('SETTINGS')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
-                activeTab === 'SETTINGS' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {t('navbar.tabs.settings')}
-            </button>
-            {currentUser?.rol === 'ADMIN' && (
-              <button
-                onClick={() => setActiveTab('ADMIN')}
-                className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
-                  activeTab === 'ADMIN' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {t('navbar.tabs.admin')}
-              </button>
-            )}
-          </nav>
-        </div>
+          )}
+        </nav>
 
         {/* Right User Bar */}
         <div className="flex items-center space-x-1.5 sm:space-x-3 text-xs flex-shrink-0">
           {/* Real-time Clock (Desktop/Tablet) */}
-          <div className="hidden md:flex items-center space-x-2 text-slate-300 bg-[#1b1f25] px-2.5 py-1 rounded border border-[#2b3038] mono text-[11px]">
+          <div className="hidden 2xl:flex items-center space-x-2 text-slate-300 bg-[#1b1f25] px-2.5 py-1 rounded border border-[#2b3038] mono text-[11px] whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
             <span>{clock || '07:52:55 PM'}</span>
           </div>
@@ -169,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               const next = current.startsWith('es') ? 'en' : 'es';
               i18n.changeLanguage(next);
             }}
-            className="flex items-center space-x-1 px-1.5 py-1 rounded bg-[#1d2127] border border-[#2f353e] hover:border-slate-400 text-slate-300 hover:text-white transition-all text-xs font-bold" 
+            className="flex items-center space-x-1 px-1.5 py-1 rounded bg-[#1d2127] border border-[#2f353e] hover:border-slate-400 text-slate-300 hover:text-white transition-all text-xs font-bold flex-shrink-0" 
             title={t('navbar.langTitle')}
           >
             <Globe className="w-3 h-3 text-blue-400" />
@@ -181,10 +198,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* User profile (Desktop/Tablet only; on mobile it is in the hamburger menu drawer) */}
           <button
             onClick={() => setActiveTab('SETTINGS')}
-            className="hidden sm:flex items-center space-x-2 hover:opacity-80 transition-opacity text-left"
+            className="hidden sm:flex items-center space-x-2 hover:opacity-80 transition-opacity text-left flex-shrink-0"
             title={t('navbar.profileTitle')}
           >
-            <div className="text-right leading-tight max-w-[140px] truncate">
+            <div className="text-right leading-tight max-w-[120px] md:max-w-[140px] truncate">
               <div className="font-semibold text-slate-200 truncate">{currentUser?.nombre || 'Otoniel'}</div>
               <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">
                 {currentUser?.rol || 'ADMIN'}
@@ -195,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Sign Out / Logout */}
           <button
             onClick={onLogout || (() => setActiveTab('SETTINGS'))}
-            className="hidden sm:flex items-center space-x-1 text-slate-400 hover:text-red-400 transition-colors p-1 sm:px-2 sm:py-1"
+            className="hidden sm:flex items-center space-x-1 text-slate-400 hover:text-red-400 transition-colors p-1 sm:px-2 sm:py-1 flex-shrink-0"
             title={t('navbar.logoutTitle')}
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -205,7 +222,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Mobile Hamburger Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="xl:hidden p-1.5 rounded-lg bg-[#1d2127] border border-[#2f353e] text-slate-300 hover:text-white transition-colors flex items-center justify-center"
+            className="xl:hidden p-1.5 rounded-lg bg-[#1d2127] border border-[#2f353e] text-slate-300 hover:text-white transition-colors flex items-center justify-center flex-shrink-0"
             aria-label="Abrir menú de navegación"
           >
             {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -217,42 +234,55 @@ export const Navbar: React.FC<NavbarProps> = ({
       {mobileMenuOpen && (
         <div className="xl:hidden mt-3 pt-3 border-t border-[#23272d] space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="grid grid-cols-2 gap-1.5 pb-2 border-b border-[#23272d]">
-            <button
-              onClick={() => {
-                setActiveTab('TRACKER');
-                setMobileMenuOpen(false);
-              }}
-              className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
-                activeTab === 'TRACKER' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
-              }`}
-            >
-              <span>{t('navbar.tabs.tracker')}</span>
-              {activeTab === 'TRACKER' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('DASHBOARD');
-                setMobileMenuOpen(false);
-              }}
-              className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
-                activeTab === 'DASHBOARD' ? 'bg-[#1a73e8] text-white shadow-sm' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
-              }`}
-            >
-              <span>{t('navbar.tabs.dashboard')}</span>
-              {activeTab === 'DASHBOARD' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('CUTTING');
-                setMobileMenuOpen(false);
-              }}
-              className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
-                activeTab === 'CUTTING' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
-              }`}
-            >
-              <span>{t('navbar.tabs.cutting')}</span>
-              {activeTab === 'CUTTING' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-            </button>
+            {/* TRACKER: ADMIN, SUPERVISOR */}
+            {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR') && (
+              <button
+                onClick={() => {
+                  setActiveTab('TRACKER');
+                  setMobileMenuOpen(false);
+                }}
+                className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
+                  activeTab === 'TRACKER' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
+                }`}
+              >
+                <span>{t('navbar.tabs.tracker')}</span>
+                {activeTab === 'TRACKER' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+              </button>
+            )}
+
+            {/* DASHBOARD: ADMIN, SUPERVISOR */}
+            {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR') && (
+              <button
+                onClick={() => {
+                  setActiveTab('DASHBOARD');
+                  setMobileMenuOpen(false);
+                }}
+                className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
+                  activeTab === 'DASHBOARD' ? 'bg-[#1a73e8] text-white shadow-sm' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
+                }`}
+              >
+                <span>{t('navbar.tabs.dashboard')}</span>
+                {activeTab === 'DASHBOARD' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+              </button>
+            )}
+
+            {/* CUTTING: ADMIN, SUPERVISOR, TERMINAL */}
+            {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'TERMINAL') && (
+              <button
+                onClick={() => {
+                  setActiveTab('CUTTING');
+                  setMobileMenuOpen(false);
+                }}
+                className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
+                  activeTab === 'CUTTING' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
+                }`}
+              >
+                <span>{t('navbar.tabs.cutting')}</span>
+                {activeTab === 'CUTTING' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+              </button>
+            )}
+
+            {/* SCANNER: ALL ROLES */}
             <button
               onClick={() => {
                 setActiveTab('SCANNER');
@@ -265,6 +295,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>{t('navbar.tabs.scanner')}</span>
               {activeTab === 'SCANNER' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
             </button>
+
+            {/* SETTINGS: ALL ROLES */}
             <button
               onClick={() => {
                 setActiveTab('SETTINGS');
@@ -277,6 +309,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>{t('navbar.tabs.settings')}</span>
               {activeTab === 'SETTINGS' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
             </button>
+
+            {/* ADMIN: ADMIN ONLY */}
             {currentUser?.rol === 'ADMIN' && (
               <button
                 onClick={() => {

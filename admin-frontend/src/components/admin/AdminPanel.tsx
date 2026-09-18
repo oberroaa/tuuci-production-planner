@@ -299,7 +299,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserMsId, setNewUserMsId] = useState('');
-  const [newUserRol, setNewUserRol] = useState<'ADMIN' | 'SUPERVISOR' | 'OPERADOR'>('OPERADOR');
+  const [newUserRol, setNewUserRol] = useState<'ADMIN' | 'SUPERVISOR' | 'OPERADOR' | 'TERMINAL'>('OPERADOR');
   const [newUserLineaId, setNewUserLineaId] = useState<number | ''>('');
 
   // Editing state variables
@@ -336,7 +336,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [editingUserName, setEditingUserName] = useState<string>('');
   const [editingUserEmail, setEditingUserEmail] = useState<string>('');
-  const [editingUserRol, setEditingUserRol] = useState<'ADMIN' | 'SUPERVISOR' | 'OPERADOR'>('OPERADOR');
+  const [editingUserRol, setEditingUserRol] = useState<'ADMIN' | 'SUPERVISOR' | 'OPERADOR' | 'TERMINAL'>('OPERADOR');
   const [editingUserLineaId, setEditingUserLineaId] = useState<number | ''>('');
 
   // System Configuration state (cooldown, refresh, database pool)
@@ -2975,6 +2975,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                               ? 'bg-purple-100 text-purple-800'
                               : u.rol === 'SUPERVISOR'
                               ? 'bg-blue-100 text-blue-800'
+                              : u.rol === 'TERMINAL'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
                               : 'bg-emerald-100 text-emerald-800'
                           }`}
                         >
@@ -3065,6 +3067,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="OPERADOR">{t('admin.usersSec.roleOperadorDesc')}</option>
+                  <option value="TERMINAL">{t('admin.usersSec.roleTerminalDesc')}</option>
                   <option value="SUPERVISOR">{t('admin.usersSec.roleSupervisorDesc')}</option>
                   <option value="ADMIN">{t('admin.usersSec.roleAdminDesc')}</option>
                 </select>

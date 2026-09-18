@@ -146,7 +146,7 @@ export async function initDb() {
         microsoft_id TEXT UNIQUE NOT NULL,
         nombre TEXT NOT NULL,
         email TEXT NOT NULL,
-        rol TEXT NOT NULL CHECK(rol IN ('ADMIN', 'SUPERVISOR', 'OPERADOR')),
+        rol TEXT NOT NULL CHECK(rol IN ('ADMIN', 'SUPERVISOR', 'OPERADOR', 'TERMINAL')),
         linea_id INTEGER REFERENCES lineas(id) ON DELETE SET NULL
       );
 
@@ -254,6 +254,35 @@ export async function initDb() {
     await client.query('COMMIT');
     await seedDefaultCatalogs(client);
     
+    // Migration: ensure usuarios table CHECK constraint includes 'TERMINAL' role
+    try {
+      await client.query(`
+        DO $$
+        BEGIN
+          -- Find and drop existing check constraint on rol if it exists
+          IF EXISTS (
+            SELECT 1 FROM information_schema.constraint_column_usage 
+            WHERE table_name = 'usuarios' AND column_name = 'rol'
+          ) THEN
+            EXECUTE (
+              SELECT 'ALTER TABLE usuarios DROP CONSTRAINT ' || quote_ident(tc.constraint_name)
+              FROM information_schema.table_constraints tc
+              JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+              WHERE tc.table_name = 'usuarios' AND ccu.column_name = 'rol' AND tc.constraint_type = 'CHECK'
+              LIMIT 1
+            );
+          END IF;
+          -- Re-add constraint with TERMINAL included
+          ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN ('ADMIN', 'SUPERVISOR', 'OPERADOR', 'TERMINAL'));
+        EXCEPTION
+          WHEN OTHERS THEN
+            NULL; -- Ignore if constraint is already matching or locked
+        END $$;
+      `);
+    } catch (migErr) {
+      console.warn('Rol migration note:', migErr.message);
+    }
+
     // Backfill any existing scanner rows that lack an api_key
     // Run this outside seedDefaultCatalogs so it executes even if the db is already seeded
     const nullKeys = await client.query('SELECT id, codigo_estacion FROM escaneres WHERE api_key IS NULL');

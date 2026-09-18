@@ -20,14 +20,56 @@ interface ScannerDevice {
   tipo_proceso_nombre?: string;
 }
 
+// Web Audio API beep synthesizer for industrial floor devices
+function playScannerTone(type: 'green' | 'red') {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === 'green') {
+      // Crisp high-pitch double beep for successful scan (1800Hz)
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1760, ctx.currentTime);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    } else {
+      // Low dual buzz for rejected/error scan (350Hz)
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+    }
+  } catch {
+    // Audio might be restricted until user interacts with the page
+  }
+}
+
 export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSuccess, currentUser, activeLine }) => {
   const { t } = useTranslation();
   const [pieceQr, setPieceQr] = useState<string>('');
   const [devices, setDevices] = useState<ScannerDevice[]>([]);
-  const [selectedStationCode, setSelectedStationCode] = useState<string>('AUTO');
+  
+  // Default to AUTO or restore operator preference from localStorage
+  const [selectedStationCode, setSelectedStationCode] = useState<string>(() => {
+    try {
+      return localStorage.getItem('tuuci_scanner_station') || 'AUTO';
+    } catch {
+      return 'AUTO';
+    }
+  });
+
   const [oledDisplay, setOledDisplay] = useState<{ line1: string; line2: string; tone: 'green' | 'red' | 'idle' }>({
     line1: 'READY TO SCAN',
-    line2: 'SELECT DEVICE',
+    line2: 'AUTO DETECTION ACTIVE',
     tone: 'idle'
   });
   const [history, setHistory] = useState<any[]>([]);
@@ -36,9 +78,23 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
   const [configCooldownSecs, setConfigCooldownSecs] = useState<number>(3);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus barcode input on load so physical barcode scanner gun is ready instantly
+  // Indestructible auto-focus: Focus immediately, on tab switch, and on any click anywhere in the screen
   useEffect(() => {
-    inputRef.current?.focus();
+    const keepFocus = () => {
+      // Only refocus if user is not currently selecting a dropdown or typing in another form
+      if (document.activeElement?.tagName !== 'SELECT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        inputRef.current?.focus();
+      }
+    };
+
+    keepFocus();
+    window.addEventListener('click', keepFocus);
+    window.addEventListener('touchstart', keepFocus);
+
+    return () => {
+      window.removeEventListener('click', keepFocus);
+      window.removeEventListener('touchstart', keepFocus);
+    };
   }, []);
 
   const fetchScannerDevices = useCallback(() => {
@@ -52,9 +108,6 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         if (data?.escaneres) {
           let active = data.escaneres.filter((s: ScannerDevice) => s.activo === 1);
           
-          // Line-based filtering:
-          // If a specific line is selected (or assigned to the user), only show scanners for that line or global ones (without line).
-          // Scanners assigned to other lines are excluded.
           const effectiveLine = activeLine && activeLine !== 'TODAS' && activeLine !== 'ALL'
             ? activeLine
             : (currentUser?.rol !== 'ADMIN' ? (currentUser?.linea_nombre || null) : null);
@@ -68,20 +121,19 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
 
           setDevices(active);
           setSelectedStationCode((prev) => {
-            // If previous selection is still active, keep it
-            if (prev !== 'AUTO' && active.some((d: ScannerDevice) => d.codigo_estacion === prev)) {
-              return prev;
-            }
-            if (active.length > 0) {
-              const firstDev = active[0];
-              const tipoDesc = firstDev.tipo_nombre || firstDev.tipo_proceso_nombre || '';
+            // Keep current choice if it is AUTO or still exists in active devices
+            if (prev === 'AUTO') {
               setOledDisplay({
                 line1: t('scanner.readyToScan'),
-                line2: `${t('scanner.stationLabel', { station: firstDev.codigo_estacion })}${tipoDesc ? ` [${tipoDesc}]` : ''}`,
+                line2: t('scanner.autoDetectionActive'),
                 tone: 'idle'
               });
-              return firstDev.codigo_estacion;
+              return 'AUTO';
             }
+            if (active.some((d: ScannerDevice) => d.codigo_estacion === prev)) {
+              return prev;
+            }
+            // Otherwise default to AUTO
             setOledDisplay({
               line1: t('scanner.readyToScan'),
               line2: t('scanner.autoDetectionActive'),
@@ -139,6 +191,10 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
 
   const handleStationChange = (code: string) => {
     setSelectedStationCode(code);
+    try {
+      localStorage.setItem('tuuci_scanner_station', code);
+    } catch { /* ignore */ }
+
     const found = devices.find((d) => d.codigo_estacion === code);
     if (found) {
       const tipoDesc = found.tipo_nombre || found.tipo_proceso_nombre || '';
@@ -196,10 +252,11 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
       const data = await res.json();
 
       if (data.success) {
+        playScannerTone('green');
         setCooldown(configCooldownSecs);
         setOledDisplay({
-          line1: data.oled_message,
-          line2: `${data.pieceCode} [${data.station || selectedStationCode}]`,
+          line1: data.oled_message || 'OK',
+          line2: `${data.pieceCode || code} [${data.station || selectedStationCode}]`,
           tone: 'green'
         });
         setHistory((prev) => [
@@ -215,6 +272,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         ]);
         onScanSuccess();
       } else {
+        playScannerTone('red');
         if (data.cooldown) {
           setCooldown(data.remainingSecs || configCooldownSecs);
         }
@@ -236,6 +294,7 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
         ]);
       }
     } catch (err) {
+      playScannerTone('red');
       setOledDisplay({
         line1: 'NET ERROR',
         line2: 'REINTENTAR',
@@ -281,9 +340,25 @@ export const ScannerSimulator: React.FC<ScannerSimulatorProps> = ({ onScanSucces
               <Barcode className="w-5 h-5 text-blue-400" />
               <span className="text-[11px] sm:text-xs font-bold tracking-widest text-slate-400 uppercase">{t('scanner.scannerWireless')}</span>
             </div>
-            <div className="flex items-center space-x-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[9px] sm:text-[10px] text-emerald-400 font-bold uppercase">{t('scanner.wifiConnected')}</span>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen?.().catch(() => {});
+                  } else {
+                    document.exitFullscreen?.().catch(() => {});
+                  }
+                }}
+                className="px-2 py-0.5 text-[9px] font-bold text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded border border-slate-700 transition-colors"
+                title="Pantalla Completa / Modo Terminal"
+              >
+                ⛶ FULLSCREEN
+              </button>
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[9px] sm:text-[10px] text-emerald-400 font-bold uppercase">{t('scanner.wifiConnected')}</span>
+              </div>
             </div>
           </div>
 
