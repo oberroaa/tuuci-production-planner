@@ -466,15 +466,17 @@ export function App() {
           />
         </div>
 
-        <div style={{ display: activeTab === 'ADMIN' ? 'block' : 'none' }}>
-          <AdminPanel
-            onCatalogUpdated={() => {
-              fetchSummary();
-              fetchLines();
-              triggerGlobalRefresh();
-            }}
-          />
-        </div>
+        {currentUser?.rol === 'ADMIN' && (
+          <div style={{ display: activeTab === 'ADMIN' ? 'block' : 'none' }}>
+            <AdminPanel
+              onCatalogUpdated={() => {
+                fetchSummary();
+                fetchLines();
+                triggerGlobalRefresh();
+              }}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
