@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy, Search, ChevronDown, Database } from 'lucide-react';
+import { Settings, Plus, Trash2, CheckCircle2, XCircle, Sliders, Layers, Radio, Shield, Users, Pencil, Check, X, ArrowUp, ArrowDown, GitBranch, Star, AlertTriangle, AlertCircle, Info, Timer, RefreshCw, Copy, Search, ChevronDown, Database, Clock } from 'lucide-react';
 
 interface AdminPanelProps {
   onCatalogUpdated: () => void;
@@ -344,6 +344,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
   const [systemRefreshSecs, setSystemRefreshSecs] = useState<number>(5);
   const [systemPoolMax, setSystemPoolMax] = useState<number>(50);
   const [systemPoolTimeoutSecs, setSystemPoolTimeoutSecs] = useState<number>(15);
+  const [systemSessionDays, setSystemSessionDays] = useState<number>(365);
   const [savingConfig, setSavingConfig] = useState<boolean>(false);
 
   const loadSystemConfigs = async () => {
@@ -356,6 +357,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
         setSystemRefreshSecs(data.values.auto_refresh_interval_segundos || 5);
         setSystemPoolMax(data.values.pg_pool_max || 50);
         setSystemPoolTimeoutSecs(data.values.pg_pool_timeout_segundos || 15);
+        setSystemSessionDays(data.values.session_duracion_dias || 365);
       }
     } catch (err) {
       console.error('Failed to load system configs', err);
@@ -373,7 +375,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
           scanner_cooldown_segundos: systemCooldownSecs,
           auto_refresh_interval_segundos: systemRefreshSecs,
           pg_pool_max: systemPoolMax,
-          pg_pool_timeout_segundos: systemPoolTimeoutSecs
+          pg_pool_timeout_segundos: systemPoolTimeoutSecs,
+          session_duracion_dias: systemSessionDays
         })
       });
       const data = await res.json();
@@ -3362,6 +3365,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                         }`}
                       >
                         {val}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Session Duration / Lifespan */}
+                <div className="space-y-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                      <Clock className="w-4 h-4 text-emerald-600" />
+                      <span>{t('admin.systemSec.sessionDaysLabel')}</span>
+                    </label>
+                    <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                      {t('admin.systemSec.sessionDaysCount', { count: systemSessionDays })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {t('admin.systemSec.sessionDaysDesc')}
+                  </p>
+
+                  <div className="pt-2 flex items-center space-x-4">
+                    <input
+                      type="range"
+                      min="1"
+                      max="730"
+                      step="1"
+                      value={systemSessionDays}
+                      onChange={(e) => setSystemSessionDays(parseInt(e.target.value, 10))}
+                      className="flex-1 accent-emerald-600 cursor-pointer"
+                    />
+                    <div className="flex items-center space-x-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="3650"
+                        value={systemSessionDays}
+                        onChange={(e) => setSystemSessionDays(Math.max(1, Math.min(3650, parseInt(e.target.value, 10) || 1)))}
+                        className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <span className="text-xs text-slate-500 font-medium">{t('admin.systemSec.daysUnit')}</span>
+                    </div>
+                  </div>
+
+                  {/* Preset buttons */}
+                  <div className="flex flex-wrap gap-1.5 pt-2">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 self-center">{t('admin.systemSec.presets')}</span>
+                    {[7, 30, 90, 180, 365, 730].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setSystemSessionDays(val)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold font-mono transition-all ${
+                          systemSessionDays === val
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {val}d
                       </button>
                     ))}
                   </div>

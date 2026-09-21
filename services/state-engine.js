@@ -410,23 +410,29 @@ export class StateEngine {
     const stateTerminada = stateTerminadaRes.rows[0];
     const stateEsperando = stateEsperandoRes.rows[0];
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    // Concurrency Resilience: Retry handler for PostgreSQL 40P01 (deadlock detected)
+    const MAX_RETRIES = 3;
+    let attempt = 0;
 
-      // Concurrency protection: Row-level lock FOR UPDATE on target pieza_proceso
-      const lockedPPRes = await client.query(`
-        SELECT pp.id, pp.estado_id, e.nombre as estado_nombre
-        FROM pieza_procesos pp
-        JOIN estados e ON pp.estado_id = e.id
-        WHERE pp.id = $1
-        FOR UPDATE
-      `, [pp.id]);
+    while (attempt < MAX_RETRIES) {
+      attempt++;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      if (lockedPPRes.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Paso de proceso no encontrado' };
-      }
+        // Concurrency protection: Row-level lock FOR UPDATE on target pieza_proceso
+        const lockedPPRes = await client.query(`
+          SELECT pp.id, pp.estado_id, e.nombre as estado_nombre
+          FROM pieza_procesos pp
+          JOIN estados e ON pp.estado_id = e.id
+          WHERE pp.id = $1
+          FOR UPDATE
+        `, [pp.id]);
+
+        if (lockedPPRes.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Paso de proceso no encontrado' };
+        }
 
       const lockedPP = lockedPPRes.rows[0];
 
@@ -550,12 +556,20 @@ export class StateEngine {
       await client.query('ROLLBACK');
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Unhandled valid state' };
     } catch (err) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      // Retry if PostgreSQL Deadlock Detected (code 40P01)
+      if (err.code === '40P01' && attempt < MAX_RETRIES) {
+        console.warn(`[StateEngine] Deadlock 40P01 detectado en intento ${attempt}/${MAX_RETRIES} para pieza ${codigoQRUnico}. Reintentando con backoff...`);
+        client.release();
+        await new Promise(resolve => setTimeout(resolve, 50 * attempt));
+        continue;
+      }
       throw err;
     } finally {
-      client.release();
+      try { client.release(); } catch (_) {}
     }
   }
+}
 
   /**
    * Audits the pieces of a Job against its route to detect completion and any lagging pieces.

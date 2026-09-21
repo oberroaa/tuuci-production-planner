@@ -247,7 +247,8 @@ export async function initDb() {
         ('scanner_cooldown_segundos', '5', 'Tiempo de espera (segundos) entre escaneos para evitar reenvíos accidentales'),
         ('auto_refresh_interval_segundos', '5', 'Intervalo de actualización automática del tablero Kanban'),
         ('pg_pool_max', '50', 'Límite máximo de conexiones simultáneas en el pool de PostgreSQL'),
-        ('pg_pool_timeout_segundos', '15', 'Tiempo máximo de espera (segundos) para obtener una conexión del pool')
+        ('pg_pool_timeout_segundos', '15', 'Tiempo máximo de espera (segundos) para obtener una conexión del pool'),
+        ('session_duracion_dias', '365', 'Duración máxima de la sesión de usuario en días antes de requerir nuevo inicio de sesión')
       ON CONFLICT (clave) DO NOTHING;
     `);
 

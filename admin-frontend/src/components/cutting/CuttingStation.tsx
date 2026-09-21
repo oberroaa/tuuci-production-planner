@@ -262,8 +262,16 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
         })
       });
 
-      const data = await res.json();
-      if (data.success) {
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = resText ? JSON.parse(resText) : {};
+      } catch (parseErr) {
+        console.error('Non-JSON response from /api/jobs:', resText);
+        throw new Error(`El servidor respondió con error (${res.status}): ${resText.slice(0, 120) || res.statusText}`);
+      }
+
+      if (res.ok && data.success) {
         setActiveJob(data.job);
         setPrintedLabels(data.job.pieces.map((p: any) => p.codigoQRUnico));
         setBatchFinished(false);
@@ -278,7 +286,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             : 'La ruta seleccionada no tiene procesos configurados. Ve al Panel de Administración, entra en "Rutas de Procesos por Línea" y agrega al menos una estación a esta ruta antes de crear la orden.';
           setConfirmError(friendlyMsg);
         } else {
-          setConfirmError(data.error || 'Error al registrar la orden');
+          setConfirmError(data.error || `Error del servidor (${res.status}): ${res.statusText || 'No se pudo crear el Job'}`);
         }
       }
     } catch (err: any) {

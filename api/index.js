@@ -145,8 +145,9 @@ export function verifyUserToken(token) {
   if (signature !== expectedSig) return null;
   try {
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    // 365 days session lifespan for industrial floor devices (prevents unexpected logouts during active factory shifts)
-    if (Date.now() - payload.timestamp > 365 * 24 * 60 * 60 * 1000) return null;
+    // Configurable session lifespan (defaults to 365 days) for industrial floor devices
+    const sessionDays = (cachedConfigs && cachedConfigs.session_duracion_dias) ? cachedConfigs.session_duracion_dias : 365;
+    if (Date.now() - payload.timestamp > sessionDays * 24 * 60 * 60 * 1000) return null;
     return payload;
   } catch {
     return null;
@@ -1195,7 +1196,8 @@ let cachedConfigs = {
   scanner_cooldown_segundos: 5,
   auto_refresh_interval_segundos: 5,
   pg_pool_max: 50,
-  pg_pool_timeout_segundos: 15
+  pg_pool_timeout_segundos: 15,
+  session_duracion_dias: 365
 };
 
 async function loadSystemConfigs() {
@@ -1210,6 +1212,8 @@ async function loadSystemConfigs() {
         cachedConfigs.pg_pool_max = Math.max(5, Math.min(200, parseInt(r.valor, 10) || 50));
       } else if (r.clave === 'pg_pool_timeout_segundos') {
         cachedConfigs.pg_pool_timeout_segundos = Math.max(1, Math.min(60, parseInt(r.valor, 10) || 15));
+      } else if (r.clave === 'session_duracion_dias') {
+        cachedConfigs.session_duracion_dias = Math.max(1, Math.min(3650, parseInt(r.valor, 10) || 365));
       }
     }
     // Apply database-stored pool parameters to live pool
@@ -1236,7 +1240,8 @@ app.get('/api/config', async (req, res) => {
         scanner_cooldown_segundos: parseInt(configMap.scanner_cooldown_segundos || '5', 10),
         auto_refresh_interval_segundos: parseInt(configMap.auto_refresh_interval_segundos || '5', 10),
         pg_pool_max: parseInt(configMap.pg_pool_max || '50', 10),
-        pg_pool_timeout_segundos: parseInt(configMap.pg_pool_timeout_segundos || '15', 10)
+        pg_pool_timeout_segundos: parseInt(configMap.pg_pool_timeout_segundos || '15', 10),
+        session_duracion_dias: parseInt(configMap.session_duracion_dias || '365', 10)
       }
     });
   } catch (err) {
@@ -1250,7 +1255,8 @@ app.put('/api/config', requireAdminRole, async (req, res) => {
       scanner_cooldown_segundos, 
       auto_refresh_interval_segundos,
       pg_pool_max,
-      pg_pool_timeout_segundos
+      pg_pool_timeout_segundos,
+      session_duracion_dias
     } = req.body;
 
     if (scanner_cooldown_segundos !== undefined) {
@@ -1294,6 +1300,16 @@ app.put('/api/config', requireAdminRole, async (req, res) => {
       `).run(String(poolTimeoutVal));
       cachedConfigs.pg_pool_timeout_segundos = poolTimeoutVal;
       poolNeedsUpdate = true;
+    }
+
+    if (session_duracion_dias !== undefined) {
+      const sessionDaysVal = Math.max(1, Math.min(3650, parseInt(session_duracion_dias, 10) || 365));
+      await db.prepare(`
+        INSERT INTO configuraciones (clave, valor, updated_at)
+        VALUES ('session_duracion_dias', ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = CURRENT_TIMESTAMP
+      `).run(String(sessionDaysVal));
+      cachedConfigs.session_duracion_dias = sessionDaysVal;
     }
 
     if (poolNeedsUpdate) {
