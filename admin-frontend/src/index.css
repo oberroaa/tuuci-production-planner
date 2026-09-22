@@ -76,87 +76,112 @@ body {
 
 @media print {
   @page {
-    size: letter landscape;
-    margin: 8mm 8mm 8mm 8mm;
+    size: auto;
+    margin: 0;
   }
 
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
+    color: #000000 !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
   }
 
-  /* Completely hide all background application content, navbars, buttons, headers */
+  /* 1. Hide everything on the screen during print */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 2. Hide all non-print chrome and navigation permanently */
   header,
   nav,
-  main,
-  .no-print,
   button,
-  .border-b.bg-slate-50,
-  .border-t.bg-slate-50 {
+  .no-print {
     display: none !important;
   }
 
-  /* Keep the fixed overlay container visible if printing audit or qr-tickets */
-  body > #root,
-  body > #root > div,
-  .fixed.inset-0:has(#printable-job-audit),
-  .fixed.inset-0:has(#printable-qr-tickets) {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-    overflow: visible !important;
-    box-shadow: none !important;
-    border: none !important;
-    transform: none !important;
-  }
-
-  /* Fallback for browsers that do not support :has() on fixed container */
-  .fixed.inset-0 {
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-    overflow: visible !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  /* Audit & Tickets Containers */
-  #printable-job-audit,
-  #printable-qr-tickets {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    overflow: visible !important;
-  }
-
-  #printable-job-audit *,
+  /* 3. When printing tickets: extract #printable-qr-tickets to the top of the print canvas */
+  #printable-qr-tickets,
   #printable-qr-tickets * {
     visibility: visible !important;
   }
 
-  /* Page 1: Header + Job Info + Cierres + Piezas del Job must fit in 1 page */
+  #printable-qr-tickets {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    display: block !important;
+  }
+
+  #printable-qr-tickets .grid {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 4. Thermal stickers layout (1 sticker per label on Zebra or PDF page) */
+  .thermal-ticket {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    border: 1.5px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 0 10px 0 !important;
+    padding: 10px !important;
+  }
+
+  .thermal-ticket:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
+    margin-bottom: 0 !important;
+  }
+
+  .thermal-ticket svg {
+    display: block !important;
+    margin: 0 auto !important;
+    max-width: 100% !important;
+    height: auto !important;
+    shape-rendering: crispEdges !important;
+  }
+
+  /* 5. Support for Job Audit Forensic Report */
+  #printable-job-audit,
+  #printable-job-audit * {
+    visibility: visible !important;
+  }
+
+  #printable-job-audit {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 8mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    display: block !important;
+  }
+
   .print-page-1 {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  /* Bitacora section: Starts on Page 2 and flows downwards cleanly */
   .print-page-break-before {
     page-break-before: always !important;
     break-before: page !important;
@@ -185,15 +210,6 @@ body {
     color: #0f172a !important;
     padding: 4px 6px !important;
     font-size: 10px !important;
-  }
-
-  .thermal-ticket {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-    border: 1.5px solid #333333 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    margin-bottom: 8px !important;
   }
 }
 

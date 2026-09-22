@@ -1023,7 +1023,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
       {reprintModalJob && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-shrink-0 no-print">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
                   <Printer className="w-5 h-5" />
@@ -1094,7 +1094,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
             </div>
 
             {/* Actions footer */}
-            <div className="pt-3 border-t border-slate-200 flex items-center justify-between flex-shrink-0">
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-between flex-shrink-0 no-print">
               <span className="text-xs text-slate-500">
                 {t('cutting.ticketsReady', { count: reprintModalJob.piecesList?.length || 0 })}
               </span>
