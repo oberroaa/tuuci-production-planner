@@ -84,9 +84,23 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
     setError(null);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = currentUser?.token || (typeof localStorage !== 'undefined' ? (() => {
+        try {
+          return JSON.parse(localStorage.getItem('tuuci_user') || '{}')?.token;
+        } catch {
+          return null;
+        }
+      })() : null);
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-session-token'] = token;
+      }
+
       const res = await fetch(`/api/pieces/${piece.pieza_id}/reassign`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           targetProcesoId,
           usuarioId: currentUser?.id || null,

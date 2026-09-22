@@ -95,9 +95,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         payload.lineaId = currentUser.linea_id;
       }
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = currentUser?.token || (typeof localStorage !== 'undefined' ? (() => {
+        try {
+          return JSON.parse(localStorage.getItem('tuuci_user') || '{}')?.token;
+        } catch {
+          return null;
+        }
+      })() : null);
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-session-token'] = token;
+      }
+
       const res = await fetch(`/api/users/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload)
       });
 
