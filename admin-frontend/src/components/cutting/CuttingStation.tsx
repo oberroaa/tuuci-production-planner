@@ -247,9 +247,23 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
     setConfirmError(null);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = currentUser?.token || (typeof localStorage !== 'undefined' ? (() => {
+        try {
+          return JSON.parse(localStorage.getItem('tuuci_user') || '{}')?.token;
+        } catch {
+          return null;
+        }
+      })() : null);
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-session-token'] = token;
+      }
+
       const res = await fetch('/api/jobs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           jobCode: ocrResult.jobCode,
           lineaId: selectedLineId,
@@ -319,9 +333,23 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
       ) || cat.procesos[0];
 
       if (initialProc) {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = currentUser?.token || (typeof localStorage !== 'undefined' ? (() => {
+          try {
+            return JSON.parse(localStorage.getItem('tuuci_user') || '{}')?.token;
+          } catch {
+            return null;
+          }
+        })() : null);
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-session-token'] = token;
+        }
+
         const res = await fetch('/api/cutting/batch-close', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             jobId: activeJob.jobId,
             procesoId: initialProc.id,
@@ -350,9 +378,23 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
     setManualCloseMsg(null);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = currentUser?.token || (typeof localStorage !== 'undefined' ? (() => {
+        try {
+          return JSON.parse(localStorage.getItem('tuuci_user') || '{}')?.token;
+        } catch {
+          return null;
+        }
+      })() : null);
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-session-token'] = token;
+      }
+
       const res = await fetch('/api/cutting/batch-close', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           jobCode: cleanJobCode,
           usuarioId: currentUser?.id || 1
