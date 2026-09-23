@@ -202,7 +202,7 @@ export const ReassignPieceModal: React.FC<ReassignPieceModalProps> = ({
 
           {/* Target Station Selector */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span>Seleccionar Estación Destino o Reinicio *</span>
               <span className="text-[10px] font-normal text-slate-400">
                 Elige la misma estación para reiniciar a ESPERANDO
