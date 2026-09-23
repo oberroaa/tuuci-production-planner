@@ -2444,14 +2444,14 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       className="thermal-ticket p-4 border border-slate-300 rounded-xl bg-white flex flex-col justify-between text-left shadow-2xs hover:border-blue-400 transition-colors"
                     >
                       {/* Top Header: Carton X of Y */}
-                      <div className="w-full flex items-center justify-between pb-1 text-[11px] font-sans font-semibold text-slate-700">
+                      <div className="ticket-header w-full flex items-center justify-between pb-1 text-[11px] font-sans font-semibold text-slate-700">
                         <span>Carton: {idx + 1} Of {totalPiezas}</span>
                         <span className="font-mono text-[10px] text-slate-400">PIEZA #{idx + 1}</span>
                       </div>
 
                       {/* Item Code & Model Description */}
-                      <div className="w-full pt-1 pb-1.5 border-b border-slate-200">
-                        <div className="text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
+                      <div className="w-full pt-1 pb-1 border-b border-slate-200">
+                        <div className="ticket-model-title text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
                           {itemCode}
                         </div>
                         <div className="text-[12px] font-medium text-slate-700 leading-tight">
@@ -2460,7 +2460,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       </div>
 
                       {/* Technical specifications list */}
-                      <div className="w-full py-1.5 space-y-0.5 text-[8.5px] leading-tight font-sans text-slate-800 flex-1 overflow-hidden">
+                      <div className="ticket-specs w-full py-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[8.5px] leading-tight font-sans text-slate-800 flex-1 overflow-hidden">
                         {specLines.map((line: string, sIdx: number) => (
                           <div key={sIdx} className="truncate">
                             {line}
@@ -2469,12 +2469,12 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                       </div>
 
                       {/* Bottom Barcode 128 */}
-                      <div className="w-full pt-1.5 border-t border-slate-200 flex flex-col items-center justify-center bg-white">
-                        <div className="w-full flex justify-center py-1 overflow-hidden">
-                          <Barcode128 value={pieceCode} height={42} barWidth={1.4} showText={false} />
+                      <div className="w-full pt-1 border-t border-slate-200 flex flex-col items-center justify-center bg-white">
+                        <div className="w-full flex justify-center py-0.5 overflow-hidden">
+                          <Barcode128 value={pieceCode} height={46} barWidth={1.7} showText={false} />
                         </div>
-                        <div className="text-xs font-mono font-bold text-slate-900 tracking-wider">
-                          {jobCode}
+                        <div className="ticket-barcode-text text-xs font-mono font-bold text-slate-900 tracking-wider">
+                          {pieceCode}
                         </div>
                       </div>
                     </div>

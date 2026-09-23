@@ -4,6 +4,9 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'url';
 import db, { initDb, updatePoolConfig } from '../db-compat.js';
 import { StateEngine } from '../services/state-engine.js';
 import { DashboardService } from '../services/dashboard-service.js';
@@ -2314,6 +2317,158 @@ app.post('/api/admin/clean-jobs', requireAdminRole, async (req, res) => {
   }
 });
 
+// 9. Load initial master catalog data from JSON (Admin protected)
+app.post('/api/admin/load-initial-data', requireAdminRole, async (req, res) => {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const dataPath = path.resolve(__dirname, '../data/initial-data.json');
+
+    if (!fs.existsSync(dataPath)) {
+      return res.status(404).json({ error: 'Archivo initial-data.json no encontrado' });
+    }
+
+    const rawData = fs.readFileSync(dataPath, 'utf-8');
+    const initialData = JSON.parse(rawData);
+
+    const tx = db.transaction(async (txDb) => {
+      // 1. Lineas
+      if (Array.isArray(initialData.lineas)) {
+        for (const l of initialData.lineas) {
+          await txDb.prepare('INSERT INTO lineas (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING').run(l.nombre.trim());
+        }
+      }
+
+      // 2. Tipo Procesos
+      if (Array.isArray(initialData.tipoProcesos)) {
+        for (const tp of initialData.tipoProcesos) {
+          await txDb.prepare('INSERT INTO tipo_procesos (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING').run(tp.nombre.trim().toUpperCase());
+        }
+      }
+
+      // 3. Estados
+      if (Array.isArray(initialData.estados)) {
+        for (const st of initialData.estados) {
+          await txDb.prepare(`
+            INSERT INTO estados (nombre, orden, visible_para_operador, permite_escaneo, dispara_activacion_siguiente)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (nombre) DO UPDATE SET
+              orden = EXCLUDED.orden,
+              visible_para_operador = EXCLUDED.visible_para_operador,
+              permite_escaneo = EXCLUDED.permite_escaneo,
+              dispara_activacion_siguiente = EXCLUDED.dispara_activacion_siguiente
+          `).run(
+            st.nombre.trim().toUpperCase(),
+            parseInt(st.orden, 10),
+            st.visible_para_operador ? 1 : 0,
+            st.permite_escaneo ? 1 : 0,
+            st.dispara_activacion_siguiente ? 1 : 0
+          );
+        }
+      }
+
+      // 4. Rutas y Procesos
+      if (Array.isArray(initialData.rutas)) {
+        for (const r of initialData.rutas) {
+          const lineRow = await txDb.prepare('SELECT id FROM lineas WHERE nombre = ?').get(r.linea);
+          if (!lineRow) continue;
+
+          let rutaRow = await txDb.prepare('SELECT id FROM rutas WHERE linea_id = ? AND nombre = ?').get(lineRow.id, r.nombre);
+          if (!rutaRow) {
+            const insRuta = await txDb.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, ?)').run(
+              lineRow.id,
+              r.nombre,
+              r.es_default ? 1 : 0
+            );
+            rutaRow = { id: insRuta.lastInsertRowid };
+          }
+
+          if (Array.isArray(r.pasos)) {
+            for (const paso of r.pasos) {
+              const tpRow = await txDb.prepare('SELECT id FROM tipo_procesos WHERE nombre = ?').get(paso.tipo.toUpperCase());
+              if (!tpRow) continue;
+
+              await txDb.prepare(`
+                INSERT INTO procesos (linea_id, ruta_id, tipo_proceso_id, orden, modo_trabajo, es_proceso_cierre, tiempo_demora_segundos)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (ruta_id, orden) DO UPDATE SET
+                  tipo_proceso_id = EXCLUDED.tipo_proceso_id,
+                  modo_trabajo = EXCLUDED.modo_trabajo,
+                  es_proceso_cierre = EXCLUDED.es_proceso_cierre,
+                  tiempo_demora_segundos = EXCLUDED.tiempo_demora_segundos
+              `).run(
+                lineRow.id,
+                rutaRow.id,
+                tpRow.id,
+                parseInt(paso.orden, 10),
+                paso.modo || 'INDIVIDUAL',
+                paso.esCierre ? 1 : 0,
+                paso.tiempoDemoraSegundos || 0
+              );
+            }
+          }
+        }
+      }
+
+      // 5. Escaneres
+      if (Array.isArray(initialData.escaneres)) {
+        for (const esc of initialData.escaneres) {
+          const tpRow = await txDb.prepare('SELECT id FROM tipo_procesos WHERE nombre = ?').get(esc.tipo.toUpperCase());
+          if (!tpRow) continue;
+
+          let targetLineaId = null;
+          if (esc.linea) {
+            const lineRow = await txDb.prepare('SELECT id FROM lineas WHERE nombre = ?').get(esc.linea);
+            if (lineRow) targetLineaId = lineRow.id;
+          }
+
+          await txDb.prepare(`
+            INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo, api_key)
+            VALUES (?, ?, ?, 1, ?)
+            ON CONFLICT (codigo_estacion) DO UPDATE SET
+              tipo_proceso_id = EXCLUDED.tipo_proceso_id,
+              linea_id = EXCLUDED.linea_id,
+              api_key = EXCLUDED.api_key
+          `).run(esc.codigo.toUpperCase(), tpRow.id, targetLineaId, esc.apiKey || null);
+        }
+      }
+
+      // 6. Usuarios
+      if (Array.isArray(initialData.usuarios)) {
+        for (const u of initialData.usuarios) {
+          let userLineaId = null;
+          if (u.linea) {
+            const lineRow = await txDb.prepare('SELECT id FROM lineas WHERE nombre = ?').get(u.linea);
+            if (lineRow) userLineaId = lineRow.id;
+          }
+
+          await txDb.prepare(`
+            INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (microsoft_id) DO UPDATE SET
+              nombre = EXCLUDED.nombre,
+              email = EXCLUDED.email,
+              rol = EXCLUDED.rol,
+              linea_id = EXCLUDED.linea_id
+          `).run(
+            u.microsoft_id,
+            u.nombre.trim(),
+            u.email.trim().toLowerCase(),
+            u.rol,
+            u.rol === 'ADMIN' ? null : userLineaId
+          );
+        }
+      }
+    });
+
+    await tx();
+    notifyDashboardUpdate();
+    res.json({ success: true, message: 'Datos iniciales cargados exitosamente desde JSON' });
+  } catch (err) {
+    handleServerError(res, err, 500);
+  }
+});
+
 // Centralized Express Error-Handling Middleware (catches synchronous and unhandled exceptions)
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
@@ -2328,7 +2483,6 @@ const PORT = process.env.PORT || 3001;
 
 export { app, server };
 
-import { fileURLToPath } from 'url';
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isMain && process.env.NODE_ENV !== 'test') {

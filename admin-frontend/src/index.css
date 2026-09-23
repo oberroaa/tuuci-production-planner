@@ -76,7 +76,7 @@ body {
 
 @media print {
   @page {
-    size: 3in 4in portrait;
+    size: 4in 3in;
     margin: 0;
   }
 
@@ -85,7 +85,7 @@ body {
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
-    width: 3in !important;
+    width: 4in !important;
     height: auto !important;
     overflow: visible !important;
   }
@@ -115,7 +115,7 @@ body {
     display: block !important;
     margin: 0 !important;
     padding: 0 !important;
-    width: 3in !important;
+    width: 4in !important;
     height: auto !important;
     max-height: none !important;
     background: transparent !important;
@@ -140,7 +140,7 @@ body {
   #printable-qr-tickets {
     position: static !important;
     display: block !important;
-    width: 3in !important;
+    width: 4in !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -153,15 +153,15 @@ body {
     padding: 0 !important;
   }
 
-  /* 5. Thermal stickers layout (Vertical 3" Ancho x 4" Alto) */
+  /* 5. Thermal stickers layout (Uline S-6263: 4" Ancho x 3" Alto) */
   .thermal-ticket {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    width: 3in !important;
-    height: 3.85in !important;
-    max-width: 3in !important;
-    max-height: 3.85in !important;
+    width: 4in !important;
+    height: 2.88in !important;
+    max-width: 4in !important;
+    max-height: 2.88in !important;
     box-sizing: border-box !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -171,7 +171,7 @@ body {
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
-    padding: 0.15in 0.15in !important;
+    padding: 0.12in 0.18in !important;
     overflow: hidden !important;
   }
 
@@ -181,10 +181,33 @@ body {
     margin-bottom: 0 !important;
   }
 
+  .thermal-ticket .ticket-header {
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+  }
+
+  .thermal-ticket .ticket-model-title {
+    font-size: 13pt !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+  }
+
+  .thermal-ticket .ticket-specs {
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
+  }
+
+  .thermal-ticket .ticket-barcode-text {
+    font-size: 13pt !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.05em !important;
+  }
+
   .thermal-ticket svg {
     display: block !important;
     margin: 0 auto !important;
     max-width: 100% !important;
+    height: 48px !important;
     shape-rendering: crispEdges !important;
   }
 

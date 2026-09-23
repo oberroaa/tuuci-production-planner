@@ -395,6 +395,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   // Danger Zone: Reset Tracker & Dashboard Operational Data
   const [cleaningData, setCleaningData] = useState<boolean>(false);
+  const [loadingInitialData, setLoadingInitialData] = useState<boolean>(false);
+
+  const handleRequestLoadInitialData = () => {
+    askConfirmation({
+      title: '¿Cargar Datos Iniciales del Sistema?',
+      message: 'Esta acción importará y actualizará los catálogos base (Líneas, Tipos de Proceso, Estados, Rutas Estándar, Escáneres y Usuarios predeterminados como Terminal, Supervisor y Admin) definidos en initial-data.json.',
+      confirmText: 'Cargar Datos',
+      cancelText: 'Cancelar',
+      type: 'info',
+      onConfirm: async () => {
+        setLoadingInitialData(true);
+        try {
+          const res = await fetch('/api/admin/load-initial-data', { method: 'POST' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            showToast('Datos iniciales cargados exitosamente', 'success');
+            await loadCatalogs();
+            onCatalogUpdated();
+          } else {
+            showToast(data.error || 'No se pudieron cargar los datos iniciales', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Error de conexión al cargar datos iniciales', 'error');
+        } finally {
+          setLoadingInitialData(false);
+        }
+      }
+    });
+  };
 
   const handleRequestCleanOperationalData = () => {
     askConfirmation({
@@ -3502,6 +3532,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
                     <>
                       <Trash2 className="w-4 h-4" />
                       <span>{t('admin.systemSec.cleanBtn')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Initial Master Data Card */}
+            <div className="bg-indigo-50/70 border-2 border-indigo-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
+              <div className="flex items-center space-x-2.5 text-indigo-700">
+                <Database className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-bold text-indigo-900">Catálogos y Datos Iniciales</h4>
+                  <p className="text-[11px] text-indigo-700 mt-0.5">Importar configuración base desde initial-data.json</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Restaura o inicializa los catálogos maestros con los valores predeterminados de fábrica: Líneas, Tipos de Proceso, Estados, Rutas Estándar, Escáneres y Usuarios predeterminados (incluyendo Terminal, Operador, Supervisor y Admin).
+              </p>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleRequestLoadInitialData}
+                  disabled={loadingInitialData}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                >
+                  {loadingInitialData ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Cargando datos...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Database className="w-4 h-4" />
+                      <span>Cargar Datos Iniciales</span>
                     </>
                   )}
                 </button>

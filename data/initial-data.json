@@ -1,0 +1,138 @@
+{
+  "lineas": [
+    { "nombre": "Mueble" },
+    { "nombre": "Clásica" },
+    { "nombre": "Cantiléver" },
+    { "nombre": "Cabaña" }
+  ],
+  "tipoProcesos": [
+    { "nombre": "RECEIVING" },
+    { "nombre": "CORTE" },
+    { "nombre": "MAQUINADO" },
+    { "nombre": "FABRICACION" },
+    { "nombre": "ENSAMBLE" },
+    { "nombre": "QC" },
+    { "nombre": "PACKING" },
+    { "nombre": "DONE" }
+  ],
+  "estados": [
+    {
+      "nombre": "INACTIVO",
+      "orden": 1,
+      "visible_para_operador": 0,
+      "permite_escaneo": 0,
+      "dispara_activacion_siguiente": 0
+    },
+    {
+      "nombre": "ESPERANDO",
+      "orden": 2,
+      "visible_para_operador": 1,
+      "permite_escaneo": 1,
+      "dispara_activacion_siguiente": 0
+    },
+    {
+      "nombre": "EN PROCESO",
+      "orden": 3,
+      "visible_para_operador": 1,
+      "permite_escaneo": 1,
+      "dispara_activacion_siguiente": 0
+    },
+    {
+      "nombre": "TERMINADA",
+      "orden": 4,
+      "visible_para_operador": 1,
+      "permite_escaneo": 0,
+      "dispara_activacion_siguiente": 1
+    }
+  ],
+  "rutas": [
+    {
+      "linea": "Mueble",
+      "nombre": "Ruta Estándar",
+      "es_default": 1,
+      "pasos": [
+        { "tipo": "RECEIVING", "orden": 1, "modo": "LOTE", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "CORTE", "orden": 2, "modo": "LOTE", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "FABRICACION", "orden": 3, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "ENSAMBLE", "orden": 4, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "QC", "orden": 5, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "PACKING", "orden": 6, "modo": "INDIVIDUAL", "esCierre": 1, "tiempoDemoraSegundos": 0 },
+        { "tipo": "DONE", "orden": 7, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 }
+      ]
+    },
+    {
+      "linea": "Clásica",
+      "nombre": "Ruta Estándar",
+      "es_default": 1,
+      "pasos": [
+        { "tipo": "CORTE", "orden": 1, "modo": "LOTE", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "FABRICACION", "orden": 2, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "PACKING", "orden": 3, "modo": "INDIVIDUAL", "esCierre": 1, "tiempoDemoraSegundos": 0 },
+        { "tipo": "DONE", "orden": 4, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 }
+      ]
+    },
+    {
+      "linea": "Cantiléver",
+      "nombre": "Ruta Estándar",
+      "es_default": 1,
+      "pasos": [
+        { "tipo": "CORTE", "orden": 1, "modo": "LOTE", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "MAQUINADO", "orden": 2, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "FABRICACION", "orden": 3, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "PACKING", "orden": 4, "modo": "INDIVIDUAL", "esCierre": 1, "tiempoDemoraSegundos": 0 },
+        { "tipo": "DONE", "orden": 5, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 }
+      ]
+    },
+    {
+      "linea": "Cabaña",
+      "nombre": "Ruta Estándar",
+      "es_default": 1,
+      "pasos": [
+        { "tipo": "CORTE", "orden": 1, "modo": "LOTE", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "FABRICACION", "orden": 2, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "ENSAMBLE", "orden": 3, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 },
+        { "tipo": "PACKING", "orden": 4, "modo": "INDIVIDUAL", "esCierre": 1, "tiempoDemoraSegundos": 0 },
+        { "tipo": "DONE", "orden": 5, "modo": "INDIVIDUAL", "esCierre": 0, "tiempoDemoraSegundos": 0 }
+      ]
+    }
+  ],
+  "escaneres": [
+    { "codigo": "RECEIVING-01", "tipo": "RECEIVING", "linea": "Mueble", "apiKey": "tuuci_key_receiving_01" },
+    { "codigo": "CORTE-01", "tipo": "CORTE", "linea": "Mueble", "apiKey": "tuuci_key_corte_01" },
+    { "codigo": "FABRICACION-01", "tipo": "FABRICACION", "linea": "Mueble", "apiKey": "tuuci_key_fabricacion_01" },
+    { "codigo": "MAQUINADO-01", "tipo": "MAQUINADO", "linea": "Mueble", "apiKey": "tuuci_key_maquinado_01" },
+    { "codigo": "ENSAMBLE-01", "tipo": "ENSAMBLE", "linea": "Mueble", "apiKey": "tuuci_key_ensamble_01" },
+    { "codigo": "QC-01", "tipo": "QC", "linea": "Mueble", "apiKey": "tuuci_key_qc_01" },
+    { "codigo": "PACKING-01", "tipo": "PACKING", "linea": "Mueble", "apiKey": "tuuci_key_packing_01" }
+  ],
+  "usuarios": [
+    {
+      "microsoft_id": "ms-admin-001",
+      "nombre": "Otoniel Berroa",
+      "email": "oberroa@tuuci.com",
+      "rol": "ADMIN",
+      "linea": null
+    },
+    {
+      "microsoft_id": "ms-sup-001",
+      "nombre": "Carlos Supervisor",
+      "email": "csupervisor@tuuci.com",
+      "rol": "SUPERVISOR",
+      "linea": "Mueble"
+    },
+    {
+      "microsoft_id": "ms-op-001",
+      "nombre": "Juan Operador",
+      "email": "joperador@tuuci.com",
+      "rol": "OPERADOR",
+      "linea": "Mueble"
+    },
+    {
+      "microsoft_id": "ms-term-001",
+      "nombre": "Terminal Quiosco",
+      "email": "terminal@tuuci.com",
+      "rol": "TERMINAL",
+      "linea": "Mueble"
+    }
+  ]
+}
