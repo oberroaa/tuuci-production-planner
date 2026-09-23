@@ -18,6 +18,7 @@ export class StateEngine {
     modelo,
     itemCode = null,
     specsRaw = '',
+    config = null,
     cantidadPiezas,
     creadoPorUsuarioId = null,
     imagenEtiquetaUrl = null
@@ -97,11 +98,13 @@ export class StateEngine {
     try {
       await client.query('BEGIN');
 
+      const configJson = config ? (typeof config === 'string' ? config : JSON.stringify(config)) : null;
+
       const jobResult = await client.query(`
-        INSERT INTO jobs (job_code, linea_id, ruta_id, modelo, item_code, specs_raw, cantidad_piezas, creado_por_usuario_id, imagen_etiqueta_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO jobs (job_code, linea_id, ruta_id, modelo, item_code, specs_raw, config, cantidad_piezas, creado_por_usuario_id, imagen_etiqueta_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id
-      `, [jobCode, lineaId, effectiveRutaId, modelo, itemCode, specsRaw, qty, creadoPorUsuarioId, imagenEtiquetaUrl]);
+      `, [jobCode, lineaId, effectiveRutaId, modelo, itemCode, specsRaw, configJson, qty, creadoPorUsuarioId, imagenEtiquetaUrl]);
 
       const jobId = jobResult.rows[0].id;
       const createdPieces = [];

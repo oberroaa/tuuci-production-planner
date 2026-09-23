@@ -2396,33 +2396,90 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 </span>
               </div>
 
-              {/* Individual Piece Tickets Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                {(printingJob.piecesList || []).map((pieceCode: string, idx: number) => (
-                  <div
-                    key={idx}
-                    className="thermal-ticket p-3 border-2 border-slate-300 rounded-xl bg-white flex flex-col items-center justify-between text-center space-y-2 shadow-2xs hover:border-blue-400 transition-colors"
-                  >
-                    <div className="w-full flex items-center justify-between border-b border-slate-200 pb-1 text-[10px]">
-                      <span className="font-extrabold text-slate-900 tracking-wider">TUUCI</span>
-                      <span className="font-mono font-bold text-slate-600">
-                        PIEZA #{idx + 1} de {printingJob.piecesList.length}
-                      </span>
-                    </div>
+              {/* Individual Piece Tickets Grid (Formatted for ULINE S-6263 4x3" Direct Thermal Labels) */}
+              <div className="grid grid-cols-1 gap-3 pt-1">
+                {(printingJob.piecesList || []).map((pieceCode: string, idx: number) => {
+                  const totalPiezas = printingJob.piecesList?.length || printingJob.cantidad_piezas || 1;
+                  const itemCode = printingJob.item_code || printingJob.itemCode || 'OM7.5SQ';
+                  const modeloDesc = printingJob.modelo || 'OceanMaster M1 Classic 7.5\' SQ';
+                  const jobCode = printingJob.job_code || printingJob.codigo_job || printingJob.jobCode || pieceCode.split('-')[0];
+                  
+                  const jobConfig = printingJob.config;
+                  let specLines: string[] = [];
+                  if (jobConfig) {
+                    try {
+                      const parsed = typeof jobConfig === 'string' ? JSON.parse(jobConfig) : jobConfig;
+                      if (Array.isArray(parsed)) {
+                        specLines = parsed.map(String);
+                      } else if (typeof parsed === 'object' && parsed !== null) {
+                        specLines = Object.entries(parsed).map(([k, v]) => `${k}:-${v}`);
+                      }
+                    } catch {
+                      // ignore parse errors and fallback
+                    }
+                  }
 
-                    {/* Industrial Code 128 Linear Barcode */}
-                    <div className="py-1 flex justify-center w-full overflow-hidden bg-white">
-                      <Barcode128 value={pieceCode} height={42} barWidth={1.7} showText={true} />
-                    </div>
+                  if (specLines.length === 0) {
+                    const rawSpecs = printingJob.specs_raw || printingJob.specsRaw || '';
+                    specLines = rawSpecs ? rawSpecs.split('\n').filter(Boolean) : [
+                      '0_CPR Description:-Legacy PartC 1015271-501',
+                      '0_CPR Number:-18147',
+                      '1_Parasol Size:-7.5 ft',
+                      '2_Parasol Shape:-Square',
+                      '29_Mast Size:-1.5" Mast',
+                      '3_Parasol Type:-Full Umbrella',
+                      '30_Frame Finish:-Polished Titanium',
+                      '31_Lifting System:-Manual Lift with Stainless Steel Pin',
+                      '32_Finial:-Venice Aluminum Finial',
+                      '33_Mast Height:-Standard: 96"',
+                      '4_Top Canopy Fabric-Natural, MXT 9003',
+                      '6_Single Wind Vent Fabric:-To Match Canopy',
+                      '7_Canopy Profile-Market Cut Folded'
+                    ];
+                  }
 
-                    <div className="w-full text-[10px] text-slate-600 truncate border-t border-slate-100 pt-1 flex items-center justify-between">
-                      <span className="truncate font-medium">{printingJob.modelo || 'Lote de Producción'}</span>
-                      <span className="font-mono font-bold text-slate-700 ml-1 flex-shrink-0">
-                        {printingJob.job_code || printingJob.codigo_job || printingJob.jobCode}
-                      </span>
+                  return (
+                    <div
+                      key={idx}
+                      className="thermal-ticket p-4 border border-slate-300 rounded-xl bg-white flex flex-col justify-between text-left shadow-2xs hover:border-blue-400 transition-colors"
+                    >
+                      {/* Top Header: Carton X of Y */}
+                      <div className="w-full flex items-center justify-between pb-1 text-[11px] font-sans font-semibold text-slate-700">
+                        <span>Carton: {idx + 1} Of {totalPiezas}</span>
+                        <span className="font-mono text-[10px] text-slate-400">PIEZA #{idx + 1}</span>
+                      </div>
+
+                      {/* Item Code & Model Description */}
+                      <div className="w-full pt-1 pb-1.5 border-b border-slate-200">
+                        <div className="text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
+                          {itemCode}
+                        </div>
+                        <div className="text-[12px] font-medium text-slate-700 leading-tight">
+                          {modeloDesc}
+                        </div>
+                      </div>
+
+                      {/* Technical specifications list */}
+                      <div className="w-full py-1.5 space-y-0.5 text-[8.5px] leading-tight font-sans text-slate-800 flex-1 overflow-hidden">
+                        {specLines.map((line: string, sIdx: number) => (
+                          <div key={sIdx} className="truncate">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Bottom Barcode 128 */}
+                      <div className="w-full pt-1.5 border-t border-slate-200 flex flex-col items-center justify-center bg-white">
+                        <div className="w-full flex justify-center py-1 overflow-hidden">
+                          <Barcode128 value={pieceCode} height={42} barWidth={1.4} showText={false} />
+                        </div>
+                        <div className="text-xs font-mono font-bold text-slate-900 tracking-wider">
+                          {jobCode}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

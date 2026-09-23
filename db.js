@@ -158,6 +158,7 @@ export async function initDb() {
         modelo TEXT NOT NULL,
         item_code TEXT,
         specs_raw TEXT,
+        config JSONB,
         cantidad_piezas INTEGER NOT NULL,
         creado_por_usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
         imagen_etiqueta_url TEXT,
@@ -169,6 +170,7 @@ export async function initDb() {
       );
 
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS item_code TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS config JSONB;
 
       -- Migración de constraint para soportar estado 'PARCIAL'
       DO $$

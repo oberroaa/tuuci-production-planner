@@ -1536,7 +1536,7 @@ app.get('/api/jobs/check/:jobCode', async (req, res) => {
 // 4. Cutting Station (Fase 1): Create Job and Pieces (Protected by requireAuth and Schema Validation)
 app.post('/api/jobs', requireAuth, validateSchema(schemas.createJob), async (req, res) => {
   try {
-    const { jobCode, lineaId, rutaId, modelo, itemCode, specsRaw, cantidadPiezas } = req.body;
+    const { jobCode, lineaId, rutaId, modelo, itemCode, specsRaw, config, cantidadPiezas } = req.body;
     const creadoPorUsuarioId = req.user?.id || req.body.creadoPorUsuarioId || null;
     const job = await StateEngine.createJob({
       jobCode,
@@ -1545,6 +1545,7 @@ app.post('/api/jobs', requireAuth, validateSchema(schemas.createJob), async (req
       modelo,
       itemCode,
       specsRaw,
+      config,
       cantidadPiezas,
       creadoPorUsuarioId
     });

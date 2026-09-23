@@ -76,7 +76,7 @@ body {
 
 @media print {
   @page {
-    size: auto;
+    size: 3in 4in portrait;
     margin: 0;
   }
 
@@ -85,8 +85,8 @@ body {
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
+    width: 3in !important;
     height: auto !important;
-    min-height: 0 !important;
     overflow: visible !important;
   }
 
@@ -103,21 +103,48 @@ body {
     display: none !important;
   }
 
-  /* 3. When printing tickets: extract #printable-qr-tickets to the top of the print canvas */
+  /* 3. Allow #root, main and modals to pass through without positioning bugs */
+  body,
+  #root,
+  #root > div,
+  main,
+  .fixed.inset-0,
+  .fixed.inset-0 > div {
+    visibility: visible !important;
+    position: static !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 3in !important;
+    height: auto !important;
+    max-height: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all dashboard content outside of the modal */
+  main > div > div > div:not(.fixed),
+  main > div > div > header,
+  main > div > div > nav {
+    display: none !important;
+  }
+
+  /* 4. When printing tickets: show tickets container cleanly */
   #printable-qr-tickets,
   #printable-qr-tickets * {
     visibility: visible !important;
   }
 
   #printable-qr-tickets {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
+    position: static !important;
+    display: block !important;
+    width: 3in !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    display: block !important;
+    overflow: visible !important;
   }
 
   #printable-qr-tickets .grid {
@@ -126,28 +153,31 @@ body {
     padding: 0 !important;
   }
 
-  /* 4. Thermal stickers layout (1 sticker per label on Zebra or PDF page) */
+  /* 5. Thermal stickers layout (Vertical 3" Ancho x 4" Alto) */
   .thermal-ticket {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    align-items: center !important;
-    width: 100% !important;
+    width: 3in !important;
+    height: 3.85in !important;
+    max-width: 3in !important;
+    max-height: 3.85in !important;
     box-sizing: border-box !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     break-after: page !important;
     page-break-after: always !important;
-    border: 1.5px solid #000000 !important;
+    border: none !important;
     background: #ffffff !important;
     color: #000000 !important;
-    margin: 0 0 10px 0 !important;
-    padding: 10px !important;
+    margin: 0 !important;
+    padding: 0.15in 0.15in !important;
+    overflow: hidden !important;
   }
 
   .thermal-ticket:last-child {
-    break-after: auto !important;
-    page-break-after: auto !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
     margin-bottom: 0 !important;
   }
 
@@ -155,7 +185,6 @@ body {
     display: block !important;
     margin: 0 auto !important;
     max-width: 100% !important;
-    height: auto !important;
     shape-rendering: crispEdges !important;
   }
 
