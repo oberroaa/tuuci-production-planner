@@ -81,7 +81,7 @@ body {
 
 @media print {
   @page {
-    size: 4in 3in portrait;
+    size: 3in 4in portrait;
     margin: 0;
   }
 
@@ -182,22 +182,21 @@ body {
     break-after: auto !important;
   }
 
-  /* 5. Mantiene el MISMO formato vertical en pantalla y lo rota 90 grados a Landscape al imprimir */
+  /* 5. Mantiene el MISMO formato vertical en pantalla y lo rota 90 grados al imprimir */
   .thermal-ticket {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    width: 4in !important;
+    width: 3in !important;
     height: 4in !important;
     box-sizing: border-box !important;
     border: none !important;
     background: #ffffff !important;
     color: #000000 !important;
     position: absolute !important;
-    top: 0.1in !important;
-    left: 100% !important;
-    right: 05.5in !important;
-    transform: rotate(90deg) !important;
+    top: 0in !important;
+    left: 0in !important;
+
     transform-origin: 0 0 !important;
     margin: 0 !important;
     padding: 0.05in 0.1in !important;
