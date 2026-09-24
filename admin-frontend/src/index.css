@@ -81,7 +81,7 @@ body {
 
 @media print {
   @page {
-    size: 3in 4in portrait;
+    size: 4in 3in portrait;
     margin: 0;
   }
 
@@ -187,16 +187,17 @@ body {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    width: 3in !important;
+    width: 4in !important;
     height: 4in !important;
     box-sizing: border-box !important;
     border: none !important;
     background: #ffffff !important;
     color: #000000 !important;
     position: absolute !important;
-    top: 0in !important;
-    left: 0in !important;
-
+    top: 0.1in !important;
+    left: 110% !important;
+    right: 05.5in !important;
+    transform: rotate(90deg) !important;
     transform-origin: 0 0 !important;
     margin: 0 !important;
     padding: 0.05in 0.1in !important;
@@ -209,22 +210,22 @@ body {
   }
 
   .thermal-ticket .ticket-header {
-    font-size: 14pt !important;
-    font-weight: 500 !important;
+    font-size: 16pt !important;
+    font-weight: 800 !important;
     margin-bottom: 1px !important;
     color: #000000 !important;
   }
 
   .thermal-ticket .ticket-model-title {
-    font-size: 12pt !important;
-    font-weight: 500 !important;
+    font-size: 15pt !important;
+    font-weight: 800 !important;
     line-height: 1.15 !important;
     color: #000000 !important;
   }
 
   .thermal-ticket .ticket-model-desc {
-    font-size: 10pt !important;
-    font-weight: 500 !important;
+    font-size: 12pt !important;
+    font-weight: 600 !important;
     line-height: 1.15 !important;
     color: #000000 !important;
     margin-bottom: 3px !important;
@@ -256,7 +257,7 @@ body {
     display: block !important;
     margin: 0 auto !important;
     max-width: 100% !important;
-    height: 60px !important;
+    height: 50px !important;
     shape-rendering: crispEdges !important;
   }
 
