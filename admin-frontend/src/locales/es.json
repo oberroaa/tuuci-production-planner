@@ -136,8 +136,8 @@
     "blockedAlreadyCut": "⛔ Bloqueado: Ya fue Cortado",
     "yesPrint": "Sí, imprimir ({{count}} Códigos)",
     "printModalTitle": "Impresión de Etiquetas (Código de Barras)",
-    "printNotice": "💡 Etiquetas con Código de Barras Code 128 para escaneo con pistola láser/CCD e impresoras térmicas Zebra.",
-    "printFormat": "Formato: 2x1\" / Code 128",
+    "printNotice": "💡 Etiquetas térmicas para pistola láser/CCD e impresoras térmicas Zebra.",
+    "printFormat": "Formato: Uline 4x3\" / Code 128",
     "pieceLabel": "PIEZA #{{current}} de {{total}}",
     "ticketsReady": "{{count}} tickets listos para reimpresión.",
     "sendToPrinter": "Mandar a Imprimir"

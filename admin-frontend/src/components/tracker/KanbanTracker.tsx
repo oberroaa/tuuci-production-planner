@@ -2439,42 +2439,44 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                   }
 
                   return (
-                    <div
-                      key={idx}
-                      className="thermal-ticket p-4 border border-slate-300 rounded-xl bg-white flex flex-col justify-between text-left shadow-2xs hover:border-blue-400 transition-colors"
-                    >
-                      {/* Top Header: Carton X of Y */}
-                      <div className="ticket-header w-full flex items-center justify-between pb-1 text-[11px] font-sans font-semibold text-slate-700">
-                        <span>Carton: {idx + 1} Of {totalPiezas}</span>
-                        <span className="font-mono text-[10px] text-slate-400">PIEZA #{idx + 1}</span>
-                      </div>
-
-                      {/* Item Code & Model Description */}
-                      <div className="w-full pt-1 pb-1 border-b border-slate-200">
-                        <div className="ticket-model-title text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
-                          {itemCode}
-                        </div>
-                        <div className="text-[12px] font-medium text-slate-700 leading-tight">
-                          {modeloDesc}
-                        </div>
-                      </div>
-
-                      {/* Technical specifications list */}
-                      <div className="ticket-specs w-full py-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[8.5px] leading-tight font-sans text-slate-800 flex-1 overflow-hidden">
-                        {specLines.map((line: string, sIdx: number) => (
-                          <div key={sIdx} className="truncate">
-                            {line}
+                    <div key={idx} className="ticket-print-page">
+                      <div
+                        className="thermal-ticket p-4 border border-slate-300 rounded-xl bg-white flex flex-col justify-between text-left shadow-2xs hover:border-blue-400 transition-colors"
+                      >
+                        {/* Left Column: Header (Carton X of Y) and Model Info */}
+                        <div className="ticket-left-col">
+                          <div className="ticket-header w-full flex items-center justify-between pb-1 text-[11px] font-sans font-semibold text-slate-700">
+                            <span>Carton: {idx + 1} Of {totalPiezas}</span>
+                            <span className="font-mono text-[10px] text-slate-400">PIEZA #{idx + 1}</span>
                           </div>
-                        ))}
-                      </div>
 
-                      {/* Bottom Barcode 128 */}
-                      <div className="w-full pt-1 border-t border-slate-200 flex flex-col items-center justify-center bg-white">
-                        <div className="w-full flex justify-center py-0.5 overflow-hidden">
-                          <Barcode128 value={pieceCode} height={46} barWidth={1.7} showText={false} />
+                          <div className="w-full pt-1 pb-1 border-b border-slate-200">
+                            <div className="ticket-model-title text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
+                              {itemCode}
+                            </div>
+                            <div className="ticket-model-desc text-[12px] font-medium text-slate-700 leading-tight">
+                              {modeloDesc}
+                            </div>
+                          </div>
                         </div>
-                        <div className="ticket-barcode-text text-xs font-mono font-bold text-slate-900 tracking-wider">
-                          {pieceCode}
+
+                        {/* Technical specifications list (Single column, one below the other) */}
+                        <div className="ticket-specs w-full py-1.5 flex flex-col space-y-1 text-[9.5px] leading-tight font-sans text-slate-800 flex-1 overflow-hidden">
+                          {specLines.map((line: string, sIdx: number) => (
+                            <div key={sIdx} className="truncate">
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Bottom Barcode 128 */}
+                        <div className="w-full pt-1 border-t border-slate-200 flex flex-col items-center justify-center bg-white">
+                          <div className="w-full flex justify-center py-0.5 overflow-hidden">
+                            <Barcode128 value={pieceCode} height={46} barWidth={1.7} showText={false} />
+                          </div>
+                          <div className="ticket-barcode-text text-xs font-mono font-bold text-slate-900 tracking-wider">
+                            {pieceCode}
+                          </div>
                         </div>
                       </div>
                     </div>
