@@ -12,6 +12,17 @@ function convertPlaceholders(sql) {
   return sql.replace(/\?/g, () => `$${++count}`);
 }
 
+function shouldAppendReturningId(sql) {
+  const cleanSql = sql.replace(/\/\*[\s\S]*?\*\/|--.*$/gm, '').trim();
+  const match = cleanSql.match(/^INSERT\s+INTO\s+([a-zA-Z0-9_".]+)/i);
+  if (!match) return false;
+  const rawTable = match[1].replace(/["`]/g, '').toLowerCase();
+  const table = rawTable.includes('.') ? rawTable.split('.').pop() : rawTable;
+  if (table === 'configuraciones') return false;
+  if (/\breturning\b/i.test(cleanSql)) return false;
+  return true;
+}
+
 class StatementWrapper {
   constructor(sql) {
     this.sql = convertPlaceholders(sql);
@@ -29,6 +40,9 @@ class StatementWrapper {
 
   async run(...params) {
     let querySql = this.sql;
+    if (shouldAppendReturningId(querySql)) {
+      querySql = querySql.trim().replace(/;+\s*$/, '') + ' RETURNING id';
+    }
     const res = await getPool().query(querySql, params);
     const lastId = (res.rows && res.rows[0] && ('id' in res.rows[0])) ? res.rows[0].id : null;
     return {
@@ -67,9 +81,13 @@ export const dbCompat = {
               },
               async run(...params) {
                 let s = pgSql;
+                if (shouldAppendReturningId(s)) {
+                  s = s.trim().replace(/;+\s*$/, '') + ' RETURNING id';
+                }
                 const res = await client.query(s, params);
+                const lastId = (res.rows && res.rows[0] && ('id' in res.rows[0])) ? res.rows[0].id : null;
                 return {
-                  lastInsertRowid: (res.rows && res.rows[0] && ('id' in res.rows[0])) ? res.rows[0].id : null,
+                  lastInsertRowid: lastId,
                   rowCount: res.rowCount,
                   changes: res.rowCount
                 };

@@ -380,6 +380,7 @@ app.post('/api/auth/entra/exchange', async (req, res) => {
       const insertRes = await db.prepare(`
         INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
         VALUES (?, ?, ?, ?, NULL)
+        RETURNING id
       `).run(userOid, userName, targetEmail, defaultRole);
 
       user = await db.prepare(`
@@ -471,7 +472,7 @@ app.post('/api/catalogs/lines', requireAdminRole, async (req, res) => {
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de línea es requerido' });
     let lineId;
     const tx = db.transaction(async (txDb) => {
-      const result = await txDb.prepare('INSERT INTO lineas (nombre) VALUES (?)').run(nombre.trim());
+      const result = await txDb.prepare('INSERT INTO lineas (nombre) VALUES (?) RETURNING id').run(nombre.trim());
       lineId = result.lastInsertRowid;
       await txDb.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1)').run(lineId, 'Ruta Principal');
     });
@@ -527,6 +528,7 @@ app.post('/api/catalogs/rutas', requireAdminRole, async (req, res) => {
       const result = await txDb.prepare(`
         INSERT INTO rutas (linea_id, nombre, es_default)
         VALUES (?, ?, ?)
+        RETURNING id
       `).run(lineaId, nombre.trim(), esDefault ? 1 : 0);
       insertedId = result.lastInsertRowid;
     });
@@ -600,7 +602,7 @@ app.post('/api/catalogs/tipo-procesos', requireAdminRole, async (req, res) => {
   try {
     const { nombre } = req.body;
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de tipo de proceso es requerido' });
-    const result = await db.prepare('INSERT INTO tipo_procesos (nombre) VALUES (?)').run(nombre.trim().toUpperCase());
+    const result = await db.prepare('INSERT INTO tipo_procesos (nombre) VALUES (?) RETURNING id').run(nombre.trim().toUpperCase());
     notifyDashboardUpdate();
     res.status(201).json({ id: result.lastInsertRowid, nombre: nombre.trim().toUpperCase() });
   } catch (err) {
@@ -647,7 +649,7 @@ app.post('/api/catalogs/procesos', requireAdminRole, async (req, res) => {
       if (defaultRuta) {
         targetRutaId = defaultRuta.id;
       } else {
-        const createDefault = await db.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1)').run(lineaId, 'Ruta Estándar');
+        const createDefault = await db.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, 1) RETURNING id').run(lineaId, 'Ruta Estándar');
         targetRutaId = createDefault.lastInsertRowid;
       }
     }
@@ -678,6 +680,7 @@ app.post('/api/catalogs/procesos', requireAdminRole, async (req, res) => {
         const insertResult = await txDb.prepare(`
           INSERT INTO procesos (linea_id, ruta_id, tipo_proceso_id, orden, modo_trabajo, es_proceso_cierre, tiempo_demora_segundos)
           VALUES (?, ?, ?, ?, ?, ?, ?)
+          RETURNING id
         `).run(lineaId, targetRutaId, tipoProcesoId, targetOrder, finalModo, esCierre, tiempoDemoraSegundos);
         insertedId = insertResult.lastInsertRowid;
         for (const p of conflicting) {
@@ -687,6 +690,7 @@ app.post('/api/catalogs/procesos', requireAdminRole, async (req, res) => {
         const result = await txDb.prepare(`
           INSERT INTO procesos (linea_id, ruta_id, tipo_proceso_id, orden, modo_trabajo, es_proceso_cierre, tiempo_demora_segundos)
           VALUES (?, ?, ?, ?, ?, ?, ?)
+          RETURNING id
         `).run(lineaId, targetRutaId, tipoProcesoId, targetOrder, finalModo, esCierre, tiempoDemoraSegundos);
         insertedId = result.lastInsertRowid;
       }
@@ -879,6 +883,7 @@ app.post('/api/catalogs/estados', requireAdminRole, async (req, res) => {
     const result = await db.prepare(`
       INSERT INTO estados (nombre, orden, visible_para_operador, permite_escaneo, dispara_activacion_siguiente)
       VALUES (?, ?, ?, ?, ?)
+      RETURNING id
     `).run(
       nombre.trim().toUpperCase(),
       parseInt(orden, 10),
@@ -978,6 +983,7 @@ app.post('/api/catalogs/scanners', requireAdminRole, async (req, res) => {
     const result = await db.prepare(`
       INSERT INTO escaneres (codigo_estacion, tipo_proceso_id, linea_id, activo, api_key)
       VALUES (?, ?, ?, 1, ?)
+      RETURNING id
     `).run(codigoEstacion.trim().toUpperCase(), tipoProcesoId, targetLineaId, finalKey);
     notifyDashboardUpdate();
     res.status(201).json({ id: result.lastInsertRowid, success: true, apiKey: finalKey });
@@ -1068,6 +1074,7 @@ app.post('/api/users', requireAdminRole, async (req, res) => {
     const result = await db.prepare(`
       INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
       VALUES (?, ?, ?, ?, ?)
+      RETURNING id
     `).run(msId, nombre.trim(), email.trim(), rol, rol === 'ADMIN' ? null : (lineaId || null));
     res.status(201).json({ id: result.lastInsertRowid, success: true });
   } catch (err) {
@@ -1333,6 +1340,26 @@ app.put('/api/config', requireAdminRole, async (req, res) => {
 // Cooldown / Debounce map to prevent accidental double scans within configured seconds
 const scanCooldownMap = new Map();
 
+// Periodic cleanup to prevent unbounded memory growth in scanCooldownMap (Bug Fix #2)
+const SCAN_COOLDOWN_CLEANUP_INTERVAL_MS = 60 * 1000;
+const cooldownCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  const maxCooldownMs = Math.max((cachedConfigs.scanner_cooldown_segundos || 5) * 1000 * 2, 60000);
+  for (const [key, timestamp] of scanCooldownMap.entries()) {
+    if (now - timestamp > maxCooldownMs) {
+      scanCooldownMap.delete(key);
+    }
+  }
+}, SCAN_COOLDOWN_CLEANUP_INTERVAL_MS);
+
+if (cooldownCleanupTimer.unref) {
+  cooldownCleanupTimer.unref();
+}
+
+export function clearScanCooldownMap() {
+  scanCooldownMap.clear();
+}
+
 // Helper to validate whether a user has permissions to scan a station
 export async function validateStationAccess(user, codigoEstacion) {
   if (!codigoEstacion || codigoEstacion === 'AUTO') {
@@ -1389,16 +1416,21 @@ app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
     if (cooldownMs > 0) {
       const now = Date.now();
       const lastScanTime = scanCooldownMap.get(cleanQR);
-      if (lastScanTime && (now - lastScanTime) < cooldownMs) {
-        const remainingSecs = Math.ceil((cooldownMs - (now - lastScanTime)) / 1000);
-        return res.json({
-          success: false,
-          cooldown: true,
-          remainingSecs,
-          oled_message: `ESPERE ${remainingSecs}S`,
-          tone: 'red',
-          reason: `Escaneo duplicado bloqueado. Debe esperar ${remainingSecs}s antes de volver a escanear esta pieza.`
-        });
+      if (lastScanTime) {
+        if ((now - lastScanTime) < cooldownMs) {
+          const remainingSecs = Math.ceil((cooldownMs - (now - lastScanTime)) / 1000);
+          return res.json({
+            success: false,
+            cooldown: true,
+            remainingSecs,
+            oled_message: `ESPERE ${remainingSecs}S`,
+            tone: 'red',
+            reason: `Escaneo duplicado bloqueado. Debe esperar ${remainingSecs}s antes de volver a escanear esta pieza.`
+          });
+        } else {
+          // Cooldown already passed, purge stale entry immediately
+          scanCooldownMap.delete(cleanQR);
+        }
       }
     }
 
@@ -1465,7 +1497,9 @@ app.post(['/api/scan', '/api/scan/:codigoEstacion'], async (req, res) => {
     });
 
     if (result.success) {
-      scanCooldownMap.set(cleanQR, Date.now());
+      if (cooldownMs > 0) {
+        scanCooldownMap.set(cleanQR, Date.now());
+      }
       io.emit('scan:event', result);
       notifyDashboardUpdate();
     }
@@ -2375,7 +2409,7 @@ app.post('/api/admin/load-initial-data', requireAdminRole, async (req, res) => {
 
           let rutaRow = await txDb.prepare('SELECT id FROM rutas WHERE linea_id = ? AND nombre = ?').get(lineRow.id, r.nombre);
           if (!rutaRow) {
-            const insRuta = await txDb.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, ?)').run(
+            const insRuta = await txDb.prepare('INSERT INTO rutas (linea_id, nombre, es_default) VALUES (?, ?, ?) RETURNING id').run(
               lineRow.id,
               r.nombre,
               r.es_default ? 1 : 0
