@@ -174,7 +174,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right User Bar */}
         <div className="flex items-center space-x-1.5 sm:space-x-3 text-xs flex-shrink-0">
           {/* Real-time Clock (Desktop/Tablet) */}
-          <div className="hidden 2xl:flex items-center space-x-2 text-slate-300 bg-[#1b1f25] px-2.5 py-1 rounded border border-[#2b3038] mono text-[11px] whitespace-nowrap">
+          <div className="hidden md:flex items-center space-x-2 text-slate-300 bg-[#1b1f25] px-2.5 py-1 rounded border border-[#2b3038] mono text-[11px] whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
             <span>{clock || '07:52:55 PM'}</span>
           </div>

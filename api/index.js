@@ -1677,10 +1677,64 @@ function formatDuration(ms) {
   return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
+function buildSqliteJobDateCondition(fecha) {
+  if (!fecha || fecha === 'ALL' || fecha === 'TODAS') {
+    return { condition: '', params: [] };
+  }
+
+  const now = new Date();
+  let startDate = null;
+  let endDate = null;
+  let isToday = false;
+
+  const fUpper = String(fecha).trim().toUpperCase();
+
+  if (fUpper === 'TODAY' || fUpper === 'HOY') {
+    isToday = true;
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (fUpper === 'YESTERDAY' || fUpper === 'AYER') {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    startDate = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 0, 0, 0, 0);
+    endDate = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 23, 59, 59, 999);
+  } else if (fUpper === 'WEEK' || fUpper === 'SEMANA' || fUpper === '7DAYS' || fUpper === '7DIAS') {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    startDate = new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate(), 0, 0, 0, 0);
+    endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    isToday = true;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    const [y, m, d] = fecha.split('-').map(Number);
+    startDate = new Date(y, m - 1, d, 0, 0, 0, 0);
+    endDate = new Date(y, m - 1, d, 23, 59, 59, 999);
+    isToday = (now.getFullYear() === y && now.getMonth() === (m - 1) && now.getDate() === d);
+  }
+
+  if (!startDate || !endDate) {
+    return { condition: '', params: [] };
+  }
+
+  const startIso = startDate.toISOString();
+  const endIso = endDate.toISOString();
+
+  if (isToday) {
+    return {
+      condition: `((j.created_at >= ? AND j.created_at <= ?) OR (j.estado_cierre = 'EN_PROCESO') OR (j.fecha_cierre >= ? AND j.fecha_cierre <= ?))`,
+      params: [startIso, endIso, startIso, endIso]
+    };
+  } else {
+    return {
+      condition: `((j.created_at >= ? AND j.created_at <= ?) OR (j.fecha_cierre >= ? AND j.fecha_cierre <= ?) OR (j.created_at <= ? AND (j.fecha_cierre IS NULL OR j.fecha_cierre >= ?)))`,
+      params: [startIso, endIso, startIso, endIso, endIso, startIso]
+    };
+  }
+}
+
 // 5b. Get Jobs
 app.get('/api/jobs', async (req, res) => {
   try {
-    const { lineaId, rutaId } = req.query;
+    const { lineaId, rutaId, fecha } = req.query;
     let query = `
       SELECT 
         j.*,
@@ -1714,6 +1768,12 @@ app.get('/api/jobs', async (req, res) => {
         conditions.push('j.ruta_id = ?');
         params.push(parsedRutaId);
       }
+    }
+
+    const { condition: dateCond, params: dateParams } = buildSqliteJobDateCondition(fecha);
+    if (dateCond) {
+      conditions.push(dateCond);
+      params.push(...dateParams);
     }
 
     if (conditions.length > 0) {
@@ -1976,7 +2036,7 @@ app.get('/api/jobs/:id', async (req, res) => {
 // 5b-3. Dynamic Kanban board data
 app.get('/api/kanban', async (req, res) => {
   try {
-    const { lineaId, rutaId } = req.query;
+    const { lineaId, rutaId, fecha } = req.query;
     const isAllLines = !lineaId || lineaId === 'ALL' || lineaId === 'TODAS';
 
     let lineRow = null;
@@ -2057,6 +2117,9 @@ app.get('/api/kanban', async (req, res) => {
           `).all(parseInt(rutaId, 10));
     }
 
+    const { condition: dateCond, params: dateParams } = buildSqliteJobDateCondition(fecha);
+    const dateClause = dateCond ? ` AND ${dateCond}` : '';
+
     let itemsQuery;
     let itemsParams;
     if (isAllLines) {
@@ -2090,10 +2153,10 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
+          WHERE e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')${dateClause}
           ORDER BY j.id DESC, p.id ASC
         `;
-        itemsParams = [];
+        itemsParams = [...dateParams];
       } else {
         itemsQuery = `
           SELECT 
@@ -2124,10 +2187,10 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
+          WHERE pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')${dateClause}
           ORDER BY j.id DESC, p.id ASC
         `;
-        itemsParams = [parseInt(rutaId, 10)];
+        itemsParams = [parseInt(rutaId, 10), ...dateParams];
       }
     } else {
       if (isAllRutas) {
@@ -2160,10 +2223,10 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE j.linea_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
+          WHERE j.linea_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')${dateClause}
           ORDER BY j.id DESC, p.id ASC
         `;
-        itemsParams = [currentLineId];
+        itemsParams = [currentLineId, ...dateParams];
       } else {
         itemsQuery = `
           SELECT 
@@ -2194,10 +2257,10 @@ app.get('/api/kanban', async (req, res) => {
           JOIN procesos pr ON pp.proceso_id = pr.id
           JOIN tipo_procesos tp ON pr.tipo_proceso_id = tp.id
           JOIN estados e ON pp.estado_id = e.id
-          WHERE j.linea_id = ? AND pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')
+          WHERE j.linea_id = ? AND pr.ruta_id = ? AND e.nombre IN ('ESPERANDO', 'EN PROCESO', 'TERMINADA')${dateClause}
           ORDER BY j.id DESC, p.id ASC
         `;
-        itemsParams = [currentLineId, parseInt(rutaId, 10)];
+        itemsParams = [currentLineId, parseInt(rutaId, 10), ...dateParams];
       }
     }
 
@@ -2236,7 +2299,8 @@ app.get('/api/kanban', async (req, res) => {
       rutaId: isAllRutas ? 'ALL' : parseInt(rutaId, 10),
       rutas: lineRutas,
       procesos,
-      items
+      items,
+      fecha: fecha || 'TODAY'
     });
   } catch (err) {
     handleServerError(res, err, 500);
@@ -2299,11 +2363,12 @@ app.post('/api/pieces/:id/reassign', requireAuth, async (req, res) => {
 // 6. Dashboard Analytics Summary
 app.get('/api/dashboard/summary', async (req, res) => {
   try {
-    const { lineaId, rutaId, jobCode } = req.query;
+    const { lineaId, rutaId, jobCode, fecha } = req.query;
     const summary = await DashboardService.getSummary({
       lineaId: (lineaId && lineaId !== 'ALL' && lineaId !== 'TODAS') ? parseInt(lineaId, 10) : null,
       rutaId: (rutaId && rutaId !== 'ALL' && rutaId !== 'TODAS') ? parseInt(rutaId, 10) : null,
-      jobCode: jobCode || null
+      jobCode: jobCode || null,
+      fecha: fecha || null
     });
     res.json(summary);
   } catch (err) {

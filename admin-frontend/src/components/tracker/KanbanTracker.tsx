@@ -31,6 +31,7 @@ import { BatchCloseModal } from './BatchCloseModal';
 import { JobAuditModal } from './JobAuditModal';
 import { ReassignPieceModal } from './ReassignPieceModal';
 import { Barcode128 } from '../common/Barcode128';
+import { DateFilterBar } from '../common/DateFilterBar';
 
 interface KanbanTrackerProps {
   activeLine: string;
@@ -42,6 +43,8 @@ interface KanbanTrackerProps {
   onSelectRutaId?: (rutaId: 'ALL' | number) => void;
   selectedJobCode?: string;
   onSelectJobCode?: (jobCode: string) => void;
+  selectedDate?: string;
+  onSelectDate?: (date: string) => void;
   refreshTrigger?: number;
 }
 
@@ -55,6 +58,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
   onSelectRutaId,
   selectedJobCode: controlledJobCode,
   onSelectJobCode,
+  selectedDate = 'TODAY',
+  onSelectDate,
   refreshTrigger
 }) => {
   const { t } = useTranslation();
@@ -254,7 +259,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
       // 2. Fetch Kanban data (for ALL lines or focused line)
       const lineaParam = isAllLines ? 'lineaId=ALL' : `lineaId=${currentLineObj.id}`;
       const rutaParam = selectedRutaId && selectedRutaId !== 'ALL' ? `&rutaId=${selectedRutaId}` : '&rutaId=ALL';
-      const kanbanRes = await fetch(`/api/kanban?${lineaParam}${rutaParam}`);
+      const fechaParam = selectedDate ? `&fecha=${encodeURIComponent(selectedDate)}` : '';
+      const kanbanRes = await fetch(`/api/kanban?${lineaParam}${rutaParam}${fechaParam}`);
       if (!kanbanRes.ok) return;
       const kanbanJson = await kanbanRes.json();
       setKanbanData({
@@ -268,8 +274,8 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
       // 3. Fetch Jobs list (filtered by line and focused route if selected)
       const jobsRutaParam = selectedRutaId && selectedRutaId !== 'ALL' ? `&rutaId=${selectedRutaId}` : '';
       const jobsUrl = isAllLines
-        ? `/api/jobs?lineaId=ALL${jobsRutaParam}`
-        : `/api/jobs?lineaId=${currentLineObj.id}${jobsRutaParam}`;
+        ? `/api/jobs?lineaId=ALL${jobsRutaParam}${fechaParam}`
+        : `/api/jobs?lineaId=${currentLineObj.id}${jobsRutaParam}${fechaParam}`;
       const jobsRes = await fetch(jobsUrl);
       if (!jobsRes.ok) return;
       const jobsJson = await jobsRes.json();
@@ -280,7 +286,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentLineObj.id, isAllLines, selectedRutaId]);
+  }, [currentLineObj.id, isAllLines, selectedRutaId, selectedDate]);
 
   useEffect(() => {
     fetchKanbanAndJobs();
@@ -1004,34 +1010,21 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
     <div className="p-3 sm:p-6 max-w-[1700px] mx-auto space-y-4 sm:space-y-5">
       {/* Top Controls Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-sm">
-        {/* Title & Line Info */}
+        {/* Title */}
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-              <span>{t('tracker.title', { line: isAllLines ? t('tracker.allLinesTitle') : currentLineObj?.nombre })}</span>
-              {isAllLines ? (
-                <span className="text-[10px] normal-case font-medium bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full">
-                  {t('tracker.globalView', { lines: lines.length, routes: rutas.length })}
-                </span>
-              ) : rutas.length > 1 && (
-                <span className="text-[10px] normal-case font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                  {t('tracker.multiRoute', { count: rutas.length })}
-                </span>
-              )}
+            <h1 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+              Trazabilidad
             </h1>
-            <p className="text-xs text-slate-500">
-              {isAllLines
-                ? t('tracker.allLinesSubtitle')
-                : t('tracker.singleLineSubtitle')}
-            </p>
           </div>
         </div>
 
         {/* View Switcher & Route Filter & Refresh */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        {/* Route Filter, Date Filter, View Mode Toggle & Refresh */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           {/* Quick Route Selector Dropdown */}
           <div className="flex items-center space-x-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-xs">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
@@ -1059,7 +1052,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 }
               }}
               aria-label="Seleccionar ruta de proceso"
-              className="bg-white border border-slate-300 text-xs font-bold text-slate-800 rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs"
+              className="bg-white border border-slate-300 text-xs font-bold text-slate-800 rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs max-w-[200px] truncate"
             >
               <option value="ALL">{t('tracker.allRoutes', { count: rutas.length, unit: rutas.length === 1 ? 'ruta' : 'rutas' })}</option>
               {rutas.map((r) => {
@@ -1074,37 +1067,20 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </select>
           </div>
 
-          {/* View Mode Toggle Buttons */}
-          <div className="bg-slate-100 p-1 rounded-lg flex items-center space-x-1">
-            <button
-              onClick={() => setViewMode('KANBAN')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                viewMode === 'KANBAN'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FolderKanban className="w-3.5 h-3.5" />
-              <span>{t('tracker.kanbanTab')}</span>
-            </button>
-            <button
-              onClick={() => setViewMode('JOBS')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                viewMode === 'JOBS'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>{t('tracker.jobsTab', { count: routeJobs.length })}</span>
-            </button>
-          </div>
+          {/* Date Filter Bar */}
+          {onSelectDate && (
+            <DateFilterBar
+              selectedDate={selectedDate}
+              onSelectDate={onSelectDate}
+              className="bg-slate-100/90 border-slate-200/90 text-slate-700"
+            />
+          )}
 
           {/* Refresh Button */}
           <button
             onClick={fetchKanbanAndJobs}
             disabled={refreshing}
-            className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors border border-slate-200"
+            className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors border border-slate-200 shadow-xs"
             title={t('tracker.refreshData')}
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
@@ -1498,6 +1474,34 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
             </button>
           )}
 
+          {/* View Mode Toggle Buttons (Tablero / Jobs) */}
+          <div className="bg-white p-0.5 rounded-lg flex items-center space-x-1 border border-slate-300 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('KANBAN')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                viewMode === 'KANBAN'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>{t('tracker.kanbanTab')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('JOBS')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                viewMode === 'JOBS'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>{t('tracker.jobsTab', { count: routeJobs.length })}</span>
+            </button>
+          </div>
+
           {/* Checkbox: Mostrar piezas terminadas (por defecto false) */}
           <label className="inline-flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-300 shadow-2xs hover:bg-slate-50 transition-colors select-none">
             <input
@@ -1583,13 +1587,7 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                 <X className="w-3 h-3" />
               </button>
             </span>
-          ) : (
-            <span className="text-slate-400">
-              {isAllLines
-                ? t('tracker.globalViewHint')
-                : t('tracker.lineViewHint', { line: currentLineObj?.nombre })}
-            </span>
-          )}
+          ) : null}
         </div>
       </div>
 

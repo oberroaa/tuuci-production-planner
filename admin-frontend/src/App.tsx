@@ -233,7 +233,21 @@ export function App() {
   // Unified shared route state synchronized across Dashboard and Tracker
   const [selectedRutaId, setSelectedRutaId] = useState<'ALL' | number>('ALL');
   const [dashboardJobCode, setDashboardJobCode] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    try {
+      return localStorage.getItem('tuuci_selected_date') || 'TODAY';
+    } catch {
+      return 'TODAY';
+    }
+  });
   const [refreshTriggerKey, setRefreshTriggerKey] = useState<number>(0);
+
+  const handleSelectDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    try {
+      localStorage.setItem('tuuci_selected_date', date);
+    } catch { /* ignore */ }
+  }, []);
 
   // Trigger global data refresh across all views
   const triggerGlobalRefresh = useCallback(() => {
@@ -255,22 +269,24 @@ export function App() {
   }, [activeTab, triggerGlobalRefresh]);
 
   // Fetch dashboard summary
-  const fetchSummary = useCallback(async (customRutaId?: 'ALL' | number, customJobCode?: string) => {
+  const fetchSummary = useCallback(async (customRutaId?: 'ALL' | number, customJobCode?: string, customFecha?: string) => {
     try {
       const targetRutaId = customRutaId !== undefined ? customRutaId : selectedRutaId;
       const targetJobCode = customJobCode !== undefined ? customJobCode : dashboardJobCode;
+      const targetFecha = customFecha !== undefined ? customFecha : selectedDate;
       const lineObj = lines.find((l) => l.nombre === activeLine);
       const lineaQuery = (activeLine && activeLine !== 'TODAS' && lineObj) ? `lineaId=${lineObj.id}` : 'lineaId=ALL';
       const rutaQuery = (targetRutaId && targetRutaId !== 'ALL') ? `&rutaId=${targetRutaId}` : '';
       const jobQuery = (targetJobCode && targetJobCode.trim()) ? `&jobCode=${encodeURIComponent(targetJobCode.trim())}` : '';
-      const res = await fetch(`/api/dashboard/summary?${lineaQuery}${rutaQuery}${jobQuery}`);
+      const fechaQuery = targetFecha ? `&fecha=${encodeURIComponent(targetFecha)}` : '';
+      const res = await fetch(`/api/dashboard/summary?${lineaQuery}${rutaQuery}${jobQuery}${fechaQuery}`);
       if (!res.ok) return; // silently skip – will retry on next interval
       const data = await res.json();
       setSummaryData(data);
     } catch {
       // silenced – transient network / server errors will auto-recover on next fetch cycle
     }
-  }, [activeLine, lines, selectedRutaId, dashboardJobCode]);
+  }, [activeLine, lines, selectedRutaId, dashboardJobCode, selectedDate]);
 
   useEffect(() => {
     fetchSummary();
@@ -396,15 +412,20 @@ export function App() {
             selectedRutaId={selectedRutaId}
             onSelectRutaId={(rId) => {
               setSelectedRutaId(rId);
-              fetchSummary(rId, dashboardJobCode);
+              fetchSummary(rId, dashboardJobCode, selectedDate);
             }}
             selectedJobCode={dashboardJobCode}
             onSelectJobCode={(jCode) => {
               setDashboardJobCode(jCode);
-              fetchSummary(selectedRutaId, jCode);
+              fetchSummary(selectedRutaId, jCode, selectedDate);
+            }}
+            selectedDate={selectedDate}
+            onSelectDate={(date) => {
+              handleSelectDate(date);
+              fetchSummary(selectedRutaId, dashboardJobCode, date);
             }}
             summaryData={summaryData}
-            onRefresh={() => fetchSummary(selectedRutaId, dashboardJobCode)}
+            onRefresh={() => fetchSummary(selectedRutaId, dashboardJobCode, selectedDate)}
           />
         </div>
 
@@ -422,12 +443,17 @@ export function App() {
             selectedRutaId={selectedRutaId}
             onSelectRutaId={(rId) => {
               setSelectedRutaId(rId);
-              fetchSummary(rId, dashboardJobCode);
+              fetchSummary(rId, dashboardJobCode, selectedDate);
             }}
             selectedJobCode={dashboardJobCode}
             onSelectJobCode={(jCode) => {
               setDashboardJobCode(jCode);
-              fetchSummary(selectedRutaId, jCode);
+              fetchSummary(selectedRutaId, jCode, selectedDate);
+            }}
+            selectedDate={selectedDate}
+            onSelectDate={(date) => {
+              handleSelectDate(date);
+              fetchSummary(selectedRutaId, dashboardJobCode, date);
             }}
           />
         </div>

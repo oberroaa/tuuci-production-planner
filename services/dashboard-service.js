@@ -39,11 +39,69 @@ function formatCycleTime(ms) {
   return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
 }
 
+export function buildPgJobDateCondition(fecha, startIdx = 1) {
+  if (!fecha || fecha === 'ALL' || fecha === 'TODAS') {
+    return { condition: '', params: [], nextIdx: startIdx };
+  }
+
+  const now = new Date();
+  let startDate = null;
+  let endDate = null;
+  let isToday = false;
+
+  const fUpper = String(fecha).trim().toUpperCase();
+
+  if (fUpper === 'TODAY' || fUpper === 'HOY') {
+    isToday = true;
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (fUpper === 'YESTERDAY' || fUpper === 'AYER') {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    startDate = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 0, 0, 0, 0);
+    endDate = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 23, 59, 59, 999);
+  } else if (fUpper === 'WEEK' || fUpper === 'SEMANA' || fUpper === '7DAYS' || fUpper === '7DIAS') {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    startDate = new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate(), 0, 0, 0, 0);
+    endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    isToday = true;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    const [y, m, d] = fecha.split('-').map(Number);
+    startDate = new Date(y, m - 1, d, 0, 0, 0, 0);
+    endDate = new Date(y, m - 1, d, 23, 59, 59, 999);
+    isToday = (now.getFullYear() === y && now.getMonth() === (m - 1) && now.getDate() === d);
+  }
+
+  if (!startDate || !endDate) {
+    return { condition: '', params: [], nextIdx: startIdx };
+  }
+
+  const startIso = startDate.toISOString();
+  const endIso = endDate.toISOString();
+
+  let cond;
+  let params;
+  let idx = startIdx;
+
+  if (isToday) {
+    cond = `((j.created_at >= $${idx} AND j.created_at <= $${idx + 1}) OR (j.estado_cierre = 'EN_PROCESO') OR (j.fecha_cierre >= $${idx + 2} AND j.fecha_cierre <= $${idx + 3}))`;
+    params = [startIso, endIso, startIso, endIso];
+    idx += 4;
+  } else {
+    cond = `((j.created_at >= $${idx} AND j.created_at <= $${idx + 1}) OR (j.fecha_cierre >= $${idx + 2} AND j.fecha_cierre <= $${idx + 3}) OR (j.created_at <= $${idx + 4} AND (j.fecha_cierre IS NULL OR j.fecha_cierre >= $${idx + 5})))`;
+    params = [startIso, endIso, startIso, endIso, endIso, startIso];
+    idx += 6;
+  }
+
+  return { condition: cond, params, nextIdx: idx, startDate, endDate, isToday };
+}
+
 export class DashboardService {
   /**
    * Computes high-level KPIs and station details matching the Production Planner UI screenshot.
    */
-  static async getSummary({ lineaId = null, rutaId = null, jobCode = null } = {}) {
+  static async getSummary({ lineaId = null, rutaId = null, jobCode = null, fecha = null } = {}) {
     const isAllLines = !lineaId || lineaId === 'ALL' || lineaId === 'TODAS';
 
     // 1. Line resolution
@@ -100,6 +158,14 @@ export class DashboardService {
       pIdx++;
     }
 
+    // Date condition for top-level Job stats
+    const { condition: dateCond, params: dateParams, nextIdx: nextPIdx } = buildPgJobDateCondition(fecha, pIdx);
+    if (dateCond) {
+      rutaJobCond += ` AND ${dateCond}`;
+      rutaJobParams.push(...dateParams);
+      pIdx = nextPIdx;
+    }
+
     // 2. Jobs stats
     let totalJobsRow;
     if (isAllLines) {
@@ -152,6 +218,12 @@ export class DashboardService {
       completedParams.push(cleanJobCode);
       cIdx++;
     }
+    const { condition: compDateCond, params: compDateParams, nextIdx: nextCIdx } = buildPgJobDateCondition(fecha, cIdx);
+    if (compDateCond) {
+      completedPiecesQuery += ` AND ${compDateCond}`;
+      completedParams.push(...compDateParams);
+      cIdx = nextCIdx;
+    }
 
     const completedPiecesRes = await query(completedPiecesQuery, completedParams);
     const completedPieces = completedPiecesRes.rows[0]?.completed_count || 0;
@@ -182,6 +254,12 @@ export class DashboardService {
       activePiecesQuery += ` AND j.job_code = $${aIdx}`;
       activeParams.push(cleanJobCode);
       aIdx++;
+    }
+    const { condition: actDateCond, params: actDateParams, nextIdx: nextAIdx } = buildPgJobDateCondition(fecha, aIdx);
+    if (actDateCond) {
+      activePiecesQuery += ` AND ${actDateCond}`;
+      activeParams.push(...actDateParams);
+      aIdx = nextAIdx;
     }
 
     const activePiecesRes = await query(activePiecesQuery, activeParams);
@@ -295,6 +373,14 @@ export class DashboardService {
           params.push(cleanJobCode);
           sIdx++;
         }
+        const { condition: stDateCond, params: stDateParams, nextIdx: nextSIdx } = buildPgJobDateCondition(fecha, sIdx);
+        if (stDateCond) {
+          activeQ += ` AND ${stDateCond}`;
+          doneQ += ` AND ${stDateCond}`;
+          timeQ += ` AND ${stDateCond}`;
+          params.push(...stDateParams);
+          sIdx = nextSIdx;
+        }
 
         const activeCountRes = await query(activeQ, params);
         const doneCountRes = await query(doneQ, params);
@@ -405,6 +491,14 @@ export class DashboardService {
           params.push(cleanJobCode);
           sIdx++;
         }
+        const { condition: stDateCond, params: stDateParams, nextIdx: nextSIdx } = buildPgJobDateCondition(fecha, sIdx);
+        if (stDateCond) {
+          activeQ += ` AND ${stDateCond}`;
+          doneQ += ` AND ${stDateCond}`;
+          timeQ += ` AND ${stDateCond}`;
+          params.push(...stDateParams);
+          sIdx = nextSIdx;
+        }
 
         const activeCountRes = await query(activeQ, params);
         const doneCountRes = await query(doneQ, params);
@@ -489,6 +583,12 @@ export class DashboardService {
       alertsParams.push(cleanJobCode);
       alIdx++;
     }
+    const { condition: alDateCond, params: alDateParams, nextIdx: nextAlIdx } = buildPgJobDateCondition(fecha, alIdx);
+    if (alDateCond) {
+      alertsQuery += ` AND ${alDateCond}`;
+      alertsParams.push(...alDateParams);
+      alIdx = nextAlIdx;
+    }
     alertsQuery += ' ORDER BY COALESCE(pp.fecha_inicio, p.created_at, j.created_at) ASC LIMIT 8';
 
     const alertsRes = await query(alertsQuery, alertsParams);
@@ -548,6 +648,12 @@ export class DashboardService {
       cycleQuery += ` AND j.job_code = $${cycIdx}`;
       cycleParams.push(cleanJobCode);
       cycIdx++;
+    }
+    const { condition: cycDateCond, params: cycDateParams, nextIdx: nextCycIdx } = buildPgJobDateCondition(fecha, cycIdx);
+    if (cycDateCond) {
+      cycleQuery += ` AND ${cycDateCond}`;
+      cycleParams.push(...cycDateParams);
+      cycIdx = nextCycIdx;
     }
     cycleQuery += ' GROUP BY p.id';
 
@@ -626,7 +732,8 @@ export class DashboardService {
       stationOverview,
       throughput12Hours,
       totalThroughput12h,
-      timeAlerts: formattedAlerts
+      timeAlerts: formattedAlerts,
+      fecha: fecha || 'TODAY'
     };
   }
 }

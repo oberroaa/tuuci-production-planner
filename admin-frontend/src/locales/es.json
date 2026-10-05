@@ -13,7 +13,16 @@
     "error": "Error",
     "success": "Éxito",
     "pieces": "piezas",
-    "piece": "pieza"
+    "piece": "pieza",
+    "dateFilter": {
+      "label": "Fecha:",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "week": "7 Días",
+      "all": "Todos",
+      "custom": "Personalizada",
+      "selectDate": "Seleccionar fecha"
+    }
   },
   "navbar": {
     "title": "Production Planner",
