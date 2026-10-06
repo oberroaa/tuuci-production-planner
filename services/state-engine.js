@@ -154,6 +154,9 @@ export class StateEngine {
       };
     } catch (err) {
       await client.query('ROLLBACK');
+      if (err.code === '23505' && (err.constraint === 'jobs_job_code_key' || (err.detail && err.detail.includes('job_code')) || (err.message && err.message.includes('jobs_job_code_key')))) {
+        throw new Error(`Este Job (${jobCode}) ya fue registrado y cortado anteriormente en la línea de producción. No se puede duplicar.`);
+      }
       throw err;
     } finally {
       client.release();
@@ -265,7 +268,14 @@ export class StateEngine {
   /**
    * Phase 2: Wireless Scanner Event.
    */
-  static async handleScan({ codigoEstacion, codigoQRUnico, apiKey = null, isSimulator = false, usuarioId = null }) {
+  static async scanProcess(params) {
+    return this.handleScan(params);
+  }
+
+  static async handleScan({ codigoEstacion, codigoQRUnico, apiKey = null, scanner: passedScanner = null, isSimulator = false, usuarioId = null }) {
+    if (!apiKey && passedScanner && passedScanner.api_key) {
+      apiKey = passedScanner.api_key;
+    }
     if (!codigoQRUnico) {
       return { success: false, oled_message: 'ERROR', tone: 'red', reason: 'Missing piece QR' };
     }

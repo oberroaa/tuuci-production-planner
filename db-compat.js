@@ -9,7 +9,13 @@ export { pool, getPool, query, initDb, updatePoolConfig };
 
 function convertPlaceholders(sql) {
   let count = 0;
-  return sql.replace(/\?/g, () => `$${++count}`);
+  // Match single-quoted strings (handling escaped quotes '') or '?' parameter placeholders
+  return sql.replace(/'(?:''|[^'])*'|\?/g, (match) => {
+    if (match === '?') {
+      return `$${++count}`;
+    }
+    return match;
+  });
 }
 
 function shouldAppendReturningId(sql) {
