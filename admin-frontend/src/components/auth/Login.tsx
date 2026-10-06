@@ -1,16 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-
-interface User {
-  id: number;
-  nombre: string;
-  email: string;
-  rol: 'ADMIN' | 'SUPERVISOR' | 'OPERADOR';
-  microsoft_id: string;
-  linea_id?: number | null;
-  linea_nombre?: string | null;
-}
+import type { User } from '../../types';
 
 interface LoginProps {
   onLogin: (user: User) => void;

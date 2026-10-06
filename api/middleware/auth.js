@@ -34,9 +34,15 @@ export function verifyUserToken(token) {
   if (signature !== expectedSig) return null;
   try {
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    // Configurable session lifespan (defaults to 365 days) for industrial floor devices
+    // Configurable session lifespan with role-based boundaries:
+    // Floor kiosks and operators: up to configured sessionDays (defaults to 365 days)
+    // Administrative and supervisory roles: maximum 24 hours for security
     const sessionDays = (cachedConfigs && cachedConfigs.session_duracion_dias) ? cachedConfigs.session_duracion_dias : 365;
-    if (Date.now() - payload.timestamp > sessionDays * 24 * 60 * 60 * 1000) return null;
+    const isElevatedRole = payload.rol === 'ADMIN' || payload.rol === 'SUPERVISOR';
+    const maxLifespanMs = isElevatedRole
+      ? Math.min(sessionDays * 24 * 60 * 60 * 1000, 24 * 60 * 60 * 1000)
+      : sessionDays * 24 * 60 * 60 * 1000;
+    if (Date.now() - payload.timestamp > maxLifespanMs) return null;
     return payload;
   } catch {
     return null;

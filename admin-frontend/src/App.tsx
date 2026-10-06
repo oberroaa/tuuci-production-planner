@@ -8,6 +8,7 @@ import { KanbanTracker } from './components/tracker/KanbanTracker';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { SettingsView } from './components/settings/SettingsView';
 import { Login } from './components/auth/Login';
+import type { User, ProductionLine } from './types';
 
 export function App() {
   // Restore last active tab or default to role's primary landing view
@@ -42,11 +43,11 @@ export function App() {
   }, []);
 
   const [activeLine, setActiveLine] = useState<string>('TODAS');
-  const [lines, setLines] = useState<Array<{ id: number; nombre: string }>>([]);
+  const [lines, setLines] = useState<ProductionLine[]>([]);
   const [summaryData, setSummaryData] = useState<any>(null);
 
   // Restore authenticated session from localStorage or set to null
-  const [currentUser, setCurrentUser] = useState<any>(() => {
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('tuuci_user');
       if (saved) return JSON.parse(saved);
@@ -160,7 +161,7 @@ export function App() {
   }, [fetchLines]);
 
   // When user logs in or switches
-  const handleLogin = (user: any) => {
+  const handleLogin = (user: User) => {
     setCurrentUser(user);
     try {
       localStorage.setItem('tuuci_user', JSON.stringify(user));

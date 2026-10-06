@@ -108,38 +108,74 @@ export class StateEngine {
 
       const jobId = jobResult.rows[0].id;
       const createdPieces = [];
+      const now = new Date();
 
-      for (let i = 1; i <= qty; i++) {
-        const pieceNumber = String(i).padStart(2, '0');
-        const pieceQr = `${jobCode}-${pieceNumber}`;
-        const pieceResult = await client.query(`
-          INSERT INTO piezas (job_id, codigo_qr_unico)
-          VALUES ($1, $2)
-          RETURNING id
-        `, [jobId, pieceQr]);
-        const pieceId = pieceResult.rows[0].id;
+      // Optimized: Batch insert pieces, route processes, and audit events in chunks to eliminate N+1 latency
+      const BATCH_SIZE = 150;
+      for (let offset = 1; offset <= qty; offset += BATCH_SIZE) {
+        const batchEnd = Math.min(offset + BATCH_SIZE - 1, qty);
+        const pieceQrPlaceholders = [];
+        const pieceParams = [jobId];
 
-        createdPieces.push({ id: pieceId, codigoQRUnico: pieceQr });
-
-        // Instantiate route for this piece
-        for (let stepIndex = 0; stepIndex < procesos.length; stepIndex++) {
-          const proc = procesos[stepIndex];
-          const isFirstStep = stepIndex === 0;
-
-          const initialEstadoId = isFirstStep ? stateEnProceso.id : stateInactivo.id;
-          const fechaInicio = isFirstStep ? new Date() : null;
-
-          const ppResult = await client.query(`
-            INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id
-          `, [pieceId, proc.id, initialEstadoId, fechaInicio]);
-
-          await client.query(`
-            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
-            VALUES ($1, NULL, $2, $3)
-          `, [ppResult.rows[0].id, initialEstadoId, creadoPorUsuarioId]);
+        for (let i = offset; i <= batchEnd; i++) {
+          const pieceNumber = String(i).padStart(2, '0');
+          const pieceQr = `${jobCode}-${pieceNumber}`;
+          pieceParams.push(pieceQr);
+          pieceQrPlaceholders.push(`($1, $${pieceParams.length})`);
         }
+
+        const piecesInsertRes = await client.query(`
+          INSERT INTO piezas (job_id, codigo_qr_unico)
+          VALUES ${pieceQrPlaceholders.join(', ')}
+          RETURNING id, codigo_qr_unico
+        `, pieceParams);
+
+        // Maintain deterministic piece ordering
+        const sortedBatchPieces = piecesInsertRes.rows.sort((a, b) => a.codigo_qr_unico.localeCompare(b.codigo_qr_unico));
+
+        for (const pRow of sortedBatchPieces) {
+          createdPieces.push({ id: pRow.id, codigoQRUnico: pRow.codigo_qr_unico });
+        }
+
+        // Batch insert pieza_procesos for this chunk
+        const ppValues = [];
+        const ppParams = [];
+        let ppIdx = 1;
+
+        for (const pRow of sortedBatchPieces) {
+          for (let stepIndex = 0; stepIndex < procesos.length; stepIndex++) {
+            const proc = procesos[stepIndex];
+            const isFirstStep = stepIndex === 0;
+            const initialEstadoId = isFirstStep ? stateEnProceso.id : stateInactivo.id;
+            const fechaInicio = isFirstStep ? now : null;
+
+            ppValues.push(`($${ppIdx}, $${ppIdx + 1}, $${ppIdx + 2}, $${ppIdx + 3})`);
+            ppParams.push(pRow.id, proc.id, initialEstadoId, fechaInicio);
+            ppIdx += 4;
+          }
+        }
+
+        const ppInsertRes = await client.query(`
+          INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+          VALUES ${ppValues.join(', ')}
+          RETURNING id, estado_id
+        `, ppParams);
+
+        // Batch insert evento_estados for this chunk
+        const evValues = [];
+        const evParams = [creadoPorUsuarioId];
+        let evIdx = 2;
+
+        for (const ppRow of ppInsertRes.rows) {
+          evValues.push(`($${evIdx}, NULL, $${evIdx + 1}, $1)`);
+          evParams.push(ppRow.id, ppRow.estado_id);
+          evIdx += 2;
+        }
+
+        await client.query(`
+          INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
+          VALUES ${evValues.join(', ')}
+        `, evParams);
       }
 
       await client.query('COMMIT');
@@ -202,49 +238,105 @@ export class StateEngine {
         WHERE p.job_id = $1 AND pp.proceso_id = $2 AND pp.estado_id = $3
       `, [jobId, procesoId, stateEnProceso.id]);
       const activePieceProcesses = activeRes.rows;
-
       const now = new Date();
 
-      for (const item of activePieceProcesses) {
+      if (activePieceProcesses.length > 0) {
+        const activeIds = activePieceProcesses.map((p) => p.id);
+        const activePiezaIds = activePieceProcesses.map((p) => p.pieza_id);
+
+        // 1. Bulk update current batch processes to TERMINADA
         await client.query(`
           UPDATE pieza_procesos
           SET estado_id = $1, fecha_fin = $2
-          WHERE id = $3
-        `, [stateTerminada.id, now, item.id]);
+          WHERE id = ANY($3::int[])
+        `, [stateTerminada.id, now, activeIds]);
+
+        // 2. Bulk insert audit events for closing current batch
+        const evValues = [];
+        const evParams = [stateTerminada.id, usuarioId];
+        let evIdx = 3;
+        for (const item of activePieceProcesses) {
+          evValues.push(`($${evIdx}, $${evIdx + 1}, $1, $2)`);
+          evParams.push(item.id, item.estado_id);
+          evIdx += 2;
+        }
 
         await client.query(`
           INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
-          VALUES ($1, $2, $3, $4)
-        `, [item.id, item.estado_id, stateTerminada.id, usuarioId]);
+          VALUES ${evValues.join(', ')}
+        `, evParams);
 
+        // 3. Downstream activation for next process
         if (nextProc) {
-          const checkNextPP = await client.query(
-            'SELECT id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
-            [item.pieza_id, nextProc.id]
-          );
+          const existingNextRes = await client.query(`
+            SELECT id, pieza_id, estado_id
+            FROM pieza_procesos
+            WHERE proceso_id = $1 AND pieza_id = ANY($2::int[])
+          `, [nextProc.id, activePiezaIds]);
 
-          let nextPPId = null;
-          if (checkNextPP.rows.length === 0) {
-            const insertedNextPP = await client.query(`
-              INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
-              VALUES ($1, $2, $3, NULL)
-              RETURNING id
-            `, [item.pieza_id, nextProc.id, stateEsperando.id]);
-            nextPPId = insertedNextPP.rows[0].id;
-          } else {
-            nextPPId = checkNextPP.rows[0].id;
+          const existingByPiezaId = new Map();
+          for (const row of existingNextRes.rows) {
+            existingByPiezaId.set(row.pieza_id, row);
+          }
+
+          const existingNextIds = [];
+          const piecesNeedingInsert = [];
+          for (const item of activePieceProcesses) {
+            const existing = existingByPiezaId.get(item.pieza_id);
+            if (existing) {
+              existingNextIds.push(existing.id);
+            } else {
+              piecesNeedingInsert.push(item.pieza_id);
+            }
+          }
+
+          // Update existing next steps to ESPERANDO
+          if (existingNextIds.length > 0) {
             await client.query(`
               UPDATE pieza_procesos
               SET estado_id = $1
-              WHERE id = $2
-            `, [stateEsperando.id, nextPPId]);
+              WHERE id = ANY($2::int[])
+            `, [stateEsperando.id, existingNextIds]);
           }
 
-          if (nextPPId) {
+          // Insert missing next process rows if any
+          let newlyInsertedNextPP = [];
+          if (piecesNeedingInsert.length > 0) {
+            const insValues = [];
+            const insParams = [nextProc.id, stateEsperando.id];
+            let insIdx = 3;
+            for (const pId of piecesNeedingInsert) {
+              insValues.push(`($${insIdx}, $1, $2, NULL)`);
+              insParams.push(pId);
+              insIdx++;
+            }
+            const insRes = await client.query(`
+              INSERT INTO pieza_procesos (pieza_id, proceso_id, estado_id, fecha_inicio)
+              VALUES ${insValues.join(', ')}
+              RETURNING id, pieza_id
+            `, insParams);
+            newlyInsertedNextPP = insRes.rows;
+          }
+
+          // Insert audit events for next process activation
+          const nextEvValues = [];
+          const nextEvParams = [stateEsperando.id, usuarioId];
+          let nextEvIdx = 3;
+          for (const row of existingNextRes.rows) {
+            nextEvValues.push(`($${nextEvIdx}, NULL, $1, $2)`);
+            nextEvParams.push(row.id);
+            nextEvIdx++;
+          }
+          for (const row of newlyInsertedNextPP) {
+            nextEvValues.push(`($${nextEvIdx}, NULL, $1, $2)`);
+            nextEvParams.push(row.id);
+            nextEvIdx++;
+          }
+          if (nextEvValues.length > 0) {
             await client.query(`
               INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id)
-              VALUES ($1, NULL, $2, $3)
-            `, [nextPPId, stateEsperando.id, usuarioId]);
+              VALUES ${nextEvValues.join(', ')}
+            `, nextEvParams);
           }
         }
       }
@@ -622,17 +714,28 @@ export class StateEngine {
     const alreadyCompletedPieces = []; // Piezas que ya fueron terminadas en la estación final en un cierre previo
     const laggingPieces = []; // Piezas pendientes en estaciones anteriores
 
+    // Optimized: Fetch all steps for all pieces of this job in a single indexed query
+    const allStepsRes = await query(`
+      SELECT pp.id as pp_id, pp.pieza_id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, p.orden, tp.nombre as tipo_nombre
+      FROM pieza_procesos pp
+      JOIN piezas pz ON pp.pieza_id = pz.id
+      JOIN procesos p ON pp.proceso_id = p.id
+      JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
+      JOIN estados e ON pp.estado_id = e.id
+      WHERE pz.job_id = $1
+      ORDER BY p.orden ASC
+    `, [jobId]);
+
+    const stepsByPiece = new Map();
+    for (const step of allStepsRes.rows) {
+      if (!stepsByPiece.has(step.pieza_id)) {
+        stepsByPiece.set(step.pieza_id, []);
+      }
+      stepsByPiece.get(step.pieza_id).push(step);
+    }
+
     for (const pieza of piezas) {
-      const stepsRes = await query(`
-        SELECT pp.id as pp_id, pp.proceso_id, pp.estado_id, e.nombre as estado_nombre, p.orden, tp.nombre as tipo_nombre
-        FROM pieza_procesos pp
-        JOIN procesos p ON pp.proceso_id = p.id
-        JOIN tipo_procesos tp ON p.tipo_proceso_id = tp.id
-        JOIN estados e ON pp.estado_id = e.id
-        WHERE pp.pieza_id = $1
-        ORDER BY p.orden ASC
-      `, [pieza.id]);
-      const steps = stepsRes.rows;
+      const steps = stepsByPiece.get(pieza.id) || [];
 
       const finalStep = steps.find((s) => s.proceso_id === finalProceso.id);
 
@@ -754,28 +857,39 @@ export class StateEngine {
       await client.query('BEGIN');
 
       // 1. Procesar piezas que están en la estación final listas para ser terminadas
+      // 1. Procesar piezas que están en la estación final listas para ser terminadas (bulk)
       let closedPiecesCount = 0;
-      for (const p of audit.normalPieces) {
-        const ppRes = await client.query(
-          'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
-          [p.piezaId, targetProcesoId]
+      if (audit.normalPieces.length > 0) {
+        const normalPiezaIds = audit.normalPieces.map((p) => p.piezaId);
+        const ppRowsRes = await client.query(
+          'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = ANY($1::int[]) AND proceso_id = $2',
+          [normalPiezaIds, targetProcesoId]
         );
-        const pp = ppRes.rows[0];
-        if (pp) {
-          if (pp.estado_id !== stateTerminada.id) {
-            await client.query(`
-              UPDATE pieza_procesos
-              SET estado_id = $1, fecha_fin = COALESCE(fecha_fin, $2)
-              WHERE id = $3
-            `, [stateTerminada.id, now, pp.id]);
 
-            await client.query(`
-              INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
-              VALUES ($1, $2, $3, $4, $5)
-            `, [pp.id, pp.estado_id, stateTerminada.id, usuarioId, isPartial ? 'Cierre Parcial de Lote' : 'Cierre Total de Lote']);
+        const toUpdate = ppRowsRes.rows.filter((pp) => pp.estado_id !== stateTerminada.id);
+        if (toUpdate.length > 0) {
+          const toUpdateIds = toUpdate.map((pp) => pp.id);
+          await client.query(`
+            UPDATE pieza_procesos
+            SET estado_id = $1, fecha_fin = COALESCE(fecha_fin, $2)
+            WHERE id = ANY($3::int[])
+          `, [stateTerminada.id, now, toUpdateIds]);
+
+          const evValues = [];
+          const obs = isPartial ? 'Cierre Parcial de Lote' : 'Cierre Total de Lote';
+          const evParams = [stateTerminada.id, usuarioId, obs];
+          let evIdx = 4;
+          for (const item of toUpdate) {
+            evValues.push(`($${evIdx}, $${evIdx + 1}, $1, $2, $3)`);
+            evParams.push(item.id, item.estado_id);
+            evIdx += 2;
           }
-          closedPiecesCount++;
+          await client.query(`
+            INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+            VALUES ${evValues.join(', ')}
+          `, evParams);
         }
+        closedPiecesCount = ppRowsRes.rows.length;
       }
 
       let finalJobStatus = 'EN_PROCESO';
@@ -800,31 +914,49 @@ export class StateEngine {
       } else {
         // CIERRE TOTAL (o forzado con incidencias):
         if (audit.laggingPieces.length > 0) {
-          // Forzado con incidencias si se cerró total a pesar de haber piezas rezagadas
+          const laggingPiezaIds = audit.laggingPieces.map((p) => p.piezaId);
+          await client.query('UPDATE piezas SET cierre_excepcion = 1 WHERE id = ANY($1::int[])', [laggingPiezaIds]);
+
+          const ppFinalRes = await client.query(
+            'SELECT id, pieza_id, estado_id FROM pieza_procesos WHERE pieza_id = ANY($1::int[]) AND proceso_id = $2',
+            [laggingPiezaIds, targetProcesoId]
+          );
+
+          const ppFinalById = new Map();
+          for (const row of ppFinalRes.rows) {
+            ppFinalById.set(row.pieza_id, row);
+          }
+
+          const finalIdsToUpdate = [];
+          const evValues = [];
+          const evParams = [stateTerminada.id, usuarioId];
+          let evIdx = 3;
+
           for (const p of audit.laggingPieces) {
-            await client.query('UPDATE piezas SET cierre_excepcion = 1 WHERE id = $1', [p.piezaId]);
-
-            const missingStepsStr = p.pasosFaltantes.map((s) => s.tipoNombre).join(', ');
-            const lastStepStr = p.ultimoPaso ? `${p.ultimoPaso.tipoNombre} (${p.ultimoPaso.estadoNombre})` : 'Ninguno';
-            const obsText = `Cierre forzado en Lote Final: Se omitieron pasos [${missingStepsStr}]. Última estación real: ${lastStepStr}. ${notasCierre ? 'Nota: ' + notasCierre.trim() : ''}`.trim();
-
-            const ppFinalRes = await client.query(
-              'SELECT id, estado_id FROM pieza_procesos WHERE pieza_id = $1 AND proceso_id = $2',
-              [p.piezaId, targetProcesoId]
-            );
-            const ppFinal = ppFinalRes.rows[0];
+            const ppFinal = ppFinalById.get(p.piezaId);
             if (ppFinal) {
-              await client.query(`
-                UPDATE pieza_procesos
-                SET estado_id = $1, fecha_inicio = COALESCE(fecha_inicio, $2), fecha_fin = $3
-                WHERE id = $4
-              `, [stateTerminada.id, now, now, ppFinal.id]);
+              finalIdsToUpdate.push(ppFinal.id);
+              const missingStepsStr = p.pasosFaltantes.map((s) => s.tipoNombre).join(', ');
+              const lastStepStr = p.ultimoPaso ? `${p.ultimoPaso.tipoNombre} (${p.ultimoPaso.estadoNombre})` : 'Ninguno';
+              const obsText = `Cierre forzado en Lote Final: Se omitieron pasos [${missingStepsStr}]. Última estación real: ${lastStepStr}. ${notasCierre ? 'Nota: ' + notasCierre.trim() : ''}`.trim();
 
-              await client.query(`
-                INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
-                VALUES ($1, $2, $3, $4, $5)
-              `, [ppFinal.id, ppFinal.estado_id, stateTerminada.id, usuarioId, obsText]);
+              evValues.push(`($${evIdx}, $${evIdx + 1}, $1, $2, $${evIdx + 2})`);
+              evParams.push(ppFinal.id, ppFinal.estado_id, obsText);
+              evIdx += 3;
             }
+          }
+
+          if (finalIdsToUpdate.length > 0) {
+            await client.query(`
+              UPDATE pieza_procesos
+              SET estado_id = $1, fecha_inicio = COALESCE(fecha_inicio, $2), fecha_fin = $2
+              WHERE id = ANY($3::int[])
+            `, [stateTerminada.id, now, finalIdsToUpdate]);
+
+            await client.query(`
+              INSERT INTO evento_estados (pieza_proceso_id, estado_anterior_id, estado_nuevo_id, usuario_id, observacion)
+              VALUES ${evValues.join(', ')}
+            `, evParams);
           }
           finalJobStatus = 'COMPLETADO_CON_INCIDENCIAS';
         } else {

@@ -3,11 +3,12 @@ import { Camera, Printer, CheckCircle, RefreshCw, Layers, Scissors, AlertTriangl
 import { useTranslation } from 'react-i18next';
 import { getSocket } from '../../socket';
 import { Barcode128 } from '../common/Barcode128';
+import type { User, ProductionLine } from '../../types';
 
 interface CuttingStationProps {
   activeLine: string;
-  lines: Array<{ id: number; nombre: string }>;
-  currentUser?: any;
+  lines: ProductionLine[];
+  currentUser?: User | null;
   onJobCreated: () => void;
 }
 
@@ -85,7 +86,7 @@ export const CuttingStation: React.FC<CuttingStationProps> = ({
       if (userLine) return userLine.id;
     }
     if (currentUser?.linea_nombre) {
-      const userLine = lines.find((l) => l.nombre.toLowerCase() === currentUser.linea_nombre.toLowerCase());
+      const userLine = lines.find((l) => l.nombre.toLowerCase() === (currentUser.linea_nombre || '').toLowerCase());
       if (userLine) return userLine.id;
     }
 

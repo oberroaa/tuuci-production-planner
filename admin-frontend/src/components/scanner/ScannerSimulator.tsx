@@ -3,21 +3,12 @@ import { Scan, Radio, Volume2, CheckCircle2, XCircle, Sparkles, Barcode } from '
 import { useTranslation } from 'react-i18next';
 import { getSocket } from '../../socket';
 
+import type { User, ScannerDevice } from '../../types';
+
 interface ScannerSimulatorProps {
   onScanSuccess: () => void;
-  currentUser?: any;
+  currentUser?: User | null;
   activeLine?: string;
-}
-
-interface ScannerDevice {
-  id: number;
-  codigo_estacion: string;
-  tipo_proceso_id: number;
-  linea_id?: number | null;
-  linea_nombre?: string | null;
-  activo: number;
-  tipo_nombre?: string;
-  tipo_proceso_nombre?: string;
 }
 
 // Web Audio API beep synthesizer for industrial floor devices

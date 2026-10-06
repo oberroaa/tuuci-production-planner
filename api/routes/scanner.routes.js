@@ -100,8 +100,6 @@ router.post(['/scan', '/scan/:codigoEstacion'], async (req, res) => {
       || req.headers['x-api-key']
       || req.body?.apiKey 
       || req.body?.token 
-      || req.query?.token 
-      || req.query?.apiKey 
       || null;
 
     let usuarioId = null;

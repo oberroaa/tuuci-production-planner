@@ -1,5 +1,6 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import crypto from 'node:crypto';
 
 dotenv.config();
 
@@ -302,7 +303,7 @@ export async function initDb() {
     // Run this outside seedDefaultCatalogs so it executes even if the db is already seeded
     const nullKeys = await client.query('SELECT id, codigo_estacion FROM escaneres WHERE api_key IS NULL');
     for (const row of nullKeys.rows) {
-      const genKey = `tuuci_key_${row.codigo_estacion.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 8)}`;
+      const genKey = `tuuci_key_${row.codigo_estacion.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${crypto.randomBytes(4).toString('hex')}`;
       await client.query('UPDATE escaneres SET api_key = $1 WHERE id = $2', [genKey, row.id]);
     }
 

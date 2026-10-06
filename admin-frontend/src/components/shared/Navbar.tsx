@@ -1,14 +1,15 @@
 import React from 'react';
 import { ChevronDown, Sun, LogOut, Globe, Menu, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { User, ProductionLine } from '../../types';
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   activeLine: string;
   setActiveLine: (line: string) => void;
-  lines: Array<{ id: number; nombre: string }>;
-  currentUser?: any;
+  lines: ProductionLine[];
+  currentUser?: User | null;
   onLogout?: () => void;
 }
 
