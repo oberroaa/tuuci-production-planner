@@ -241,6 +241,18 @@ export async function initDb() {
         descripcion TEXT,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+
+      -- Índices de alto rendimiento para PostgreSQL
+      CREATE INDEX IF NOT EXISTS idx_piezas_job_id ON piezas(job_id);
+      CREATE INDEX IF NOT EXISTS idx_piezas_codigo_qr ON piezas(codigo_qr_unico);
+      CREATE INDEX IF NOT EXISTS idx_pieza_procesos_pieza_id ON pieza_procesos(pieza_id);
+      CREATE INDEX IF NOT EXISTS idx_pieza_procesos_proceso_id ON pieza_procesos(proceso_id);
+      CREATE INDEX IF NOT EXISTS idx_pieza_procesos_estado_id ON pieza_procesos(estado_id);
+      CREATE INDEX IF NOT EXISTS idx_evento_estados_pieza_proceso ON evento_estados(pieza_proceso_id);
+      CREATE INDEX IF NOT EXISTS idx_jobs_linea_id ON jobs(linea_id);
+      CREATE INDEX IF NOT EXISTS idx_jobs_ruta_id ON jobs(ruta_id);
+      CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_jobs_fecha_cierre ON jobs(fecha_cierre);
     `);
 
     await client.query(`
