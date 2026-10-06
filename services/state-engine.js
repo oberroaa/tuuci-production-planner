@@ -81,22 +81,22 @@ export class StateEngine {
       throw err;
     }
 
-    // Ensure jobCode is strictly unique
-    const existingJobRes = await query(`
-      SELECT j.id, j.job_code, j.created_at, l.nombre as linea_nombre
-      FROM jobs j
-      LEFT JOIN lineas l ON j.linea_id = l.id
-      WHERE j.job_code = $1
-    `, [jobCode]);
-
-    if (existingJobRes.rows.length > 0) {
-      const existingJob = existingJobRes.rows[0];
-      throw new Error(`Este Job (${jobCode}) ya fue registrado y cortado anteriormente en la línea ${existingJob.linea_nombre || 'de producción'}. No se puede duplicar.`);
-    }
-
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Ensure jobCode is strictly unique within the transaction context
+      const existingJobRes = await client.query(`
+        SELECT j.id, j.job_code, j.created_at, l.nombre as linea_nombre
+        FROM jobs j
+        LEFT JOIN lineas l ON j.linea_id = l.id
+        WHERE j.job_code = $1
+      `, [jobCode]);
+
+      if (existingJobRes.rows.length > 0) {
+        const existingJob = existingJobRes.rows[0];
+        throw new Error(`Este Job (${jobCode}) ya fue registrado y cortado anteriormente en la línea ${existingJob.linea_nombre || 'de producción'}. No se puede duplicar.`);
+      }
 
       const configJson = config ? (typeof config === 'string' ? config : JSON.stringify(config)) : null;
 

@@ -9,8 +9,9 @@ export { pool, getPool, query, initDb, updatePoolConfig };
 
 function convertPlaceholders(sql) {
   let count = 0;
-  // Match single-quoted strings ('...'), dollar-quoted strings ($$...$$), SQL comments (--... or /*...*/), or '?'
-  return sql.replace(/'(?:''|[^'])*'|\/\*[\s\S]*?\*\/|--[^\r\n]*|\?/g, (match) => {
+  // Match single-quoted strings ('...'), dollar-quoted strings ($$...$$), SQL comments (--... or /*...*/),
+  // PostgreSQL jsonb operators (?|, ?&, ?#), or standalone '?'
+  return sql.replace(/'(?:''|[^'])*'|\/\*[\s\S]*?\*\/|--[^\r\n]*|\?[|&#]|\?/g, (match) => {
     if (match === '?') {
       return `$${++count}`;
     }
