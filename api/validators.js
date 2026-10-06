@@ -112,5 +112,34 @@ export const schemas = {
 
   createLine: {
     nombre: { type: 'string', required: true, minLength: 2, maxLength: 100 }
+  },
+
+  createRoute: {
+    lineaId: { type: 'integer', required: true, min: 1 },
+    nombre: { type: 'string', required: true, minLength: 2, maxLength: 100 },
+    esDefault: { type: 'boolean', required: false }
+  },
+
+  createProcess: {
+    lineaId: { type: 'integer', required: true, min: 1 },
+    rutaId: { type: 'integer', required: false, min: 1 },
+    tipoProcesoId: { type: 'integer', required: true, min: 1 },
+    orden: { type: 'integer', required: false, min: 1 },
+    modoTrabajo: { type: 'enum', values: ['INDIVIDUAL', 'LOTE'], required: false }
+  },
+
+  createUser: {
+    nombre: { type: 'string', required: true, minLength: 2, maxLength: 100 },
+    email: { type: 'string', required: true, minLength: 5, maxLength: 150 },
+    rol: { type: 'enum', values: ['ADMIN', 'SUPERVISOR', 'OPERADOR'], required: true },
+    lineaId: { type: 'integer', required: false, min: 1 }
+  },
+
+  updateUser: {
+    nombre: { type: 'string', required: false, minLength: 2, maxLength: 100 },
+    email: { type: 'string', required: false, minLength: 5, maxLength: 150 },
+    rol: { type: 'enum', values: ['ADMIN', 'SUPERVISOR', 'OPERADOR'], required: false },
+    lineaId: { type: 'integer', required: false, min: 1 }
   }
 };
+

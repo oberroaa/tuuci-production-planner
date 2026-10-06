@@ -210,14 +210,15 @@ app.use(authenticateUser);
 export function handleServerError(res, err, defaultStatus = 500) {
   console.error('[SERVER ERROR]', err);
   if (res.headersSent) return; // response already flushed — nothing we can do
+  const status = typeof defaultStatus === 'number' && defaultStatus >= 400 && defaultStatus < 600 ? defaultStatus : 500;
   if (process.env.NODE_ENV === 'production') {
-    return res.status(defaultStatus).json({
-      error: defaultStatus === 500
+    return res.status(status).json({
+      error: status >= 500
         ? 'Error interno del servidor. Por favor, contacte al administrador del sistema.'
-        : (err.message || 'Error en la solicitud')
+        : (err?.message || 'Error en la solicitud')
     });
   }
-  return res.status(defaultStatus).json({ error: err.message || 'Error en la solicitud' });
+  return res.status(status).json({ error: err?.message || 'Error en la solicitud' });
 }
 
 // Broadcast helpers
@@ -466,9 +467,10 @@ app.get('/api/catalogs', async (req, res) => {
 });
 
 // 2b. Add / Edit / Delete Line (Admin protected)
-app.post('/api/catalogs/lines', requireAdminRole, async (req, res) => {
+app.post('/api/catalogs/lines', requireAdminRole, validateSchema(schemas.createLine), async (req, res) => {
   try {
     const { nombre } = req.body;
+
     if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'Nombre de línea es requerido' });
     let lineId;
     const tx = db.transaction(async (txDb) => {
@@ -514,9 +516,10 @@ app.delete('/api/catalogs/lines/:id', requireAdminRole, async (req, res) => {
 });
 
 // 2b.2 Add / Edit / Delete Route (Admin protected)
-app.post('/api/catalogs/rutas', requireAdminRole, async (req, res) => {
+app.post('/api/catalogs/rutas', requireAdminRole, validateSchema(schemas.createRoute), async (req, res) => {
   try {
     const { lineaId, nombre, esDefault } = req.body;
+
     if (!lineaId || !nombre || !nombre.trim()) {
       return res.status(400).json({ error: 'Línea y nombre de ruta son requeridos' });
     }
@@ -635,9 +638,10 @@ app.delete('/api/catalogs/tipo-procesos/:id', requireAdminRole, async (req, res)
 });
 
 // 2d. Add process step to a line route (Admin protected)
-app.post('/api/catalogs/procesos', requireAdminRole, async (req, res) => {
+app.post('/api/catalogs/procesos', requireAdminRole, validateSchema(schemas.createProcess), async (req, res) => {
   try {
     const { lineaId, rutaId, tipoProcesoId, orden, modoTrabajo } = req.body;
+
     if (!lineaId || !tipoProcesoId || orden === undefined || orden === null || !modoTrabajo) {
       return res.status(400).json({ error: 'Campos requeridos faltantes' });
     }
@@ -1064,12 +1068,9 @@ app.get('/api/users', async (req, res) => {
 });
 
 
-app.post('/api/users', requireAdminRole, async (req, res) => {
+app.post('/api/users', requireAdminRole, validateSchema(schemas.createUser), async (req, res) => {
   try {
     const { microsoftId, nombre, email, rol, lineaId } = req.body;
-    if (!nombre || !email || !rol) {
-      return res.status(400).json({ error: 'Nombre, email y rol son requeridos' });
-    }
     const msId = microsoftId && microsoftId.trim() ? microsoftId.trim() : `ms-${Date.now()}`;
     const result = await db.prepare(`
       INSERT INTO usuarios (microsoft_id, nombre, email, rol, linea_id)
@@ -1082,7 +1083,8 @@ app.post('/api/users', requireAdminRole, async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', validateSchema(schemas.updateUser), async (req, res) => {
+
   try {
     const { id } = req.params;
     const { nombre, email, rol, lineaId } = req.body;
