@@ -247,7 +247,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onCatalogUpdated }) => {
 
   const handleCopyScannerUrl = (code: string) => {
     const host = window.location.hostname || 'localhost';
-    const url = `http://${host}:3001/api/scan/${code}`;
+    const port = window.location.port === '5173' ? '3002' : (window.location.port || '3002');
+    const url = `http://${host}:${port}/api/scan/${code}`;
     navigator.clipboard.writeText(url);
     setCopiedStation(code);
     setTimeout(() => setCopiedStation(null), 2500);

@@ -7,6 +7,7 @@
   "main": "api/index.js",
   "scripts": {
     "start": "node api/index.js",
+    "server": "node --watch api/index.js",
     "dev": "node --watch api/index.js",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",

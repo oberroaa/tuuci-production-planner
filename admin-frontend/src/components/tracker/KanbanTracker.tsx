@@ -1941,7 +1941,15 @@ export const KanbanTracker: React.FC<KanbanTrackerProps> = ({
                           <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
                           <span>{t('tracker.consolidatedViewTitle')}</span>
                           <span className="text-blue-600 font-extrabold">
-                            {rutas.map((r) => r.nombre).join(' + ')}
+                            {(() => {
+                              const uniqueNames = Array.from(new Set(rutas.map((r) => r.nombre).filter(Boolean)));
+                              if (uniqueNames.length === 0) return '';
+                              if (uniqueNames.length === 1) return uniqueNames[0];
+                              if (rutas.length > 3) {
+                                return t('common.allRoutesCount', { count: rutas.length, defaultValue: `Todas las rutas (${rutas.length})` });
+                              }
+                              return uniqueNames.join(' + ');
+                            })()}
                           </span>
                         </span>
                         <span className="text-slate-300">•</span>
