@@ -7,6 +7,7 @@ import { ScannerSimulator } from './components/scanner/ScannerSimulator';
 import { KanbanTracker } from './components/tracker/KanbanTracker';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { SettingsView } from './components/settings/SettingsView';
+import DailyBoard from './components/daily-board/DailyBoard';
 import { Login } from './components/auth/Login';
 import type { User, ProductionLine } from './types';
 
@@ -429,6 +430,12 @@ export function App() {
             onRefresh={() => fetchSummary(selectedRutaId, dashboardJobCode, selectedDate)}
           />
         </div>
+
+        {activeTab === 'DAILY_BOARD' && (
+          <div>
+            <DailyBoard />
+          </div>
+        )}
 
         <div style={{ display: activeTab === 'TRACKER' ? 'block' : 'none' }}>
           <KanbanTracker

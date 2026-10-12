@@ -127,6 +127,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
+          {/* DAILY BOARD: ADMIN, SUPERVISOR */}
+          {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR') && (
+            <button
+              onClick={() => setActiveTab('DAILY_BOARD')}
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap ${
+                activeTab === 'DAILY_BOARD' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              {t('navbar.tabs.dailyBoard') || 'DAILY BOARD'}
+            </button>
+          )}
+
           {/* CUTTING: ADMIN, SUPERVISOR, TERMINAL */}
           {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR' || currentUser?.rol === 'TERMINAL') && (
             <button
@@ -264,6 +276,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <span>{t('navbar.tabs.dashboard')}</span>
                 {activeTab === 'DASHBOARD' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
+              </button>
+            )}
+
+            {/* DAILY BOARD: ADMIN, SUPERVISOR */}
+            {(currentUser?.rol === 'ADMIN' || currentUser?.rol === 'SUPERVISOR') && (
+              <button
+                onClick={() => {
+                  setActiveTab('DAILY_BOARD');
+                  setMobileMenuOpen(false);
+                }}
+                className={`text-left text-xs font-semibold px-3.5 py-2.5 rounded-lg transition-colors flex items-center justify-between ${
+                  activeTab === 'DAILY_BOARD' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:text-white bg-[#1a1e24]'
+                }`}
+              >
+                <span>{t('navbar.tabs.dailyBoard') || 'DAILY BOARD'}</span>
+                {activeTab === 'DAILY_BOARD' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
               </button>
             )}
 

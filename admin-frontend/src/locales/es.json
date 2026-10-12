@@ -32,6 +32,7 @@
     "tabs": {
       "tracker": "TRACKER",
       "dashboard": "DASHBOARD",
+      "dailyBoard": "DAILY BOARD",
       "cutting": "CUTTING",
       "scanner": "SCANNER",
       "settings": "SETTINGS",
